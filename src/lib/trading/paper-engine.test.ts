@@ -476,3 +476,60 @@ describe("per-tick bracket triggers", () => {
     expect(evaluateTick(a, "BTCUSDT", Number.NaN, NOW).account).toBe(a);
   });
 });
+
+describe("same-side merge liquidation (adversarial review finding 1)", () => {
+  it("prices liquidation from the margin actually locked, not the last fill's leverage", () => {
+    // A 2x core is overwhelmingly well-margined; adding a tiny 125x slice must
+    // not drag its liquidation up near entry just because 125x was the *last*
+    // leverage used.
+    let a = createAccount({ seedBalance: 1_000_000 });
+    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 10, leverage: 2 }, 20_000, NOW)
+      .account;
+    a = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "BUY", qty: 0.1, leverage: 125 },
+      20_000,
+      NOW + 1,
+    ).account;
+    const p = pos(a);
+    expect(p.qty).toBeCloseTo(10.1, 6);
+    // Overwriting leverage with 125 would have put this at ~19_940.
+    expect(p.liquidationPrice).toBeCloseTo(10_197.43, 1);
+
+    // True loss here is nowhere near the locked margin: must not liquidate.
+    const res = evaluateTick(a, "BTCUSDT", 15_000, NOW + 2);
+    expect(res.account.positions).toHaveLength(1);
+    expect(res.account.history).toHaveLength(0);
+  });
+
+  it("liquidates a mostly-125x position dragged down by a tiny low-leverage add", () => {
+    // The mirror image: overwriting leverage with the *last* fill's 2x would
+    // have pushed liquidation all the way down to ~10_100, letting a thinly
+    // margined position ride to a deeply negative equity.
+    let a = createAccount({ seedBalance: 1_000_000 });
+    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 10, leverage: 125 }, 20_000, NOW)
+      .account;
+    a = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "BUY", qty: 0.1, leverage: 2 },
+      20_000,
+      NOW + 1,
+    ).account;
+    const p = pos(a);
+    expect(p.liquidationPrice).toBeCloseTo(19_842.57, 1);
+
+    const res = evaluateTick(a, "BTCUSDT", 19_800, NOW + 2);
+    expect(res.account.positions).toHaveLength(0);
+    expect(res.account.history[0].reason).toBe("LIQUIDATION");
+  });
+});
+
+describe("liquidation buffer clamp (adversarial review finding 5)", () => {
+  it("clamps a negative buffer instead of putting liquidation on the wrong side of entry", () => {
+    // maintMarginRate (0.01) exceeds 1/leverage (1/125 = 0.008): an
+    // unclamped buffer would put a LONG's liquidation above entry (instant
+    // liquidation) and a SHORT's below entry.
+    expect(liquidationPrice("LONG", 20_000, 125, 0.01)).toBe(20_000);
+    expect(liquidationPrice("SHORT", 20_000, 125, 0.01)).toBe(20_000);
+  });
+});

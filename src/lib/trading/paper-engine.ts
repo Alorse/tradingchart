@@ -198,7 +198,10 @@ export function marginFor(qty: number, price: number, leverage: number): number 
 /**
  * Isolated-margin liquidation price: the mark at which the loss has eaten the
  * initial margin down to the maintenance requirement. Higher leverage puts it
- * closer to the entry, which is the whole point of showing it.
+ * closer to the entry, which is the whole point of showing it. The buffer is
+ * clamped to zero — a maintenance rate at or above `1/leverage` would
+ * otherwise put liquidation on the wrong side of entry, liquidating the
+ * position on its very first tick.
  */
 export function liquidationPrice(
   side: PaperDirection,
@@ -207,8 +210,31 @@ export function liquidationPrice(
   maintMarginRate: number,
 ): number {
   if (!isPositive(entry) || leverage <= 0) return 0;
-  const buffer = 1 / leverage - maintMarginRate;
+  const buffer = Math.max(0, 1 / leverage - maintMarginRate);
   const price = side === "LONG" ? entry * (1 - buffer) : entry * (1 + buffer);
+  return price > 0 ? price : 0;
+}
+
+/**
+ * Liquidation price derived straight from the margin actually locked, rather
+ * than from a single leverage figure. A same-side merge blends slices opened
+ * at different leverages: summing their margins is correct, but a leverage
+ * recomputed from the blended entry (or simply overwritten by the latest
+ * fill's) does not describe what is actually backing the position, and can
+ * put liquidation absurdly close to — or absurdly far from — entry. Buffer is
+ * clamped to zero for the same reason as `liquidationPrice`.
+ */
+export function liquidationPriceFromMargin(
+  side: PaperDirection,
+  entry: number,
+  qty: number,
+  margin: number,
+  maintMarginRate: number,
+): number {
+  if (!isPositive(entry) || !isPositive(qty)) return 0;
+  const maintMargin = qty * entry * maintMarginRate;
+  const buffer = Math.max(0, (margin - maintMargin) / qty);
+  const price = side === "LONG" ? entry - buffer : entry + buffer;
   return price > 0 ? price : 0;
 }
 
@@ -416,21 +442,26 @@ function applyFill(
   const sameSide = positions.find((p) => p.symbol === symbol) ?? null;
   if (sameSide) {
     const totalQty = sameSide.qty + openQty;
+    const totalMargin = sameSide.margin + margin;
     const entryPrice =
       (sameSide.entryPrice * sameSide.qty + price * openQty) / totalQty;
     const merged: PaperPosition = {
       ...sameSide,
       qty: totalQty,
       entryPrice,
-      leverage,
-      margin: sameSide.margin + margin,
+      // Informational only: a blended figure so the position still shows
+      // *a* leverage, but liquidation below is derived from the margin
+      // actually locked, not from this number.
+      leverage: totalMargin > 0 ? (totalQty * entryPrice) / totalMargin : leverage,
+      margin: totalMargin,
       feesPaid: sameSide.feesPaid + fee,
       tp: args.tp ?? sameSide.tp,
       sl: args.sl ?? sameSide.sl,
-      liquidationPrice: liquidationPrice(
+      liquidationPrice: liquidationPriceFromMargin(
         sameSide.side,
         entryPrice,
-        leverage,
+        totalQty,
+        totalMargin,
         account.settings.maintMarginRate,
       ),
     };
