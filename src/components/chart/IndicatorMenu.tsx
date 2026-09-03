@@ -21,26 +21,22 @@ interface Entry {
 }
 
 const ENTRIES: Entry[] = [
-  { key: "volume", group: "Volume", label: () => "Volume" },
-  { key: "rsi", group: "Oscillators", label: (c) => `RSI (${c.rsi})` },
-  {
-    key: "macd",
-    group: "Oscillators",
-    label: (c) => `MACD (${c.macdFast}, ${c.macdSlow}, ${c.macdSignal})`,
-  },
-  { key: "adx", group: "Trend", label: (c) => `ADX (${c.adx})` },
-  {
-    key: "squeeze",
-    group: "Momentum",
-    label: () => "Squeeze Momentum [LazyBear]",
-  },
-  {
-    key: "vumanchu",
-    group: "Momentum",
-    label: () => "VuManChu Cipher B + Div",
-  },
-  { key: "obv", group: "Volume", label: () => "On-Balance Volume (OBV)" },
-  { key: "keylevels", group: "Levels", label: () => "Key Levels (W,M,Q,Y)" },
+  { key: "volume",    group: "Volume",      label: () => "Volume" },
+  { key: "obv",       group: "Volume",      label: () => "On-Balance Volume (OBV)" },
+  { key: "vrvp",      group: "Volume",      label: () => "Volume Profile (Visible Range)" },
+  { key: "mfi",       group: "Volume",      label: (c) => `Money Flow Index (${c.mfiPeriod})` },
+  { key: "rsi",       group: "Oscillators", label: (c) => `RSI (${c.rsi})` },
+  { key: "macd",      group: "Oscillators", label: (c) => `MACD (${c.macdFast}, ${c.macdSlow}, ${c.macdSignal})` },
+  { key: "stochrsi",  group: "Oscillators", label: (c) => `Stochastic RSI (${c.stochRsiLen}, ${c.stochRsiStochLen}, ${c.stochRsiK}, ${c.stochRsiD})` },
+  { key: "williamsr", group: "Oscillators", label: (c) => `Williams %R (${c.williamsRPeriod})` },
+  { key: "cci",       group: "Oscillators", label: (c) => `CCI (${c.cciPeriod})` },
+  { key: "adx",       group: "Trend",       label: (c) => `ADX (${c.adx})` },
+  { key: "bb",        group: "Volatility",  label: (c) => `Bollinger Bands (${c.bbPeriod}, ${c.bbMult})` },
+  { key: "atr",       group: "Volatility",  label: (c) => `Average True Range (${c.atrPeriod})` },
+  { key: "vwap",      group: "Overlays",    label: () => "VWAP" },
+  { key: "squeeze",   group: "Momentum",    label: () => "Squeeze Momentum [LazyBear]" },
+  { key: "vumanchu",  group: "Momentum",    label: () => "VuManChu Cipher B + Div" },
+  { key: "keylevels", group: "Levels",      label: () => "Key Levels (W,M,Q,Y)" },
 ];
 
 export function IndicatorMenu() {

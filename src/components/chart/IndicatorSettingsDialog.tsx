@@ -16,12 +16,16 @@ import {
   DEFAULT_ADX_STYLE,
   DEFAULT_SQUEEZE_STYLE,
   DEFAULT_KEY_LEVELS,
+  DEFAULT_BOLLINGER_STYLE,
+  DEFAULT_VWAP_STYLE,
+  DEFAULT_VOLUME_PROFILE,
   type IndicatorKey,
   type IndicatorConfig,
   type AdxStyle,
   type UserEMA,
   type SqueezeStyle,
   type KeyLevelsConfig,
+  type VolumeProfileConfig,
 } from "@/lib/store/chart-store";
 
 const TITLES: Record<IndicatorKey, string> = {
@@ -33,6 +37,14 @@ const TITLES: Record<IndicatorKey, string> = {
   vumanchu: "VuManChu Cipher B",
   obv: "On-Balance Volume",
   keylevels: "Key Levels (W,M,Q,Y)",
+  bb: "Bollinger Bands",
+  vwap: "VWAP",
+  vrvp: "Volume Profile (Visible Range)",
+  stochrsi: "Stochastic RSI",
+  williamsr: "Williams %R",
+  atr: "Average True Range",
+  cci: "Commodity Channel Index",
+  mfi: "Money Flow Index",
 };
 
 export function IndicatorSettingsDialog() {
@@ -89,6 +101,7 @@ export function IndicatorSettingsDialog() {
               setConfig(DEFAULT_CONFIG);
               setTarget(null);
             }}
+            onClose={() => setTarget(null)}
           />
         )}
       </DialogContent>
@@ -183,9 +196,19 @@ interface FormProps {
   config: IndicatorConfig;
   onSave: (patch: Partial<IndicatorConfig>) => void;
   onReset: () => void;
+  onClose: () => void;
 }
 
-function SettingsForm({ target, config, onSave, onReset }: FormProps) {
+/**
+ * Indicators whose settings live in their own store slice, not in
+ * `IndicatorConfig`, and are applied the moment they change. They get a plain
+ * "Done" instead of the Reset/Apply pair: there is no draft for Apply to
+ * commit, and the shared "Reset defaults" resets the *whole* IndicatorConfig —
+ * so pressing it from here would silently wipe the RSI, MACD and ADX periods.
+ */
+const LIVE_APPLY_TARGETS = new Set<IndicatorKey>(["vrvp", "keylevels"]);
+
+function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
   const [draft, setDraft] = useState({
     rsi: config.rsi,
     macdFast: config.macdFast,
@@ -198,6 +221,19 @@ function SettingsForm({ target, config, onSave, onReset }: FormProps) {
     squeezeBBMult: config.squeezeBBMult,
     squeezeKC: config.squeezeKC,
     squeezeKCMult: config.squeezeKCMult,
+    bbPeriod: config.bbPeriod,
+    bbMult: config.bbMult,
+    bbMaType: config.bbMaType,
+    vwapAnchor: config.vwapAnchor,
+    vwapBandMult: config.vwapBandMult,
+    stochRsiLen: config.stochRsiLen,
+    stochRsiStochLen: config.stochRsiStochLen,
+    stochRsiK: config.stochRsiK,
+    stochRsiD: config.stochRsiD,
+    williamsRPeriod: config.williamsRPeriod,
+    atrPeriod: config.atrPeriod,
+    cciPeriod: config.cciPeriod,
+    mfiPeriod: config.mfiPeriod,
   });
 
   useEffect(() => {
@@ -213,6 +249,19 @@ function SettingsForm({ target, config, onSave, onReset }: FormProps) {
       squeezeBBMult: config.squeezeBBMult,
       squeezeKC: config.squeezeKC,
       squeezeKCMult: config.squeezeKCMult,
+      bbPeriod: config.bbPeriod,
+      bbMult: config.bbMult,
+      bbMaType: config.bbMaType,
+      vwapAnchor: config.vwapAnchor,
+      vwapBandMult: config.vwapBandMult,
+      stochRsiLen: config.stochRsiLen,
+      stochRsiStochLen: config.stochRsiStochLen,
+      stochRsiK: config.stochRsiK,
+      stochRsiD: config.stochRsiD,
+      williamsRPeriod: config.williamsRPeriod,
+      atrPeriod: config.atrPeriod,
+      cciPeriod: config.cciPeriod,
+      mfiPeriod: config.mfiPeriod,
     });
   }, [config, target]);
 
@@ -237,6 +286,28 @@ function SettingsForm({ target, config, onSave, onReset }: FormProps) {
         squeezeKC: clamp(draft.squeezeKC, 2, 200),
         squeezeKCMult: clamp(draft.squeezeKCMult, 0.1, 10),
       });
+    else if (target === "bb")
+      onSave({
+        bbPeriod: clamp(draft.bbPeriod, 2, 500),
+        bbMult: clamp(draft.bbMult, 0.1, 10),
+        bbMaType: draft.bbMaType,
+      });
+    else if (target === "vwap")
+      onSave({
+        vwapAnchor: draft.vwapAnchor,
+        vwapBandMult: clamp(draft.vwapBandMult, 0.1, 10),
+      });
+    else if (target === "stochrsi")
+      onSave({
+        stochRsiLen: clamp(draft.stochRsiLen, 2, 200),
+        stochRsiStochLen: clamp(draft.stochRsiStochLen, 2, 200),
+        stochRsiK: clamp(draft.stochRsiK, 1, 50),
+        stochRsiD: clamp(draft.stochRsiD, 1, 50),
+      });
+    else if (target === "williamsr") onSave({ williamsRPeriod: clamp(draft.williamsRPeriod, 2, 500) });
+    else if (target === "atr") onSave({ atrPeriod: clamp(draft.atrPeriod, 2, 500) });
+    else if (target === "cci") onSave({ cciPeriod: clamp(draft.cciPeriod, 2, 500) });
+    else if (target === "mfi") onSave({ mfiPeriod: clamp(draft.mfiPeriod, 2, 500) });
     else if (target === "volume") onSave({});
   }
 
@@ -337,20 +408,158 @@ function SettingsForm({ target, config, onSave, onReset }: FormProps) {
           OBV uses cumulative volume signed by close direction. No parameters.
         </p>
       )}
+      {target === "bb" && (
+        <>
+          <SectionLabel>Inputs</SectionLabel>
+          <div className="grid grid-cols-3 gap-2">
+            <Field
+              label="Length"
+              value={draft.bbPeriod}
+              onChange={(n) => setDraft((d) => ({ ...d, bbPeriod: n }))}
+            />
+            <FloatField
+              label="StdDev"
+              value={draft.bbMult}
+              onChange={(n) => setDraft((d) => ({ ...d, bbMult: n }))}
+            />
+            <SelectField
+              label="Basis MA"
+              value={draft.bbMaType}
+              options={[
+                { value: "SMA", label: "SMA" },
+                { value: "EMA", label: "EMA" },
+              ]}
+              onChange={(v) => setDraft((d) => ({ ...d, bbMaType: v as "SMA" | "EMA" }))}
+            />
+          </div>
+          <BollingerStyleSection />
+        </>
+      )}
+      {target === "vwap" && (
+        <>
+          <SectionLabel>Inputs</SectionLabel>
+          <div className="grid grid-cols-2 gap-2">
+            <SelectField
+              label="Anchor"
+              value={draft.vwapAnchor}
+              options={[
+                { value: "session", label: "Session (daily)" },
+                { value: "week", label: "Week" },
+                { value: "month", label: "Month" },
+                { value: "year", label: "Year" },
+              ]}
+              onChange={(v) =>
+                setDraft((d) => ({ ...d, vwapAnchor: v as typeof d.vwapAnchor }))
+              }
+            />
+            <FloatField
+              label="Band multiplier"
+              value={draft.vwapBandMult}
+              onChange={(n) => setDraft((d) => ({ ...d, vwapBandMult: n }))}
+            />
+          </div>
+          <VwapStyleSection />
+        </>
+      )}
+      {target === "stochrsi" && (
+        <>
+          <SectionLabel>Inputs</SectionLabel>
+          <div className="grid grid-cols-2 gap-2">
+            <Field
+              label="RSI length"
+              value={draft.stochRsiLen}
+              onChange={(n) => setDraft((d) => ({ ...d, stochRsiLen: n }))}
+            />
+            <Field
+              label="Stochastic length"
+              value={draft.stochRsiStochLen}
+              onChange={(n) => setDraft((d) => ({ ...d, stochRsiStochLen: n }))}
+            />
+            <Field
+              label="%K smoothing"
+              min={1}
+              value={draft.stochRsiK}
+              onChange={(n) => setDraft((d) => ({ ...d, stochRsiK: n }))}
+            />
+            <Field
+              label="%D smoothing"
+              min={1}
+              value={draft.stochRsiD}
+              onChange={(n) => setDraft((d) => ({ ...d, stochRsiD: n }))}
+            />
+          </div>
+          <OverlaySection target="stochrsi" />
+        </>
+      )}
+      {target === "williamsr" && (
+        <>
+          <Field
+            label="Length"
+            value={draft.williamsRPeriod}
+            onChange={(n) => setDraft((d) => ({ ...d, williamsRPeriod: n }))}
+          />
+          <OverlaySection target="williamsr" />
+        </>
+      )}
+      {target === "atr" && (
+        <>
+          <Field
+            label="Length"
+            value={draft.atrPeriod}
+            onChange={(n) => setDraft((d) => ({ ...d, atrPeriod: n }))}
+          />
+          <p className="text-[10px] text-tv-text-muted">
+            Wilder&apos;s smoothing of the true range, plotted in price units.
+          </p>
+          <OverlaySection target="atr" />
+        </>
+      )}
+      {target === "cci" && (
+        <>
+          <Field
+            label="Length"
+            value={draft.cciPeriod}
+            onChange={(n) => setDraft((d) => ({ ...d, cciPeriod: n }))}
+          />
+          <OverlaySection target="cci" />
+        </>
+      )}
+      {target === "mfi" && (
+        <>
+          <Field
+            label="Length"
+            value={draft.mfiPeriod}
+            onChange={(n) => setDraft((d) => ({ ...d, mfiPeriod: n }))}
+          />
+          <OverlaySection target="mfi" />
+        </>
+      )}
+      {target === "vrvp" && <VolumeProfileSettings />}
       {target === "keylevels" && <KeyLevelsSettings />}
 
       <div className="mt-2 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onReset}
-          className="text-tv-text-muted hover:text-tv-text"
-        >
-          Reset defaults
-        </Button>
-        <Button size="sm" onClick={save} className="bg-tv-blue hover:bg-tv-blue/90">
-          Apply
-        </Button>
+        {LIVE_APPLY_TARGETS.has(target) ? (
+          <>
+            <span className="text-[10px] text-tv-text-muted">Changes apply immediately.</span>
+            <Button size="sm" onClick={onClose} className="bg-tv-blue hover:bg-tv-blue/90">
+              Done
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onReset}
+              className="text-tv-text-muted hover:text-tv-text"
+            >
+              Reset defaults
+            </Button>
+            <Button size="sm" onClick={save} className="bg-tv-blue hover:bg-tv-blue/90">
+              Apply
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -477,6 +686,12 @@ const OVERLAY_OPTIONS: { value: IndicatorKey | "own"; label: string }[] = [
   { value: "adx", label: "ADX pane" },
   { value: "squeeze", label: "Squeeze pane" },
   { value: "vumanchu", label: "VuManChu pane" },
+  { value: "obv", label: "OBV pane" },
+  { value: "stochrsi", label: "Stoch RSI pane" },
+  { value: "williamsr", label: "Williams %R pane" },
+  { value: "atr", label: "ATR pane" },
+  { value: "cci", label: "CCI pane" },
+  { value: "mfi", label: "MFI pane" },
 ];
 
 function OverlaySection({ target }: { target: IndicatorKey }) {
@@ -832,5 +1047,342 @@ function KeyLevelsSettings() {
         Reset to defaults
       </button>
     </div>
+  );
+}
+
+/** Labelled `<select>` matching the look of `Field`. */
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-tv-text-muted">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-9 rounded border border-tv-border bg-tv-bg px-2 text-xs text-tv-text"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function LineWidthPicker({
+  value,
+  onChange,
+}: {
+  value: 1 | 2 | 3 | 4;
+  onChange: (v: 1 | 2 | 3 | 4) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {([1, 2, 3, 4] as const).map((w) => (
+        <button
+          key={w}
+          onClick={() => onChange(w)}
+          className={`h-6 w-6 rounded text-[10px] ${
+            value === w ? "bg-tv-blue/20 text-tv-blue" : "text-tv-text-muted hover:bg-tv-panel-hover"
+          }`}
+        >
+          {w}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BollingerStyleSection() {
+  const style = useChartStore((s) => s.bollingerStyle);
+  const setBollingerStyle = useChartStore((s) => s.setBollingerStyle);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionLabel>Style</SectionLabel>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-tv-text">Line width</span>
+        <LineWidthPicker
+          value={style.lineWidth}
+          onChange={(v) => setBollingerStyle({ lineWidth: v })}
+        />
+      </div>
+      <ColorPick
+        label="Upper band"
+        value={style.upperColor}
+        onChange={(v) => setBollingerStyle({ upperColor: v })}
+      />
+      <ColorPick
+        label="Lower band"
+        value={style.lowerColor}
+        onChange={(v) => setBollingerStyle({ lowerColor: v })}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <Toggle
+          label="Basis"
+          value={style.showBasis}
+          onChange={(v) => setBollingerStyle({ showBasis: v })}
+        />
+        <ColorPick label="" value={style.basisColor} onChange={(v) => setBollingerStyle({ basisColor: v })} />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Toggle
+          label="Background fill"
+          value={style.showFill}
+          onChange={(v) => setBollingerStyle({ showFill: v })}
+        />
+        <ColorPick label="" value={style.fillColor} onChange={(v) => setBollingerStyle({ fillColor: v })} />
+      </div>
+      <PercentSlider
+        label="Fill opacity"
+        value={Math.round(style.fillOpacity * 100)}
+        onChange={(n) => setBollingerStyle({ fillOpacity: n / 100 })}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setBollingerStyle(DEFAULT_BOLLINGER_STYLE)}
+        className="self-start text-tv-text-muted hover:text-tv-text"
+      >
+        Reset style
+      </Button>
+    </div>
+  );
+}
+
+function VwapStyleSection() {
+  const style = useChartStore((s) => s.vwapStyle);
+  const setVwapStyle = useChartStore((s) => s.setVwapStyle);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionLabel>Style</SectionLabel>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-tv-text">Line width</span>
+        <LineWidthPicker value={style.lineWidth} onChange={(v) => setVwapStyle({ lineWidth: v })} />
+      </div>
+      <ColorPick label="VWAP" value={style.color} onChange={(v) => setVwapStyle({ color: v })} />
+      <div className="flex items-center justify-between gap-2">
+        <Toggle
+          label="Deviation bands"
+          value={style.showBands}
+          onChange={(v) => setVwapStyle({ showBands: v })}
+        />
+        <ColorPick label="" value={style.bandColor} onChange={(v) => setVwapStyle({ bandColor: v })} />
+      </div>
+      {style.showBands && (
+        <>
+          <Toggle
+            label="Fill between bands"
+            value={style.showFill}
+            onChange={(v) => setVwapStyle({ showFill: v })}
+          />
+          {style.showFill && (
+            <PercentSlider
+              label="Fill opacity"
+              value={Math.round(style.fillOpacity * 100)}
+              onChange={(n) => setVwapStyle({ fillOpacity: n / 100 })}
+            />
+          )}
+        </>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setVwapStyle(DEFAULT_VWAP_STYLE)}
+        className="self-start text-tv-text-muted hover:text-tv-text"
+      >
+        Reset style
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Volume Profile settings, laid out the way TradingView splits its own panel:
+ * Inputs decide what gets measured, Style decides how it is drawn. Changes
+ * apply live (the profile is recomputed on every render anyway), so there is
+ * no Apply button here — unlike the numeric forms above, which stage a draft.
+ */
+function VolumeProfileSettings() {
+  const cfg = useChartStore((s) => s.volumeProfile);
+  const set = useChartStore((s) => s.setVolumeProfile);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionLabel>Inputs</SectionLabel>
+      <div className="grid grid-cols-2 gap-2">
+        <SelectField
+          label="Rows layout"
+          value={cfg.rowsLayout}
+          options={[
+            { value: "rows", label: "Number of rows" },
+            { value: "ticks", label: "Ticks per row" },
+          ]}
+          onChange={(v) => set({ rowsLayout: v as VolumeProfileConfig["rowsLayout"] })}
+        />
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-tv-text-muted">
+            {cfg.rowsLayout === "rows" ? "Row count" : "Ticks per row"}
+          </span>
+          <Input
+            type="number"
+            min={1}
+            max={500}
+            value={cfg.rowSize}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              if (!isNaN(n)) set({ rowSize: clamp(n, 1, 500) });
+            }}
+            className="bg-tv-bg tabular-nums"
+          />
+        </label>
+        <SelectField
+          label="Volume"
+          value={cfg.volumeMode}
+          options={[
+            { value: "updown", label: "Up/Down" },
+            { value: "total", label: "Total" },
+            { value: "delta", label: "Delta" },
+          ]}
+          onChange={(v) => set({ volumeMode: v as VolumeProfileConfig["volumeMode"] })}
+        />
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-tv-text-muted">
+            Value area %
+          </span>
+          <Input
+            type="number"
+            min={1}
+            max={100}
+            value={cfg.valueAreaPct}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              if (!isNaN(n)) set({ valueAreaPct: clamp(n, 1, 100) });
+            }}
+            className="bg-tv-bg tabular-nums"
+          />
+        </label>
+        <SelectField
+          label="Placement"
+          value={cfg.placement}
+          options={[
+            { value: "right", label: "Right" },
+            { value: "left", label: "Left" },
+          ]}
+          onChange={(v) => set({ placement: v as VolumeProfileConfig["placement"] })}
+        />
+      </div>
+      <Toggle
+        label="Extend POC right"
+        value={cfg.extendPocRight}
+        onChange={(v) => set({ extendPocRight: v })}
+      />
+      <Toggle
+        label="Developing POC"
+        value={cfg.showDevelopingPoc}
+        onChange={(v) => set({ showDevelopingPoc: v })}
+      />
+      <Toggle label="Show values" value={cfg.showValues} onChange={(v) => set({ showValues: v })} />
+
+      <SectionLabel>Style</SectionLabel>
+      {cfg.volumeMode === "total" ? (
+        <ColorPick label="Volume" value={cfg.totalColor} onChange={(v) => set({ totalColor: v })} />
+      ) : (
+        <>
+          <ColorPick label="Up volume" value={cfg.upColor} onChange={(v) => set({ upColor: v })} />
+          <ColorPick label="Down volume" value={cfg.downColor} onChange={(v) => set({ downColor: v })} />
+          <ColorPick
+            label="Value area up"
+            value={cfg.valueAreaUpColor}
+            onChange={(v) => set({ valueAreaUpColor: v })}
+          />
+          <ColorPick
+            label="Value area down"
+            value={cfg.valueAreaDownColor}
+            onChange={(v) => set({ valueAreaDownColor: v })}
+          />
+        </>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-tv-text">POC</span>
+        <div className="flex items-center gap-2">
+          <LineWidthPicker value={cfg.pocLineWidth} onChange={(v) => set({ pocLineWidth: v })} />
+          <ColorPick label="" value={cfg.pocColor} onChange={(v) => set({ pocColor: v })} />
+        </div>
+      </div>
+      {cfg.showDevelopingPoc && (
+        <ColorPick
+          label="Developing POC"
+          value={cfg.developingPocColor}
+          onChange={(v) => set({ developingPocColor: v })}
+        />
+      )}
+      <PercentSlider
+        label="Width (% of pane)"
+        value={cfg.widthPct}
+        min={5}
+        max={90}
+        onChange={(n) => set({ widthPct: n })}
+      />
+      <PercentSlider
+        label="Opacity outside value area"
+        value={Math.round(cfg.opacity * 100)}
+        min={5}
+        onChange={(n) => set({ opacity: n / 100 })}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => set(DEFAULT_VOLUME_PROFILE)}
+        className="self-start text-tv-text-muted hover:text-tv-text"
+      >
+        Reset to defaults
+      </Button>
+    </div>
+  );
+}
+
+function PercentSlider({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3">
+      <span className="text-xs text-tv-text">{label}</span>
+      <span className="flex items-center gap-2">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(parseInt(e.target.value, 10))}
+          className="w-28 accent-tv-blue"
+        />
+        <span className="w-8 text-right text-[11px] tabular-nums text-tv-text-muted">{value}</span>
+      </span>
+    </label>
   );
 }
