@@ -15,6 +15,19 @@ create table if not exists public.user_profiles (
 
 alter table public.user_profiles enable row level security;
 
+-- Drop any pre-existing policies on this table (including ones created under
+-- older names) so the policy below can be (re)created idempotently.
+do $$
+declare pol record;
+begin
+  for pol in
+    select policyname from pg_policies
+    where schemaname = 'public' and tablename = 'user_profiles'
+  loop
+    execute format('drop policy if exists %I on public.%I', pol.policyname, 'user_profiles');
+  end loop;
+end $$;
+
 create policy "Users can only see their own profile"
   on public.user_profiles for all
   using (auth.uid() = id);
@@ -49,6 +62,19 @@ create unique index if not exists user_watchlists_user_id_idx on public.user_wat
 
 alter table public.user_watchlists enable row level security;
 
+-- Drop any pre-existing policies on this table (including ones created under
+-- older names) so the policy below can be (re)created idempotently.
+do $$
+declare pol record;
+begin
+  for pol in
+    select policyname from pg_policies
+    where schemaname = 'public' and tablename = 'user_watchlists'
+  loop
+    execute format('drop policy if exists %I on public.%I', pol.policyname, 'user_watchlists');
+  end loop;
+end $$;
+
 create policy "Users can only see their own watchlist"
   on public.user_watchlists for all
   using (auth.uid() = user_id);
@@ -72,6 +98,19 @@ create unique index if not exists user_chart_settings_user_id_idx on public.user
 
 alter table public.user_chart_settings enable row level security;
 
+-- Drop any pre-existing policies on this table (including ones created under
+-- older names) so the policy below can be (re)created idempotently.
+do $$
+declare pol record;
+begin
+  for pol in
+    select policyname from pg_policies
+    where schemaname = 'public' and tablename = 'user_chart_settings'
+  loop
+    execute format('drop policy if exists %I on public.%I', pol.policyname, 'user_chart_settings');
+  end loop;
+end $$;
+
 create policy "Users can only see their own settings"
   on public.user_chart_settings for all
   using (auth.uid() = user_id);
@@ -90,6 +129,19 @@ create table if not exists public.user_price_lines (
 create index if not exists user_price_lines_user_symbol_idx on public.user_price_lines(user_id, symbol);
 
 alter table public.user_price_lines enable row level security;
+
+-- Drop any pre-existing policies on this table (including ones created under
+-- older names) so the policy below can be (re)created idempotently.
+do $$
+declare pol record;
+begin
+  for pol in
+    select policyname from pg_policies
+    where schemaname = 'public' and tablename = 'user_price_lines'
+  loop
+    execute format('drop policy if exists %I on public.%I', pol.policyname, 'user_price_lines');
+  end loop;
+end $$;
 
 create policy "Users can only see their own price lines"
   on public.user_price_lines for all
