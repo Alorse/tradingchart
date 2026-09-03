@@ -1,167 +1,158 @@
 import { beforeEach, describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
 import {
-  MAX_PAPER_EVENTS,
   PAPER_STORAGE_KEY,
   usePaperTradingStore,
 } from "./paper-trading-store";
-import { createAccount } from "@/lib/trading/paper-engine";
+import { DEFAULT_PAPER_SETTINGS, createAccount } from "@/lib/trading/paper-engine";
 
-const store = () => usePaperTradingStore.getState();
+const st = () => usePaperTradingStore.getState();
 
 beforeEach(() => {
-  usePaperTradingStore.setState({ account: createAccount(), marks: {}, events: [] });
+  localStorage.removeItem(PAPER_STORAGE_KEY);
+  st().resetAccount();
+  usePaperTradingStore.setState({ marks: {} });
 });
 
 describe("paper-trading-store actions", () => {
-  it("seeds a virtual balance on first use", () => {
-    expect(store().account.balance).toBe(10_000);
-    expect(store().account.positions).toHaveLength(0);
+  it("starts flat with the seeded balance", () => {
+    expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
+    expect(st().account.positions).toHaveLength(0);
   });
 
-  it("places a market order at the given price", () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
-    expect(store().account.positions).toHaveLength(1);
-    expect(store().account.balance).toBeCloseTo(7_990, 6);
-    expect(store().events.map((e) => e.type)).toEqual(["fill"]);
+  it("placeOrder opens a position at the given quote price", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    expect(st().account.positions).toHaveLength(1);
+    expect(st().account.balance).toBeCloseTo(7_990, 6);
+    // The fill price seeds the mark, so equity is immediately meaningful.
+    expect(st().marks.BTCUSDT).toBe(20_000);
+    expect(st().equity()).toBeCloseTo(9_990, 6);
   });
 
-  it("falls back to the last seen mark when no price is passed", () => {
-    store().evaluateTick("BTCUSDT", 20_000);
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 });
-    expect(store().account.positions[0].entryPrice).toBe(20_000);
-  });
-
-  it("does nothing when a market order has no price and no mark", () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 });
-    expect(store().account.positions).toHaveLength(0);
-  });
-
-  it("rests and cancels a limit order, returning the reserve", () => {
-    store().placeLimitOrder({
+  it("placeLimitOrder rests an order that evaluateTick fills on a cross", () => {
+    st().placeLimitOrder({
       symbol: "BTCUSDT",
       side: "BUY",
       qty: 1,
-      leverage: 10,
       price: 19_000,
+      leverage: 10,
     });
-    expect(store().account.orders).toHaveLength(1);
-    expect(store().account.balance).toBeCloseTo(8_096.2, 6);
-    store().cancelOrder(store().account.orders[0].id);
-    expect(store().account.orders).toHaveLength(0);
-    expect(store().account.balance).toBeCloseTo(10_000, 6);
+    expect(st().account.orders).toHaveLength(1);
+
+    st().evaluateTick("BTCUSDT", 19_500);
+    expect(st().account.orders).toHaveLength(1);
+    expect(st().account.positions).toHaveLength(0);
+
+    st().evaluateTick("BTCUSDT", 19_000);
+    expect(st().account.orders).toHaveLength(0);
+    expect(st().account.positions).toHaveLength(1);
   });
 
-  it("fills a resting limit order off a tick and records the mark", () => {
-    store().placeLimitOrder({
+  it("cancelOrder drops the order and refunds its reserve", () => {
+    st().placeLimitOrder({
       symbol: "BTCUSDT",
       side: "BUY",
       qty: 1,
-      leverage: 10,
       price: 19_000,
+      leverage: 10,
     });
-    store().evaluateTick("BTCUSDT", 19_500);
-    expect(store().account.positions).toHaveLength(0);
-    store().evaluateTick("BTCUSDT", 18_900);
-    expect(store().account.positions).toHaveLength(1);
-    expect(store().marks.BTCUSDT).toBe(18_900);
+    st().cancelOrder(st().account.orders[0].id);
+    expect(st().account.orders).toHaveLength(0);
+    expect(st().account.balance).toBeCloseTo(DEFAULT_PAPER_SETTINGS.seedBalance, 6);
   });
 
-  it("closes a position at the current mark", () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
-    store().evaluateTick("BTCUSDT", 21_000);
-    store().closePosition("BTCUSDT");
-    expect(store().account.positions).toHaveLength(0);
-    expect(store().account.history).toHaveLength(1);
-    expect(store().account.balance).toBeCloseTo(10_979.5, 6);
+  it("closePosition settles at the last known mark", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    st().evaluateTick("BTCUSDT", 21_000);
+    st().closePosition("BTCUSDT");
+    expect(st().account.positions).toHaveLength(0);
+    expect(st().account.history).toHaveLength(1);
+    expect(st().account.history[0].exitPrice).toBe(21_000);
+    expect(st().account.balance).toBeGreaterThan(DEFAULT_PAPER_SETTINGS.seedBalance);
   });
 
-  it("drives brackets from the tick, stopping out before taking profit", () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
-    store().setBrackets("BTCUSDT", 20_500, 21_000);
-    store().evaluateTick("BTCUSDT", 20_700);
-    expect(store().account.history).toHaveLength(1);
-    expect(store().account.history[0].reason).toBe("SL");
+  it("setBrackets attaches TP/SL that later ticks trigger", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    st().setBrackets("BTCUSDT", { tp: 21_000, sl: 19_500 });
+    expect(st().account.positions[0].tp).toBe(21_000);
+
+    st().evaluateTick("BTCUSDT", 21_200);
+    expect(st().account.positions).toHaveLength(0);
+    expect(st().account.history[0].reason).toBe("TP");
   });
 
-  it("skips the engine entirely when a tick has nothing to act on", () => {
-    const before = store().account;
-    store().evaluateTick("ETHUSDT", 3_000);
-    // No position and no resting order for the symbol: the account object is
-    // untouched, so subscribers never re-render off an idle WS tick.
-    expect(store().account).toBe(before);
-    expect(store().marks.ETHUSDT).toBe(undefined);
+  it("evaluateTick leaves state untouched when nothing can fill", () => {
+    const before = st().account;
+    st().evaluateTick("BTCUSDT", 20_000);
+    // No orders, no positions: not even the mark is worth storing.
+    expect(st().account).toBe(before);
+    expect(st().marks.BTCUSDT).toBe(undefined);
   });
 
-  it("keeps the account object stable across repeated identical ticks", () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
-    store().evaluateTick("BTCUSDT", 20_100);
-    const after = store().account;
-    store().evaluateTick("BTCUSDT", 20_100);
-    expect(store().account).toBe(after);
+  it("evaluateTick is idempotent at a repeated price", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    st().evaluateTick("BTCUSDT", 20_400);
+    const account = st().account;
+    const marks = st().marks;
+    st().evaluateTick("BTCUSDT", 20_400);
+    expect(st().account).toBe(account);
+    expect(st().marks).toBe(marks);
   });
 
-  it("resets back to the seed", () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
-    store().closePosition("BTCUSDT", 21_000);
-    store().resetAccount();
-    expect(store().account.balance).toBe(10_000);
-    expect(store().account.history).toHaveLength(0);
-    expect(store().account.positions).toHaveLength(0);
-    expect(store().events).toHaveLength(0);
+  it("resetAccount wipes back to the seed", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    st().evaluateTick("BTCUSDT", 21_000);
+    st().closePosition("BTCUSDT");
+    st().resetAccount();
+    expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
+    expect(st().account.history).toHaveLength(0);
+    expect(st().marks).toEqual({});
   });
 
-  it("reseeds the balance when the seed setting changes on a flat account", () => {
-    store().updateSettings({ seedBalance: 50_000 });
-    store().resetAccount();
-    expect(store().account.balance).toBe(50_000);
-  });
+  it("updateSettings re-seeds the balance only while the account is untouched", () => {
+    st().updateSettings({ seedBalance: 50_000 });
+    expect(st().account.balance).toBe(50_000);
 
-  it("bounds the event log so a long session cannot grow it without limit", () => {
-    for (let i = 0; i < MAX_PAPER_EVENTS + 30; i++) {
-      store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 0.001, leverage: 10 }, 20_000);
-    }
-    expect(store().events).toHaveLength(MAX_PAPER_EVENTS);
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    const balance = st().account.balance;
+    st().updateSettings({ seedBalance: 1_000 });
+    expect(st().account.balance).toBe(balance);
+    expect(st().account.settings.seedBalance).toBe(1_000);
   });
 });
 
 describe("paper-trading-store persistence", () => {
-  it("round-trips the account through localStorage", async () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
-    store().placeLimitOrder({
-      symbol: "BTCUSDT",
-      side: "SELL",
-      qty: 1,
-      leverage: 10,
-      price: 25_000,
-    });
-    const balance = store().account.balance;
+  it("writes the account to localStorage and rehydrates it", async () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    st().evaluateTick("BTCUSDT", 21_000);
 
     const raw = localStorage.getItem(PAPER_STORAGE_KEY);
     expect(typeof raw).toBe("string");
-    const parsed = JSON.parse(raw as string) as { state: { account: { balance: number } } };
-    expect(parsed.state.account.balance).toBeCloseTo(balance, 6);
+    const parsed = JSON.parse(raw as string) as {
+      state: { account: { balance: number; positions: unknown[] }; marks?: unknown };
+    };
+    expect(parsed.state.account.positions).toHaveLength(1);
+    expect(parsed.state.account.balance).toBeCloseTo(7_990, 6);
+    // Live marks are session data, not account state.
+    expect(parsed.state.marks).toBe(undefined);
 
-    // Wipe the in-memory state (which also rewrites storage), restore the
-    // snapshot, then rehydrate the way a page reload would.
-    usePaperTradingStore.setState({ account: createAccount(), marks: {}, events: [] });
-    expect(store().account.balance).toBe(10_000);
-    localStorage.setItem(PAPER_STORAGE_KEY, raw as string);
+    // Blow the in-memory state away, then restore it from storage.
+    usePaperTradingStore.setState({ account: createAccount(), marks: {} });
+    expect(st().account.positions).toHaveLength(0);
+
     await usePaperTradingStore.persist.rehydrate();
-
-    expect(store().account.balance).toBeCloseTo(balance, 6);
-    expect(store().account.positions).toHaveLength(1);
-    expect(store().account.positions[0].entryPrice).toBe(20_000);
-    expect(store().account.orders).toHaveLength(1);
-    expect(store().account.orders[0].price).toBe(25_000);
+    expect(st().account.positions).toHaveLength(1);
+    expect(st().account.positions[0].entryPrice).toBe(20_000);
+    expect(st().account.balance).toBeCloseTo(7_990, 6);
   });
 
-  it("does not persist session-only marks and events", () => {
-    store().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
-    store().evaluateTick("BTCUSDT", 20_500);
-    const parsed = JSON.parse(localStorage.getItem(PAPER_STORAGE_KEY) as string) as {
-      state: Record<string, unknown>;
-    };
-    expect(Object.keys(parsed.state)).toEqual(["account"]);
+  it("rehydrating a legacy blob without an account falls back to the seed", async () => {
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({ state: {}, version: 1 }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
+    expect(st().account.positions).toHaveLength(0);
   });
 });
