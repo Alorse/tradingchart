@@ -533,3 +533,29 @@ describe("liquidation buffer clamp (adversarial review finding 5)", () => {
     expect(liquidationPrice("SHORT", 20_000, 125, 0.01)).toBe(20_000);
   });
 });
+
+describe("bracket normalization on open (adversarial review finding 6)", () => {
+  it("drops a stop-loss above entry and a take-profit below entry on a fresh LONG", () => {
+    const a = fillMarketOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, sl: 21_000, tp: 19_000 },
+      20_000,
+      NOW,
+    ).account;
+    const p = pos(a);
+    expect(p.sl).toBe(null);
+    expect(p.tp).toBe(null);
+  });
+
+  it("drops a stop-loss below entry and a take-profit above entry on a fresh SHORT", () => {
+    const a = fillMarketOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10, sl: 19_000, tp: 21_000 },
+      20_000,
+      NOW,
+    ).account;
+    const p = pos(a);
+    expect(p.sl).toBe(null);
+    expect(p.tp).toBe(null);
+  });
+});

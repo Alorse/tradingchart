@@ -380,6 +380,27 @@ function closeSlice(
 }
 
 /**
+ * Drop a bracket that sits on the wrong side of the fill price for a
+ * freshly-opened position — an SL above entry on a LONG (or below entry on a
+ * SHORT) doesn't protect against a loss, it just books a gain the moment
+ * price moves at all and mislabels it as a stop-out. TP mirrors it the other
+ * way. Only called on open/flip, never on a same-side merge or a reduce,
+ * where the bracket may legitimately have been set relative to an older
+ * entry price.
+ */
+function normalizeBrackets(
+  dir: PaperDirection,
+  price: number,
+  tp: number | null,
+  sl: number | null,
+): { tp: number | null; sl: number | null } {
+  const long = dir === "LONG";
+  const validSl = sl === null || (long ? sl < price : sl > price);
+  const validTp = tp === null || (long ? tp > price : tp < price);
+  return { tp: validTp ? tp : null, sl: validSl ? sl : null };
+}
+
+/**
  * Apply a fill of `qty` at `price` to the account, netting against whatever is
  * open on that symbol. This is the single path every fill goes through —
  * market orders, limit crossings and closes alike.
@@ -468,6 +489,10 @@ function applyFill(
     positions = positions.map((p) => (p.id === sameSide.id ? merged : p));
   } else {
     const dir = directionOf(side);
+    // A fresh position (a plain open, or the re-entry leg of a flip): drop
+    // any bracket that sits on the wrong side of the fill price rather than
+    // let it rest forever and eventually fire as a stop that books a gain.
+    const { tp, sl } = normalizeBrackets(dir, price, args.tp ?? null, args.sl ?? null);
     positions = [
       ...positions,
       {
@@ -479,8 +504,8 @@ function applyFill(
         leverage,
         margin,
         feesPaid: fee,
-        tp: args.tp ?? null,
-        sl: args.sl ?? null,
+        tp,
+        sl,
         liquidationPrice: liquidationPrice(
           dir,
           price,
