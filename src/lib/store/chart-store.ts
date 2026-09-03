@@ -16,7 +16,42 @@ export type IndicatorKey =
   | "squeeze"
   | "vumanchu"
   | "obv"
-  | "keylevels";
+  | "keylevels"
+  | "bb"
+  | "vwap"
+  | "vrvp"
+  | "stochrsi"
+  | "williamsr"
+  | "atr"
+  | "cci"
+  | "mfi";
+
+/**
+ * Indicators that live in their own sub-pane below the price pane, in display
+ * order. Everything else is a main-pane overlay. Kept here rather than inline
+ * in `PriceChart` because the pane-index math, the visibility effect and the
+ * "collapse all sub-panes" toggle each need the same list, and they drifted
+ * apart when they were three separate literals.
+ */
+export const SUB_PANE_KEYS = [
+  "rsi",
+  "macd",
+  "adx",
+  "squeeze",
+  "vumanchu",
+  "obv",
+  "stochrsi",
+  "williamsr",
+  "atr",
+  "cci",
+  "mfi",
+] as const satisfies readonly IndicatorKey[];
+
+export type SubPaneKey = (typeof SUB_PANE_KEYS)[number];
+
+export function isSubPaneKey(key: IndicatorKey): key is SubPaneKey {
+  return (SUB_PANE_KEYS as readonly IndicatorKey[]).includes(key);
+}
 
 export type DrawingTool =
   | "cursor"
@@ -59,6 +94,19 @@ export interface IndicatorConfig {
   vumanchuAvgLen: number;
   vumanchuMaLen: number;
   vumanchuMfiPeriod: number;
+  bbPeriod: number;
+  bbMult: number;
+  bbMaType: "SMA" | "EMA";
+  vwapAnchor: "session" | "week" | "month" | "year";
+  vwapBandMult: number;
+  stochRsiLen: number;
+  stochRsiStochLen: number;
+  stochRsiK: number;
+  stochRsiD: number;
+  williamsRPeriod: number;
+  atrPeriod: number;
+  cciPeriod: number;
+  mfiPeriod: number;
 }
 
 export const DEFAULT_CONFIG: IndicatorConfig = {
@@ -77,6 +125,19 @@ export const DEFAULT_CONFIG: IndicatorConfig = {
   vumanchuAvgLen: 12,
   vumanchuMaLen: 3,
   vumanchuMfiPeriod: 60,
+  bbPeriod: 20,
+  bbMult: 2,
+  bbMaType: "SMA",
+  vwapAnchor: "session",
+  vwapBandMult: 1,
+  stochRsiLen: 14,
+  stochRsiStochLen: 14,
+  stochRsiK: 3,
+  stochRsiD: 3,
+  williamsRPeriod: 14,
+  atrPeriod: 14,
+  cciPeriod: 20,
+  mfiPeriod: 14,
 };
 
 export interface KeyLevelsConfig {
@@ -145,6 +206,110 @@ export const INDICATOR_COLORS: Record<IndicatorKey, string> = {
   vumanchu: "#4994ec",
   obv: "#ffb74d",
   keylevels: "#08bcd4",
+  bb: "#2962ff",
+  vwap: "#00bcd4",
+  vrvp: "#2962ff",
+  stochrsi: "#2962ff",
+  williamsr: "#ab47bc",
+  atr: "#ffb74d",
+  cci: "#26a69a",
+  mfi: "#42a5f5",
+};
+
+/** Bollinger Bands style — colours, widths and the optional band fill. */
+export interface BollingerStyle {
+  basisColor: string;
+  upperColor: string;
+  lowerColor: string;
+  lineWidth: 1 | 2 | 3 | 4;
+  showBasis: boolean;
+  /** Translucent fill between the bands, as TradingView draws it. */
+  showFill: boolean;
+  fillColor: string;
+  fillOpacity: number;
+}
+
+export const DEFAULT_BOLLINGER_STYLE: BollingerStyle = {
+  basisColor: "#ff6d00",
+  upperColor: "#2962ff",
+  lowerColor: "#2962ff",
+  lineWidth: 1,
+  showBasis: true,
+  showFill: true,
+  fillColor: "#2962ff",
+  fillOpacity: 0.08,
+};
+
+/** VWAP style — the line plus its optional deviation bands. */
+export interface VwapStyle {
+  color: string;
+  lineWidth: 1 | 2 | 3 | 4;
+  showBands: boolean;
+  bandColor: string;
+  showFill: boolean;
+  fillOpacity: number;
+}
+
+export const DEFAULT_VWAP_STYLE: VwapStyle = {
+  // Cyan rather than TradingView's blue: Bollinger's rails already default to
+  // blue here, and the two are both main-pane overlays people run together.
+  color: "#00bcd4",
+  lineWidth: 2,
+  showBands: false,
+  bandColor: "#787b86",
+  showFill: false,
+  fillOpacity: 0.06,
+};
+
+/**
+ * Volume Profile (Visible Range) — mirrors TradingView's own settings panel,
+ * split the same way: Inputs decide *what* is measured, Style decides how it
+ * is drawn.
+ */
+export interface VolumeProfileConfig {
+  // Inputs
+  rowsLayout: "rows" | "ticks";
+  rowSize: number;
+  volumeMode: "updown" | "total" | "delta";
+  valueAreaPct: number;
+  placement: "right" | "left";
+  extendPocRight: boolean;
+  showDevelopingPoc: boolean;
+  // Style
+  upColor: string;
+  downColor: string;
+  valueAreaUpColor: string;
+  valueAreaDownColor: string;
+  totalColor: string;
+  pocColor: string;
+  pocLineWidth: 1 | 2 | 3 | 4;
+  developingPocColor: string;
+  /** Histogram width as a percentage of the plot area. */
+  widthPct: number;
+  /** Opacity applied to rows outside the value area. */
+  opacity: number;
+  showValues: boolean;
+}
+
+export const DEFAULT_VOLUME_PROFILE: VolumeProfileConfig = {
+  rowsLayout: "rows",
+  rowSize: 24,
+  volumeMode: "updown",
+  valueAreaPct: 70,
+  placement: "right",
+  extendPocRight: true,
+  showDevelopingPoc: false,
+  upColor: "#26a69a",
+  downColor: "#ef5350",
+  valueAreaUpColor: "#26a69a",
+  valueAreaDownColor: "#ef5350",
+  totalColor: "#2962ff",
+  pocColor: "#ff0000",
+  pocLineWidth: 1,
+  developingPocColor: "#ffeb3b",
+  widthPct: 30,
+  opacity: 0.45,
+  showValues: false,
 };
 
 /** A user-added EMA instance. Multiple can coexist. */
@@ -313,6 +478,12 @@ interface ChartState {
   keyLevels: KeyLevelsConfig;
   /** Squeeze indicator style overrides */
   squeezeStyle: SqueezeStyle;
+  /** Bollinger Bands style overrides */
+  bollingerStyle: BollingerStyle;
+  /** VWAP style overrides */
+  vwapStyle: VwapStyle;
+  /** Volume Profile (visible range) inputs + style */
+  volumeProfile: VolumeProfileConfig;
   /** Logarithmic price scale (main pane only) */
   logScale: boolean;
   /** Per-indicator log scale toggle (sub-panes) */
@@ -435,6 +606,9 @@ interface ChartState {
   setAdxStyle: (patch: Partial<AdxStyle>) => void;
   setKeyLevels: (patch: Partial<KeyLevelsConfig>) => void;
   setSqueezeStyle: (patch: Partial<SqueezeStyle>) => void;
+  setBollingerStyle: (patch: Partial<BollingerStyle>) => void;
+  setVwapStyle: (patch: Partial<VwapStyle>) => void;
+  setVolumeProfile: (patch: Partial<VolumeProfileConfig>) => void;
   setLogScale: (v: boolean) => void;
   setIndicatorLogScale: (key: IndicatorKey, v: boolean) => void;
   setMainPriceScaleMode: (mode: "normal" | "percentage" | "indexed100") => void;
@@ -520,32 +694,41 @@ function initialWatchlists(): {
   };
 }
 
+/** Every indicator off — the shape both `indicators` and `hidden` must have. */
+export const ALL_INDICATORS_FALSE: Record<IndicatorKey, boolean> = {
+  rsi: false,
+  macd: false,
+  volume: false,
+  adx: false,
+  squeeze: false,
+  vumanchu: false,
+  obv: false,
+  keylevels: false,
+  bb: false,
+  vwap: false,
+  vrvp: false,
+  stochrsi: false,
+  williamsr: false,
+  atr: false,
+  cci: false,
+  mfi: false,
+};
+
+/** What a brand-new chart starts with. */
+export const DEFAULT_INDICATORS: Record<IndicatorKey, boolean> = {
+  ...ALL_INDICATORS_FALSE,
+  rsi: true,
+  volume: true,
+};
+
 export const useChartStore = create<ChartState>()(
   persist(
     (set, get) => ({
       symbol: "BTCUSDT",
       chartType: "candles" as ChartType,
       timeframe: "15m" as Timeframe,
-      indicators: {
-        rsi: true,
-        macd: false,
-        volume: true,
-        adx: false,
-        squeeze: false,
-        vumanchu: false,
-        obv: false,
-        keylevels: false,
-      },
-      hidden: {
-        rsi: false,
-        macd: false,
-        volume: false,
-        adx: false,
-        squeeze: false,
-        vumanchu: false,
-        obv: false,
-        keylevels: false,
-      },
+      indicators: { ...DEFAULT_INDICATORS },
+      hidden: { ...ALL_INDICATORS_FALSE },
       config: { ...DEFAULT_CONFIG },
       userEMAs: [
         { id: randomId(), period: 20, color: EMA_PALETTE[0], lineWidth: 1, hidden: false },
@@ -554,6 +737,9 @@ export const useChartStore = create<ChartState>()(
       adxStyle: { ...DEFAULT_ADX_STYLE },
       keyLevels: { ...DEFAULT_KEY_LEVELS },
       squeezeStyle: { ...DEFAULT_SQUEEZE_STYLE },
+      bollingerStyle: { ...DEFAULT_BOLLINGER_STYLE },
+      vwapStyle: { ...DEFAULT_VWAP_STYLE },
+      volumeProfile: { ...DEFAULT_VOLUME_PROFILE },
       logScale: false,
       mainPriceScaleMode: "normal",
       mainPriceScaleInverted: false,
@@ -755,6 +941,14 @@ export const useChartStore = create<ChartState>()(
           set((st) => ({ squeezeStyle: { ...st.squeezeStyle, ...patch } }));
         }
       },
+
+      setBollingerStyle: (patch) =>
+        set((st) => ({ bollingerStyle: { ...st.bollingerStyle, ...patch } })),
+
+      setVwapStyle: (patch) => set((st) => ({ vwapStyle: { ...st.vwapStyle, ...patch } })),
+
+      setVolumeProfile: (patch) =>
+        set((st) => ({ volumeProfile: { ...st.volumeProfile, ...patch } })),
 
       setLogScale: (logScale) => {
         // Log and percentage/indexed-to-100 are mutually exclusive price-scale
@@ -1137,7 +1331,7 @@ export const useChartStore = create<ChartState>()(
     }),
     {
       name: "tv-gratis-chart-state",
-      version: 5,
+      version: 6,
       migrate: (persisted, fromVersion) => {
         const p = persisted as Record<string, unknown>;
         if (fromVersion < 3 && Array.isArray(p.watchlist)) {
@@ -1166,6 +1360,16 @@ export const useChartStore = create<ChartState>()(
           if (adxStyle && adxStyle.showKeyLevel === undefined) adxStyle.showKeyLevel = true;
           if (adxStyle && adxStyle.keyLevelColor === "#787b86") adxStyle.keyLevelColor = "#ffffff";
         }
+        // v6: eight new indicators (BB, VWAP, VRVP, StochRSI, %R, ATR, CCI, MFI).
+        // A persisted `indicators`/`hidden` map predates their keys, and a
+        // missing key reads as undefined rather than false — harmless for the
+        // toggles, but `Object.values(indicators).filter(Boolean)` and the
+        // pane-index walk both assume a complete record.
+        if (fromVersion < 6) {
+          p.indicators = { ...ALL_INDICATORS_FALSE, ...(p.indicators as object ?? {}) };
+          p.hidden = { ...ALL_INDICATORS_FALSE, ...(p.hidden as object ?? {}) };
+          p.config = { ...DEFAULT_CONFIG, ...(p.config as object ?? {}) };
+        }
         return p;
       },
       partialize: (s) => ({
@@ -1178,6 +1382,9 @@ export const useChartStore = create<ChartState>()(
         adxStyle: s.adxStyle,
         keyLevels: s.keyLevels,
         squeezeStyle: s.squeezeStyle,
+        bollingerStyle: s.bollingerStyle,
+        vwapStyle: s.vwapStyle,
+        volumeProfile: s.volumeProfile,
         logScale: s.logScale,
         indicatorLogScale: s.indicatorLogScale,
         mainPriceScaleMode: s.mainPriceScaleMode,
