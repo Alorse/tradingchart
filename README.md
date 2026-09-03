@@ -110,7 +110,7 @@ For 1000 candles and multiple panes the cost is negligible.
 
 - ❌ Pine Script (proprietary to TradingView, can't be cloned)
 - ❌ Server-side alerts (alerts currently run client-side)
-- ❌ Real trading (broker integration)
+- ❌ Paper trading
 - ❌ Screener / scanner over the full exchange universe
 
 `lightweight-charts` is Apache 2.0 with attribution to TradingView — the attribution lives in the footer/UI as the license requires.
