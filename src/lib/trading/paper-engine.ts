@@ -720,6 +720,12 @@ export function evaluateTick(
   let acc = account;
   let events: PaperEvent[] = [];
 
+  // A position on this symbol that already existed *before* this tick's limit
+  // fills. Positions net per symbol, so there is at most one; its id survives
+  // a same-side merge or a partial reduce, but not an open or a flip — that
+  // distinction is what the bracket pass below uses to skip a fresh position.
+  const preTickPositionId = acc.positions.find((p) => p.symbol === symbol)?.id ?? null;
+
   // Resting limit orders first: an order that fills on this tick gets its
   // brackets evaluated by the *next* one, never by the tick that opened it.
   const crossing = acc.orders.filter(
@@ -752,9 +758,13 @@ export function evaluateTick(
     events = [...events, ...res.events];
   }
 
-  // Then brackets and liquidation, at most one trigger per position.
+  // Then brackets and liquidation, at most one trigger per position — but
+  // never for a position this same tick just opened or flipped into: it has
+  // no id in common with whatever (if anything) existed before the fills
+  // above, so evaluating it here would price a stop/TP/liquidation off the
+  // tick that created it rather than the next one.
   const position = acc.positions.find((p) => p.symbol === symbol);
-  if (position) {
+  if (position && position.id === preTickPositionId) {
     const exit = triggeredExit(position, price);
     if (exit) {
       const res = closePosition(acc, symbol, exit.price, now, undefined, exit.reason);

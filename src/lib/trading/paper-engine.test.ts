@@ -559,3 +559,26 @@ describe("bracket normalization on open (adversarial review finding 6)", () => {
     expect(p.tp).toBe(null);
   });
 });
+
+describe("same-tick bracket evaluation (adversarial review finding 4)", () => {
+  it("does not evaluate brackets against the tick price for a position this tick just opened", () => {
+    // A SELL limit @19_000 with a valid SL above entry (19_500). A tick that
+    // both crosses the limit and blows through 19_500 must not stop the
+    // position out on the very tick that created it.
+    const a = placeLimitOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 19_000, leverage: 10, sl: 19_500 },
+      NOW,
+    ).account;
+
+    const opened = evaluateTick(a, "BTCUSDT", 19_600, NOW + 1);
+    expect(opened.account.positions).toHaveLength(1);
+    expect(pos(opened.account).side).toBe("SHORT");
+    expect(pos(opened.account).sl).toBe(19_500);
+    expect(opened.account.history).toHaveLength(0);
+
+    const stopped = evaluateTick(opened.account, "BTCUSDT", 19_500, NOW + 2);
+    expect(stopped.account.positions).toHaveLength(0);
+    expect(stopped.account.history[0].reason).toBe("SL");
+  });
+});
