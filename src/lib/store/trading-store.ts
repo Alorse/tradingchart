@@ -5,6 +5,9 @@ import { persist } from "zustand/middleware";
 import { isPerp, cleanSym } from "@/lib/binance/rest";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
+import { useToastStore } from "@/lib/alerts/toast-store";
+import { tradeGate } from "@/lib/trading/exchange-gate";
+import { hedgePositionIdx, remainingQty } from "@/lib/trading/hedge";
 import type {
   Order,
   Position,
@@ -190,7 +193,37 @@ function mapRawOrders(data: unknown, perp: boolean): Order[] {
     updateTime: o.updateTime as number,
     reduceOnly: (o.reduceOnly as boolean) ?? false,
     isPerp: perp,
+    positionIdx: typeof o.positionIdx === "number" ? o.positionIdx : undefined,
   }));
+}
+
+/**
+ * POST an order and actually read the outcome.
+ *
+ * `fetch` only rejects on a network-layer failure: an exchange rejection
+ * (invalid stop price, "would trigger immediately", minNotional, rate limit)
+ * arrives as a perfectly ordinary 400 that an unchecked `await fetch(...)`
+ * discards. That is how a protective stop could fail while the app reported
+ * success, leaving a leveraged position unprotected and unannounced.
+ *
+ * Both venues surface failures the same way through `/api/trade/order`, so one
+ * check covers them: Binance's error status and body are forwarded verbatim,
+ * and Bybit's non-zero `retCode` — which the exchange itself returns inside an
+ * HTTP 200 envelope — is converted to a 400 with a `msg` by the route.
+ */
+async function postOrder(body: PlaceOrderParams): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch("/api/trade/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => ({}))) as { msg?: string; error?: string };
+    if (!res.ok) return { ok: false, error: data.msg ?? data.error ?? "Order failed" };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
 }
 
 /** Shape returned by `/api/trade/sync` for each of its three reads. */
@@ -396,6 +429,16 @@ export const useTradingStore = create<TradingState>()(
       placeOrder: async (symbol, overrides) => {
         const { apiKey, apiSecret, testnet, exchange, form } = get();
         if (!apiKey || !apiSecret) return { ok: false, error: "No API credentials set." };
+
+        // The chart may be on a different venue than the connected account.
+        // Submitting anyway would fill on the wrong exchange's book, at a price
+        // the user never saw. Same check the read-side overlays already make.
+        const gate = tradeGate(symbol, exchange);
+        if (!gate.ok) {
+          set({ lastError: gate.reason });
+          return { ok: false, error: gate.reason };
+        }
+
         const f = { ...form, ...overrides };
         const perp = isPerp(symbol);
         const sym = cleanSym(symbol);
@@ -456,56 +499,67 @@ export const useTradingStore = create<TradingState>()(
         };
 
         try {
-          const res = await fetch("/api/trade/order", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          const data = await res.json() as Record<string, unknown>;
-          if (!res.ok) {
-            const msg = (data.msg as string) || "Order failed";
+          const entry = await postOrder(body);
+          if (!entry.ok) {
+            const msg = entry.error ?? "Order failed";
             set({ isLoading: false, lastError: msg });
             return { ok: false, error: msg };
           }
 
+          // The entry is filled/working from here on. A protective leg that
+          // fails now leaves real exposure unprotected, so its outcome is
+          // checked and surfaced rather than dropped — the exchange can reject
+          // a stop the entry itself accepted (price moved, minNotional, a
+          // trigger that would fire immediately).
+          const exitSide: OrderSide = f.side === "BUY" ? "SELL" : "BUY";
+          const failures: string[] = [];
+
           // Place SL as a separate reduceOnly order (perp only) — only when
           // it wasn't already attached natively above (Bybit).
           if (perp && !nativeTpSl && f.slEnabled && f.sl) {
-            const slSide: OrderSide = f.side === "BUY" ? "SELL" : "BUY";
-            await fetch("/api/trade/order", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                apiKey, apiSecret, testnet, exchange,
-                symbol: sym, isPerp: true,
-                side: slSide, type: "STOP_MARKET",
-                quantity: f.qty, stopPrice: f.sl,
-                reduceOnly: true, workingType: "MARK_PRICE",
-                ...(posIdx !== undefined ? { positionIdx: posIdx } : {}),
-              } satisfies PlaceOrderParams),
+            const r = await postOrder({
+              apiKey, apiSecret, testnet, exchange,
+              symbol: sym, isPerp: true,
+              side: exitSide, type: "STOP_MARKET",
+              quantity: f.qty, stopPrice: f.sl,
+              reduceOnly: true, workingType: "MARK_PRICE",
+              ...(posIdx !== undefined ? { positionIdx: posIdx } : {}),
             });
+            if (!r.ok) failures.push(`stop-loss at ${f.sl} was rejected (${r.error})`);
           }
 
           // Place TP as a separate reduceOnly order (perp only) — only when
           // it wasn't already attached natively above (Bybit).
           if (perp && !nativeTpSl && f.tpEnabled && f.tp) {
-            const tpSide: OrderSide = f.side === "BUY" ? "SELL" : "BUY";
-            await fetch("/api/trade/order", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                apiKey, apiSecret, testnet, exchange,
-                symbol: sym, isPerp: true,
-                side: tpSide, type: "TAKE_PROFIT_MARKET",
-                quantity: f.qty, stopPrice: f.tp,
-                reduceOnly: true, workingType: "MARK_PRICE",
-                ...(posIdx !== undefined ? { positionIdx: posIdx } : {}),
-              } satisfies PlaceOrderParams),
+            const r = await postOrder({
+              apiKey, apiSecret, testnet, exchange,
+              symbol: sym, isPerp: true,
+              side: exitSide, type: "TAKE_PROFIT_MARKET",
+              quantity: f.qty, stopPrice: f.tp,
+              reduceOnly: true, workingType: "MARK_PRICE",
+              ...(posIdx !== undefined ? { positionIdx: posIdx } : {}),
             });
+            if (!r.ok) failures.push(`take-profit at ${f.tp} was rejected (${r.error})`);
           }
 
           set({ isLoading: false });
           void get().syncAccount(symbol);
+
+          if (failures.length > 0) {
+            // Deliberately loud: the entry went through, so the user now holds
+            // an unprotected position and the panel's inline error alone is
+            // easy to miss when the order ticket isn't on screen.
+            const msg = `Entry filled, but the ${failures.join(" and ")}. The position is UNPROTECTED.`;
+            set({ lastError: msg });
+            useToastStore.getState().push({
+              variant: "alert",
+              title: "Protective order failed",
+              message: msg,
+              ttlMs: 0,
+            });
+            return { ok: false, error: msg };
+          }
+
           return { ok: true };
         } catch (e) {
           set({ isLoading: false, lastError: String(e) });
@@ -518,11 +572,22 @@ export const useTradingStore = create<TradingState>()(
         if (!apiKey || !apiSecret) return;
         const perp = isPerp(symbol);
         const sym = cleanSym(symbol);
-        await fetch("/api/trade/order", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apiKey, apiSecret, testnet, exchange, symbol: sym, isPerp: perp, orderId }),
-        });
+        try {
+          const res = await fetch("/api/trade/order", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ apiKey, apiSecret, testnet, exchange, symbol: sym, isPerp: perp, orderId }),
+          });
+          // Same reasoning as `postOrder`: a rejected cancel is a 400, not a
+          // thrown error, and silently ignoring it leaves the user believing a
+          // working order is gone when it is still live.
+          if (!res.ok) {
+            const data = (await res.json().catch(() => ({}))) as { msg?: string };
+            set({ lastError: data.msg ?? "cancel failed" });
+          }
+        } catch (e) {
+          set({ lastError: String(e) });
+        }
         void get().syncAccount(symbol);
       },
 
@@ -531,6 +596,41 @@ export const useTradingStore = create<TradingState>()(
         if (!apiKey || !apiSecret) return { ok: false, error: "No credentials" };
         const perp = isPerp(symbol);
         const sym = cleanSym(symbol);
+
+        // Re-post the quantity still working, not the original size. Anything
+        // already filled has become position, and adding it back on top would
+        // silently inflate exposure beyond what the user ever intended.
+        const quantity = patch.quantity ?? remainingQty(order.origQty, order.executedQty);
+        if (!(quantity > 0)) {
+          // Nothing left to move. Bail out *before* cancelling: cancelling a
+          // fully-filled order achieves nothing, but cancelling and then
+          // failing to re-post would be a silent loss of protection.
+          const msg = "Order is already filled — nothing left to modify.";
+          set({ lastError: msg });
+          void get().syncAccount(symbol);
+          return { ok: false, error: msg };
+        }
+
+        // Bybit rejects a repost whose positionIdx doesn't match the account's
+        // position mode. The order carries its own slot when the exchange
+        // reported one; otherwise derive it, remembering that a reduceOnly
+        // order belongs to the position on the *opposite* side.
+        let posIdx = order.positionIdx;
+        if (posIdx === undefined && exchange === "bybit" && perp) {
+          try {
+            const params = new URLSearchParams({
+              apiKey, apiSecret, testnet: String(testnet), exchange, symbol: sym,
+            });
+            const res = await fetch(`/api/trade/position-mode?${params}`);
+            if (res.ok) {
+              const { hedge } = await res.json() as { hedge: boolean };
+              if (hedge) posIdx = hedgePositionIdx(order.side, order.reduceOnly ?? false);
+            }
+          } catch {
+            // fall back to no positionIdx (one-way default)
+          }
+        }
+
         set({ modifyingOrderId: order.orderId, lastError: null });
 
         // Cancel the original order first.
@@ -559,7 +659,6 @@ export const useTradingStore = create<TradingState>()(
         const isTrigger =
           order.type === "STOP_MARKET" || order.type === "TAKE_PROFIT_MARKET";
         const price = patch.price ?? (isTrigger ? order.stopPrice : order.price);
-        const quantity = patch.quantity ?? order.origQty;
         const body: PlaceOrderParams = {
           apiKey, apiSecret, testnet, exchange,
           symbol: sym, isPerp: perp,
@@ -569,25 +668,31 @@ export const useTradingStore = create<TradingState>()(
           ...(order.timeInForce && !isTrigger ? { timeInForce: order.timeInForce } : {}),
           ...(perp && order.reduceOnly ? { reduceOnly: true } : {}),
           ...(isTrigger ? { workingType: "MARK_PRICE" } : {}),
+          ...(posIdx !== undefined ? { positionIdx: posIdx } : {}),
         };
-        try {
-          const res = await fetch("/api/trade/order", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          const data = (await res.json().catch(() => ({}))) as { msg?: string };
-          set({ modifyingOrderId: null });
-          if (!res.ok) {
-            set({ lastError: data.msg ?? "replace failed" });
-            return { ok: false, error: data.msg ?? "replace failed" };
-          }
+
+        const replaced = await postOrder(body);
+        set({ modifyingOrderId: null });
+        if (!replaced.ok) {
+          const msg = replaced.error ?? "replace failed";
+          // The original order is already cancelled at this point, so the
+          // cached list is stale the moment this fails. Refresh before the
+          // next poll tick (up to 15s away at the idle rate), or the UI keeps
+          // showing a working order — possibly a stop — that no longer exists.
+          set({ lastError: msg });
           void get().syncAccount(symbol);
-          return { ok: true };
-        } catch (e) {
-          set({ modifyingOrderId: null, lastError: String(e) });
-          return { ok: false, error: String(e) };
+          if (order.reduceOnly) {
+            useToastStore.getState().push({
+              variant: "alert",
+              title: "Protective order lost",
+              message: `The ${order.type === "STOP_MARKET" ? "stop-loss" : "exit"} order was cancelled but could not be replaced: ${msg}`,
+              ttlMs: 0,
+            });
+          }
+          return { ok: false, error: msg };
         }
+        void get().syncAccount(symbol);
+        return { ok: true };
       },
 
       closePosition: async (symbol, position) => {
@@ -678,30 +783,48 @@ export const useTradingStore = create<TradingState>()(
             });
           }
         }
-        async function place(type: "TAKE_PROFIT_MARKET" | "STOP_MARKET", stopPrice: number) {
-          await fetch("/api/trade/order", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              apiKey, apiSecret, testnet, exchange,
-              symbol: sym, isPerp: true,
-              side: closeSide, type,
-              quantity: String(qty), stopPrice: String(stopPrice),
-              reduceOnly: true, workingType: "MARK_PRICE",
-            } satisfies PlaceOrderParams),
+        function place(type: "TAKE_PROFIT_MARKET" | "STOP_MARKET", stopPrice: number) {
+          return postOrder({
+            apiKey, apiSecret, testnet, exchange,
+            symbol: sym, isPerp: true,
+            side: closeSide, type,
+            quantity: String(qty), stopPrice: String(stopPrice),
+            reduceOnly: true, workingType: "MARK_PRICE",
           });
         }
 
         try {
+          // The old protective order is cancelled before the new one goes in,
+          // so a rejected replacement means the position is now bare — that
+          // has to be reported, not swallowed behind `{ ok: true }`.
+          const failures: string[] = [];
           if (tp !== undefined) {
             await cancelExisting((t) => t === "TAKE_PROFIT_MARKET" || t === "TAKE_PROFIT");
-            if (tp !== null && tp > 0) await place("TAKE_PROFIT_MARKET", tp);
+            if (tp !== null && tp > 0) {
+              const r = await place("TAKE_PROFIT_MARKET", tp);
+              if (!r.ok) failures.push(`take-profit at ${tp} was rejected (${r.error})`);
+            }
           }
           if (sl !== undefined) {
             await cancelExisting((t) => t === "STOP_MARKET" || t === "STOP" || t === "STOP_LIMIT");
-            if (sl !== null && sl > 0) await place("STOP_MARKET", sl);
+            if (sl !== null && sl > 0) {
+              const r = await place("STOP_MARKET", sl);
+              if (!r.ok) failures.push(`stop-loss at ${sl} was rejected (${r.error})`);
+            }
           }
           void get().syncAccount(symbol);
+
+          if (failures.length > 0) {
+            const msg = `The ${failures.join(" and ")}. The position is UNPROTECTED.`;
+            set({ lastError: msg });
+            useToastStore.getState().push({
+              variant: "alert",
+              title: "Protective order failed",
+              message: msg,
+              ttlMs: 0,
+            });
+            return { ok: false, error: msg };
+          }
           return { ok: true };
         } catch (e) {
           set({ lastError: String(e) });

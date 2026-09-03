@@ -7,6 +7,7 @@ import { useTradingStore } from "@/lib/store/trading-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useBookTicker } from "@/lib/binance/use-book-ticker";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
+import { tradeGate } from "@/lib/trading/exchange-gate";
 import {
   qtyToSizings,
   sizingToQty,
@@ -125,6 +126,7 @@ export function OrderPanel() {
   const symbol = useChartStore((s) => s.symbol);
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);
+  const exchange = useTradingStore((s) => s.exchange);
   const isConnected = useTradingStore((s) => s.isConnected);
   const balance = useTradingStore((s) => s.balance);
   const form = useTradingStore((s) => s.form);
@@ -144,6 +146,9 @@ export function OrderPanel() {
   const { bid, ask } = useBookTicker(symbol);
   const perp = isPerp(symbol);
   const baseAsset = getBaseAsset(symbol);
+  // Account data comes from the connected exchange; the chart may be on
+  // another venue. Blocks submission instead of filling on the wrong book.
+  const gate = tradeGate(symbol, exchange);
 
   // Refresh on mount + symbol change. One batched request rather than three
   // separate ones — `useTradingSync` keeps this fresh afterwards.
@@ -333,6 +338,7 @@ export function OrderPanel() {
         qty={form.qty}
         price={form.price}
         isLoading={isLoading}
+        blockedReason={gate.ok ? null : gate.reason}
         onSubmit={() => placeOrder(symbol)}
       />
 
@@ -947,7 +953,7 @@ function ExtraSettings({
 }
 
 function SubmitButton({
-  symbol, side, type, qty, price, isLoading, onSubmit,
+  symbol, side, type, qty, price, isLoading, blockedReason, onSubmit,
 }: {
   symbol: string;
   side: "BUY" | "SELL";
@@ -955,21 +961,31 @@ function SubmitButton({
   qty: string;
   price: string;
   isLoading: boolean;
+  /** Set when the chart's venue doesn't match the connected account, in which
+   *  case the order must not be submitted at all. */
+  blockedReason: string | null;
   onSubmit: () => void;
 }) {
   const cleanSym = symbol.replace(/\.P$/, "");
-  const summary = `${qty || "0"} ${cleanSym} ${type === "LIMIT" ? `@ ${price || "—"} LIMIT` : type}`;
-  const disabled = isLoading || !qty;
+  const summary = blockedReason
+    ? blockedReason
+    : `${qty || "0"} ${cleanSym} ${type === "LIMIT" ? `@ ${price || "—"} LIMIT` : type}`;
+  const disabled = isLoading || !qty || blockedReason !== null;
   return (
     <button
       onClick={onSubmit}
       disabled={disabled}
+      title={blockedReason ?? undefined}
       className={cn(
         "flex flex-col items-center justify-center gap-0.5 border-t border-tv-border px-3 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-50",
-        side === "BUY" ? "bg-tv-blue hover:bg-tv-blue/90" : "bg-tv-red hover:bg-tv-red/90",
+        blockedReason
+          ? "bg-tv-text-muted"
+          : side === "BUY" ? "bg-tv-blue hover:bg-tv-blue/90" : "bg-tv-red hover:bg-tv-red/90",
       )}
     >
-      <span>{isLoading ? "Submitting…" : side === "BUY" ? "Buy" : "Sell"}</span>
+      <span>
+        {blockedReason ? "Unavailable" : isLoading ? "Submitting…" : side === "BUY" ? "Buy" : "Sell"}
+      </span>
       <span className="text-[10px] font-normal opacity-90">{summary}</span>
     </button>
   );

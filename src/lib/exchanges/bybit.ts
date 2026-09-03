@@ -207,6 +207,8 @@ export interface RawBybitOrder {
   reduceOnly: boolean;
   createdTime: string;
   updatedTime: string;
+  /** 0 one-way, 1 hedge-long, 2 hedge-short. */
+  positionIdx?: number;
 }
 
 function mapBybitOrderType(o: RawBybitOrder): OrderType {
@@ -270,6 +272,8 @@ export function mapBybitOrder(o: RawBybitOrder): Order {
     updateTime: num(o.updatedTime),
     reduceOnly: o.reduceOnly ?? false,
     isPerp: true,
+    // Carried so a cancel/replace can re-post into the same hedge slot.
+    positionIdx: o.positionIdx,
   };
 }
 

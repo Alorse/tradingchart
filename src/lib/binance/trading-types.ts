@@ -32,6 +32,10 @@ export interface Order {
   updateTime: number;
   reduceOnly?: boolean;
   isPerp: boolean;
+  /** Bybit hedge-mode slot this order belongs to (0 one-way, 1 long, 2 short).
+   *  Undefined for Binance. Needed when cancel/replacing an order on a hedge
+   *  account: Bybit rejects a repost whose index doesn't match the mode. */
+  positionIdx?: number;
 }
 
 export interface Position {

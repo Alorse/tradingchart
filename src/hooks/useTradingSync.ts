@@ -142,6 +142,21 @@ export function useTradingSync() {
     };
   }, [apiKey, apiSecret, exchange, testnet, symbol]);
 
+  // Clear the order ticket when the chart moves to another symbol. `qty` is
+  // canonical and sized for one instrument, but it used to survive a symbol
+  // switch untouched — and `BuySellOverlay`'s double-click fires a MARKET
+  // order with it, with no confirmation and the ticket panel possibly closed,
+  // so the stale size wasn't even on screen. Skips the first run so a form
+  // filled before this hook mounts isn't wiped.
+  const symbolSeenRef = useRef(false);
+  useEffect(() => {
+    if (!symbolSeenRef.current) {
+      symbolSeenRef.current = true;
+      return;
+    }
+    useTradingStore.getState().resetForm();
+  }, [symbol]);
+
   // Announce fills by diffing consecutive position snapshots. Without a signed
   // user-data socket this is the reliable signal: the exchange has already
   // averaged the entry price for us, so a size change IS a fill.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTradingStore } from "@/lib/store/trading-store";
+import { symbolInfoExchange } from "@/lib/trading/exchange-gate";
 import type { SymbolInfo } from "@/lib/binance/trading-types";
 
 /**
@@ -63,7 +64,12 @@ export async function getSymbolInfo(
 /** React hook — returns either a real SymbolInfo or the defaults. */
 export function useSymbolInfo(symbol: string): SymbolInfo {
   const testnet = useTradingStore((s) => s.testnet);
-  const exchange = useTradingStore((s) => s.exchange);
+  const account = useTradingStore((s) => s.exchange);
+  // Precision has to describe the venue the *symbol* comes from, not the venue
+  // the account is on: rounding a Bybit price to Binance's tick size produces
+  // a price the panel shows and the exchange won't take. (`PriceChart` already
+  // resolves it this way when it calls `getSymbolInfo` directly.)
+  const exchange = symbolInfoExchange(symbol, account);
   const [info, setInfo] = useState<SymbolInfo>(() => {
     const cached = CACHE.get(`${cleanSymbol(symbol)}|${testnet}|${exchange}`);
     return cached ?? { ...DEFAULT_SYMBOL_INFO, symbol: cleanSymbol(symbol) };

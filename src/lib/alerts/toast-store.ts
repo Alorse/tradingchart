@@ -30,7 +30,12 @@ export const useToastStore = create<ToastState>()((set) => ({
             typeof crypto !== "undefined" && "randomUUID" in crypto
               ? crypto.randomUUID()
               : `${Date.now()}-${Math.random()}`,
-          expiresAt: Date.now() + (ttlMs ?? DEFAULT_TTL),
+          // `ttlMs: 0` means persistent, which is what `AlertsToast` reads
+          // `expiresAt === 0` as. Adding Date.now() to it would instead expire
+          // the toast on the very next sweep — the opposite of the intent, and
+          // exactly the toasts that must not disappear (an unprotected
+          // position) are the ones that ask for it.
+          expiresAt: ttlMs === 0 ? 0 : Date.now() + (ttlMs ?? DEFAULT_TTL),
           ...rest,
         },
       ],
