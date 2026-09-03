@@ -1,9 +1,7 @@
 # TradingView Free 📈
 
-Rule number 1: Never speak to me with an Argentine tone, accent or slang. Always use neutral Spanish. No "vos", and no Argentine accents whatsoever.
-
-> **An open-source, 100% free alternative to TradingView Pro, built with LATAM in mind.**
-> Live candles, custom indicators, watchlist, multi-timeframe — no USD to pay, no login, no ads.
+> **An open-source, 100% free alternative to TradingView Pro.**
+> Live candles, custom indicators, drawing tools, alerts, bar replay — no fees, no ads.
 
 A crypto charting platform built on **Binance**'s public data (WebSocket) and the same rendering library TradingView itself uses ([`lightweight-charts`](https://github.com/tradingview/lightweight-charts)).
 
@@ -14,7 +12,10 @@ A crypto charting platform built on **Binance**'s public data (WebSocket) and th
 - 📊 **Live candles** via Binance's WebSocket (no API key)
 - 🔍 **Symbol search** across every USDT pair on the exchange
 - ⏱️ **Multi-timeframe**: 1m / 5m / 15m / 1h / 4h / 1d / 1w
-- 📐 **Client-side indicators**: EMA 20/50/200, RSI 14, MACD 12/26/9, Volume
+- 📐 **Client-side indicators**: EMA, RSI, MACD, Bollinger Bands, VWAP, Volume Profile, oscillators
+- ✏️ **Drawing tools**: trend lines, Fibs, rectangles, channels, positions and more, persisted + cloud-synced
+- 🔔 **Price alerts** with in-app notifications
+- ⏪ **Bar replay** for practice and manual backtesting
 - 👁️ **Watchlist** with prices and 24h change updating in real time
 - 🎨 **Visually identical to TradingView** (palette, fonts, layout)
 - 💾 **Persistence** in localStorage (symbol, timeframe, indicators)
@@ -105,12 +106,11 @@ They are computed **client-side** over the candle array on every update. Pure Ty
 
 For 1000 candles and multiple panes the cost is negligible.
 
-## ⚠️ What it does NOT include (yet)
+## ⚠️ Not included (yet)
 
 - ❌ Pine Script (proprietary to TradingView, can't be cloned)
-- ❌ Persistent drawing tools (Fibs, draggable trend lines)
-- ❌ Bar-by-bar replay
-- ❌ Server-side alerts (next video in the series)
-- ❌ Real trading (bot with a private API — video 4)
+- ❌ Server-side alerts (alerts currently run client-side)
+- ❌ Real trading (broker integration)
+- ❌ Screener / scanner over the full exchange universe
 
 `lightweight-charts` is Apache 2.0 with attribution to TradingView — the attribution lives in the footer/UI as the license requires.
