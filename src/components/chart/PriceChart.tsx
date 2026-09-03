@@ -29,7 +29,9 @@ import {
 import { fetchCandles } from "@/lib/data/fetch";
 import { resolveSource } from "@/lib/symbols/source";
 import { getSymbolInfo } from "@/lib/trading/symbol-info";
-import { ema, rsi, macd, obv } from "@/lib/indicators";
+import { ema, rsi, macd, obv, bollingerBands, vwap as vwapCalc } from "@/lib/indicators";
+import type { BandPoint } from "@/lib/indicators";
+import { SIMPLE_OSCILLATORS, type SimpleOscKey } from "@/lib/indicators/pane-specs";
 import { adx as adxCalc } from "@/lib/indicators/adx";
 import { squeezeMomentum } from "@/lib/indicators/squeeze";
 import { SqueezeOverlay } from "./SqueezeOverlay";
@@ -37,8 +39,11 @@ import { vumanchu as vumanchuCalc } from "@/lib/indicators/vumanchu";
 import type { Candle, Timeframe } from "@/lib/binance/types";
 import {
   INDICATOR_COLORS,
+  SUB_PANE_KEYS,
+  isSubPaneKey,
   useChartStore,
   type IndicatorKey,
+  type SubPaneKey,
   DEFAULT_CHART_COLORS,
 } from "@/lib/store/chart-store";
 import { formatPrice, formatVolume, priceFormatFor } from "@/lib/format";
@@ -52,6 +57,8 @@ import { BuySellOverlay } from "@/components/trading/BuySellOverlay";
 import { FloatingContextToolbar } from "./FloatingContextToolbar";
 import { BarCountdown } from "./BarCountdown";
 import { KeyLevelsOverlay } from "./KeyLevelsOverlay";
+import { VolumeProfileOverlay } from "./VolumeProfileOverlay";
+import { BandFillOverlay } from "./BandFillOverlay";
 import { computeKeyLevels } from "@/lib/indicators/keylevels";
 import type { SqueezePoint } from "@/lib/indicators/squeeze";
 import { xToTime, timeToX, timeframeToSeconds, timeframeLabel } from "@/lib/chart/coords";
@@ -145,6 +152,13 @@ interface LastValues {
   macdSignal?: number;
   macdHist?: number;
   volume?: number;
+  bb?: number;
+  vwap?: number;
+  stochrsi?: number;
+  williamsr?: number;
+  atr?: number;
+  cci?: number;
+  mfi?: number;
 }
 
 interface PaneOffset {
@@ -189,6 +203,17 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const vmcMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   // OBV pane
   const obvRef = useRef<ISeriesApi<"Line"> | null>(null);
+  // Bollinger Bands + VWAP — main-pane overlays
+  const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbMidRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const vwapRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const vwapUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const vwapLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
+  /** Spec-driven oscillator panes (Stoch RSI, %R, ATR, CCI, MFI): key → series. */
+  const simpleOscRef = useRef<
+    Map<SimpleOscKey, { lines: ISeriesApi<"Line">[]; guides: ISeriesApi<"Line">[] }>
+  >(new Map());
   const candlesRef = useRef<Candle[]>([]);
   // Shape of the current view (bar span + offset from the last bar), kept fresh
   // as the user pans/zooms so it survives a symbol change and can be reapplied
@@ -219,6 +244,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const toggleUserEMAHidden = useChartStore((s) => s.toggleUserEMAHidden);
   const adxStyle = useChartStore((s) => s.adxStyle);
   const squeezeStyle = useChartStore((s) => s.squeezeStyle);
+  const bollingerStyle = useChartStore((s) => s.bollingerStyle);
+  const vwapStyle = useChartStore((s) => s.vwapStyle);
+  const volumeProfileCfg = useChartStore((s) => s.volumeProfile);
   const indicatorOverlays = useChartStore((s) => s.indicatorOverlays);
   const paneZOrder = useChartStore((s) => s.paneZOrder);
   const setPaneZOrder = useChartStore((s) => s.setPaneZOrder);
@@ -291,13 +319,20 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const [ctrlHeld, setCtrlHeld] = useState(false);
   const [magnetTarget, setMagnetTarget] = useState<{ time: number; price: number } | null>(null);
   const [squeezePts, setSqueezePts] = useState<SqueezePoint[]>([]);
+  // Band rails are kept in state (not just in the series) because the
+  // translucent fill is an SVG overlay that needs the raw prices.
+  const [bbPts, setBbPts] = useState<BandPoint[]>([]);
+  /** Symbol tick size once exchange-info resolves — Volume Profile's
+   *  "ticks per row" layout is meaningless without it. */
+  const [symbolTickSize, setSymbolTickSize] = useState<number | undefined>(undefined);
+  const [vwapPts, setVwapPts] = useState<BandPoint[]>([]);
   const measureRef = useRef(measure);
   measureRef.current = measure;
   const latestCrosshairParamRef = useRef<MouseEventParams<Time> | null>(null);
   const paneOffsetsRef = useRef(paneOffsets);
   paneOffsetsRef.current = paneOffsets;
-  const indicatorPaneIdxRef = useRef<Record<"rsi" | "macd" | "adx" | "squeeze" | "vumanchu", number>>(
-    { rsi: 1, macd: 2, adx: 3, squeeze: 4, vumanchu: 5 },
+  const indicatorPaneIdxRef = useRef<Record<SubPaneKey, number>>(
+    Object.fromEntries(SUB_PANE_KEYS.map((k, i) => [k, i + 1])) as Record<SubPaneKey, number>,
   );
 
   // Drive alerts off the live price tick
@@ -1110,7 +1145,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       // Sub-pane: find host indicator
       const idxMap = indicatorPaneIdxRef.current;
       let hostKey: IndicatorKey | null = null;
-      for (const k of ["rsi", "macd", "adx", "squeeze", "vumanchu"] as const) {
+      for (const k of SUB_PANE_KEYS) {
         if (idxMap[k] === clickedPane && state.indicators[k]) {
           const target = state.indicatorOverlays[k];
           if (!target || target === "own" || !state.indicators[target as IndicatorKey]) {
@@ -1326,8 +1361,8 @@ export function PriceChart({ symbol, timeframe }: Props) {
    *   1: RSI, 2: MACD, 3: ADX, 4: Squeeze, 5: VuManChu
    * Each indicator falls into the next available index based on which higher-priority ones are enabled.
    */
-  function panelIndexFor(key: "rsi" | "macd" | "adx" | "squeeze" | "vumanchu" | "obv"): number {
-    const order: Array<typeof key> = ["rsi", "macd", "adx", "squeeze", "vumanchu", "obv"];
+  function panelIndexFor(key: SubPaneKey): number {
+    const order = SUB_PANE_KEYS;
     const assigned: Record<string, number> = {};
     let idx = 1;
     for (const k of order) {
@@ -1638,13 +1673,162 @@ export function PriceChart({ symbol, timeframe }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [indicators.obv, indicators.rsi, indicators.macd, indicators.adx, indicators.squeeze, indicators.vumanchu, indicatorOverlays]);
 
+  // ── Bollinger Bands — main-pane overlay ──────────────────────────────────
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (indicators.bb && !bbMidRef.current) {
+      const mk = (color: string) =>
+        chart.addSeries(LineSeries, {
+          color,
+          lineWidth: bollingerStyle.lineWidth,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        });
+      bbUpperRef.current = mk(bollingerStyle.upperColor);
+      bbMidRef.current = mk(bollingerStyle.basisColor);
+      bbLowerRef.current = mk(bollingerStyle.lowerColor);
+      updateBB();
+    } else if (!indicators.bb && bbMidRef.current) {
+      for (const r of [bbUpperRef, bbMidRef, bbLowerRef]) {
+        if (r.current) {
+          try { chart.removeSeries(r.current); } catch {}
+          r.current = null;
+        }
+      }
+      setBbPts([]);
+    }
+    const visible = indicators.bb && !hidden.bb;
+    const width = bollingerStyle.lineWidth;
+    bbUpperRef.current?.applyOptions({ color: bollingerStyle.upperColor, lineWidth: width, visible });
+    bbLowerRef.current?.applyOptions({ color: bollingerStyle.lowerColor, lineWidth: width, visible });
+    bbMidRef.current?.applyOptions({
+      color: bollingerStyle.basisColor,
+      lineWidth: width,
+      visible: visible && bollingerStyle.showBasis,
+    });
+  }, [indicators.bb, hidden.bb, bollingerStyle]);
+
+  useEffect(() => {
+    updateBB();
+  }, [config.bbPeriod, config.bbMult, config.bbMaType]);
+
+  // ── VWAP — main-pane overlay with optional deviation bands ───────────────
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (indicators.vwap && !vwapRef.current) {
+      vwapRef.current = chart.addSeries(LineSeries, {
+        color: vwapStyle.color,
+        lineWidth: vwapStyle.lineWidth,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+      const band = () =>
+        chart.addSeries(LineSeries, {
+          color: vwapStyle.bandColor,
+          lineWidth: 1,
+          lineStyle: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        });
+      vwapUpperRef.current = band();
+      vwapLowerRef.current = band();
+      updateVWAP();
+    } else if (!indicators.vwap && vwapRef.current) {
+      for (const r of [vwapRef, vwapUpperRef, vwapLowerRef]) {
+        if (r.current) {
+          try { chart.removeSeries(r.current); } catch {}
+          r.current = null;
+        }
+      }
+      setVwapPts([]);
+    }
+    const visible = indicators.vwap && !hidden.vwap;
+    vwapRef.current?.applyOptions({ color: vwapStyle.color, lineWidth: vwapStyle.lineWidth, visible });
+    for (const r of [vwapUpperRef, vwapLowerRef]) {
+      r.current?.applyOptions({ color: vwapStyle.bandColor, visible: visible && vwapStyle.showBands });
+    }
+  }, [indicators.vwap, hidden.vwap, vwapStyle]);
+
+  useEffect(() => {
+    updateVWAP();
+  }, [config.vwapAnchor, config.vwapBandMult]);
+
+  // ── Spec-driven oscillator panes (Stoch RSI, %R, ATR, CCI, MFI) ──────────
+  // One effect for all five: they differ only in maths and colour, and their
+  // pane index depends on which *other* sub-panes are enabled, so any change
+  // to the set has to rebuild rather than patch.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    for (const entry of simpleOscRef.current.values()) {
+      for (const series of [...entry.lines, ...entry.guides]) {
+        try { chart.removeSeries(series); } catch {}
+      }
+    }
+    simpleOscRef.current.clear();
+
+    for (const spec of SIMPLE_OSCILLATORS) {
+      if (!indicators[spec.key]) continue;
+      const paneIndex = panelIndexFor(spec.key);
+      const target = indicatorOverlays[spec.key];
+      const isGuest = !!(target && target !== "own" && indicators[target]);
+      // A guest gets its own overlay scale: a 0–100 oscillator sharing the
+      // pane's scale with, say, ATR in dollars would be flattened off-screen.
+      const priceScaleId = isGuest ? `${spec.key}-overlay` : "right";
+      const lines = spec.lines.map((l) =>
+        chart.addSeries(
+          LineSeries,
+          {
+            color: l.color,
+            lineWidth: l.width,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            priceScaleId,
+          },
+          paneIndex,
+        ),
+      );
+      // Guides stay inside the autoscale (like RSI's 30/70 rails) so a quiet
+      // oscillator keeps its familiar fixed frame instead of zooming in on noise.
+      const guides = spec.guides.map(() =>
+        chart.addSeries(
+          LineSeries,
+          {
+            color: TV_COLORS.textMuted,
+            lineWidth: 1,
+            lineStyle: 2,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            priceScaleId,
+          },
+          paneIndex,
+        ),
+      );
+      simpleOscRef.current.set(spec.key, { lines, guides });
+      try {
+        chart.panes()[paneIndex]?.setStretchFactor(1);
+        chart.panes()[0]?.setStretchFactor(3);
+      } catch {}
+    }
+    updateSimpleOscillators();
+    requestAnimationFrame(() => recomputePaneOffsets());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicators, indicatorOverlays]);
+
+  useEffect(() => {
+    updateSimpleOscillators();
+  }, [
+    config.stochRsiLen, config.stochRsiStochLen, config.stochRsiK, config.stochRsiD,
+    config.williamsRPeriod, config.atrPeriod, config.cciPeriod, config.mfiPeriod,
+  ]);
+
   // Visibility — eye toggle (hidden state) + enabled state combined.
   // Sub-pane series are also hidden when subPanesHidden (so their legend headers vanish).
   useEffect(() => {
-    const isSubPane = (key: IndicatorKey) =>
-      key === "rsi" || key === "macd" || key === "adx" || key === "squeeze" || key === "vumanchu" || key === "obv";
     const v = (key: IndicatorKey) =>
-      indicators[key] && !hidden[key] && !(isSubPane(key) && subPanesHidden);
+      indicators[key] && !hidden[key] && !(isSubPaneKey(key) && subPanesHidden);
     // EMAs visibility is driven by per-instance `hidden` flag in the sync effect
     if (rsiRef.current) rsiRef.current.applyOptions({ visible: v("rsi") });
     if (rsi30Ref.current) rsi30Ref.current.applyOptions({ visible: v("rsi") });
@@ -1666,6 +1850,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (squeezeDotsRef.current) squeezeDotsRef.current.applyOptions({ visible: v("squeeze") });
     // VuManChu pane
     if (obvRef.current) obvRef.current.applyOptions({ visible: v("obv") });
+    // Spec-driven oscillator panes — lines and guides share one visibility.
+    for (const [key, entry] of simpleOscRef.current) {
+      const on = v(key);
+      for (const series of [...entry.lines, ...entry.guides]) series.applyOptions({ visible: on });
+    }
     if (vmcWt1Ref.current) vmcWt1Ref.current.applyOptions({ visible: v("vumanchu") });
     if (vmcWt2Ref.current) vmcWt2Ref.current.applyOptions({ visible: v("vumanchu") });
     if (vmcVwapRef.current) vmcVwapRef.current.applyOptions({ visible: v("vumanchu") });
@@ -1726,6 +1915,16 @@ export function PriceChart({ symbol, timeframe }: Props) {
       vmcWt2Ref as unknown as React.RefObject<ISeriesApi<"Area"> | null>,
       !!indicatorLogScale.vumanchu,
     );
+    apply(
+      obvRef as unknown as React.RefObject<ISeriesApi<"Line"> | null>,
+      !!indicatorLogScale.obv,
+    );
+    // Spec-driven panes: the first line owns the pane's price scale.
+    for (const [key, entry] of simpleOscRef.current) {
+      entry.lines[0]?.priceScale().applyOptions({
+        mode: indicatorLogScale[key] ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+      });
+    }
   }, [indicatorLogScale, indicators]);
 
   // Apply chart color customization
@@ -2081,6 +2280,66 @@ export function PriceChart({ symbol, timeframe }: Props) {
     obvRef.current.setData(data);
   }
 
+  function updateBB() {
+    const c = candlesRef.current;
+    if (c.length === 0 || !bbMidRef.current) return;
+    const cfg = configRef.current;
+    const pts = bollingerBands(c, cfg.bbPeriod, cfg.bbMult, cfg.bbMaType);
+    bbUpperRef.current?.setData(pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.upper })));
+    bbMidRef.current.setData(pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.mid })));
+    bbLowerRef.current?.setData(pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.lower })));
+    setBbPts(pts);
+    setLastValues((prev) => ({ ...prev, bb: pts.at(-1)?.mid }));
+  }
+
+  function updateVWAP() {
+    const c = candlesRef.current;
+    if (c.length === 0 || !vwapRef.current) return;
+    const cfg = configRef.current;
+    const pts = vwapCalc(c, cfg.vwapAnchor, cfg.vwapBandMult);
+    // The running sums restart at each anchor rollover, so the value jumps and
+    // the plot draws a steep segment across the boundary. That matches Pine's
+    // `plot()` — and so TradingView's own VWAP — and it cannot be broken here
+    // anyway: a lightweight-charts whitespace point adds a slot on the time
+    // scale but the line series still connects straight across it. A real gap
+    // would need one series per anchor period.
+    const rail = (pick: (p: BandPoint) => number) =>
+      pts.map((p) => ({ time: p.time as UTCTimestamp, value: pick(p) }));
+    vwapRef.current.setData(rail((p) => p.mid));
+    vwapUpperRef.current?.setData(rail((p) => p.upper));
+    vwapLowerRef.current?.setData(rail((p) => p.lower));
+    setVwapPts(pts);
+    setLastValues((prev) => ({ ...prev, vwap: pts.at(-1)?.mid }));
+  }
+
+  function updateSimpleOscillators() {
+    const c = candlesRef.current;
+    if (c.length === 0 || simpleOscRef.current.size === 0) return;
+    const cfg = configRef.current;
+    const next: Partial<LastValues> = {};
+    for (const spec of SIMPLE_OSCILLATORS) {
+      const entry = simpleOscRef.current.get(spec.key);
+      if (!entry) continue;
+      const { times, lines } = spec.compute(c, cfg);
+      entry.lines.forEach((series, i) => {
+        const values = lines[i] ?? [];
+        series.setData(times.map((t, j) => ({ time: t as UTCTimestamp, value: values[j] })));
+      });
+      if (times.length > 0) {
+        const first = times[0] as UTCTimestamp;
+        const last = times[times.length - 1] as UTCTimestamp;
+        entry.guides.forEach((series, i) => {
+          series.setData([
+            { time: first, value: spec.guides[i] },
+            { time: last, value: spec.guides[i] },
+          ]);
+        });
+      }
+      next[spec.key] = lines[0]?.at(-1);
+    }
+    setLastValues((prev) => ({ ...prev, ...next }));
+  }
+
   function updateRSI() {
     const c = candlesRef.current;
     if (c.length === 0 || !rsiRef.current) return;
@@ -2374,6 +2633,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               const info = await getSymbolInfo(symbol, false, source.kind);
               if (!cancelled && info.tickSize > 0) {
                 applyPrecision(info.pricePrecision, info.tickSize);
+                setSymbolTickSize(info.tickSize);
               }
             } catch {
               // keep the magnitude-based guess
@@ -2399,6 +2659,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         updateSqueeze();
         updateVumanchu();
         updateOBV();
+        updateBB();
+        updateVWAP();
+        updateSimpleOscillators();
         if (chartRef.current && klines.length > 0) {
           const lastIdx = klines.length - 1;
           if (shape) {
@@ -2476,6 +2739,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
               updateSqueeze();
               updateVumanchu();
               updateOBV();
+              updateBB();
+              updateVWAP();
+              updateSimpleOscillators();
               const last = fresh[fresh.length - 1];
               const prev = fresh[fresh.length - 2] ?? last;
               const lp2 = {
@@ -2564,6 +2830,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
                 updateSqueeze();
                 updateVumanchu();
               updateOBV();
+              updateBB();
+              updateVWAP();
+              updateSimpleOscillators();
                 const prev = arr[arr.length - 2] ?? lastCandle;
                 const lp3 = {
                   value: synth.close,
@@ -2619,6 +2888,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
             updateSqueeze();
             updateVumanchu();
             updateOBV();
+            updateBB();
+            updateVWAP();
+            updateSimpleOscillators();
             const prev = arr[arr.length - 2] ?? lastCandle;
             const lp4 = {
               value: k.close,
@@ -2671,6 +2943,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
     updateSqueeze();
     updateVumanchu();
     updateOBV();
+    updateBB();
+    updateVWAP();
+    updateSimpleOscillators();
     if (arr.length) {
       const last = arr[arr.length - 1];
       const prev = arr[arr.length - 2] ?? last;
@@ -2776,17 +3051,8 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // Determine which pane each indicator lives in (based on current layout)
   // Order: RSI > MACD > ADX > Squeeze > VuManChu. Overlaid indicators reuse
   // the target's index instead of taking their own.
-  const indicatorPaneIdx: Record<
-    "rsi" | "macd" | "adx" | "squeeze" | "vumanchu",
-    number
-  > = (() => {
-    const order: Array<"rsi" | "macd" | "adx" | "squeeze" | "vumanchu"> = [
-      "rsi",
-      "macd",
-      "adx",
-      "squeeze",
-      "vumanchu",
-    ];
+  const indicatorPaneIdx: Record<SubPaneKey, number> = (() => {
+    const order = SUB_PANE_KEYS;
     const out: Record<string, number> = {};
     let idx = 1;
     for (const k of order) {
@@ -2799,7 +3065,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         if (indicators[k]) idx++;
       }
     }
-    return out as Record<"rsi" | "macd" | "adx" | "squeeze" | "vumanchu", number>;
+    return out as Record<SubPaneKey, number>;
   })();
   indicatorPaneIdxRef.current = indicatorPaneIdx;
   const rsiPaneIdx = indicatorPaneIdx.rsi;
@@ -2817,6 +3083,14 @@ export function PriceChart({ symbol, timeframe }: Props) {
       { key: "adx" as IndicatorKey, paneIdx: adxPaneIdx, name: `ADX ${config.adx}` },
       { key: "squeeze" as IndicatorKey, paneIdx: squeezePaneIdx, name: "Squeeze Momentum" },
       { key: "vumanchu" as IndicatorKey, paneIdx: vumanchuPaneIdx, name: "VuManChu Cipher B" },
+      { key: "obv" as IndicatorKey, paneIdx: indicatorPaneIdx.obv, name: "OBV" },
+      ...SIMPLE_OSCILLATORS.map((spec) => ({
+        key: spec.key as IndicatorKey,
+        paneIdx: indicatorPaneIdx[spec.key],
+        name: spec.name(config),
+        value:
+          lastValues[spec.key] !== undefined ? spec.format(lastValues[spec.key]!) : undefined,
+      })),
     ] as PaneEntry[]
   ).filter((p) => indicators[p.key]);
 
@@ -2859,6 +3133,59 @@ export function PriceChart({ symbol, timeframe }: Props) {
                 onToggleHide={() => toggleHidden("volume")}
                 onSettings={() => setSettingsTarget("volume")}
                 onRemove={() => removeIndicator("volume")}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(indicators.bb
+      ? [
+          {
+            key: "bb",
+            node: (
+              <IndicatorPill
+                name={`BB ${config.bbPeriod}, ${config.bbMult}`}
+                value={lastValues.bb !== undefined ? formatPrice(lastValues.bb) : undefined}
+                color={bollingerStyle.upperColor}
+                hidden={hidden.bb}
+                onToggleHide={() => toggleHidden("bb")}
+                onSettings={() => setSettingsTarget("bb")}
+                onRemove={() => removeIndicator("bb")}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(indicators.vwap
+      ? [
+          {
+            key: "vwap",
+            node: (
+              <IndicatorPill
+                name="VWAP"
+                value={lastValues.vwap !== undefined ? formatPrice(lastValues.vwap) : undefined}
+                color={vwapStyle.color}
+                hidden={hidden.vwap}
+                onToggleHide={() => toggleHidden("vwap")}
+                onSettings={() => setSettingsTarget("vwap")}
+                onRemove={() => removeIndicator("vwap")}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(indicators.vrvp
+      ? [
+          {
+            key: "vrvp",
+            node: (
+              <IndicatorPill
+                name="Volume Profile"
+                color={volumeProfileCfg.upColor}
+                hidden={hidden.vrvp}
+                onToggleHide={() => toggleHidden("vrvp")}
+                onSettings={() => setSettingsTarget("vrvp")}
+                onRemove={() => removeIndicator("vrvp")}
               />
             ),
           },
@@ -3144,6 +3471,43 @@ export function PriceChart({ symbol, timeframe }: Props) {
         />
       )}
 
+      {indicators.bb && !hidden.bb && bollingerStyle.showFill && (
+        <BandFillOverlay
+          chart={chartRef.current}
+          candleSeries={candleSeriesRef.current}
+          pts={bbPts}
+          color={bollingerStyle.fillColor}
+          opacity={bollingerStyle.fillOpacity}
+          mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
+          chartAreaWidth={chartRef.current ? chartRef.current.timeScale().width() : containerSize.width}
+        />
+      )}
+
+      {indicators.vwap && !hidden.vwap && vwapStyle.showBands && vwapStyle.showFill && (
+        <BandFillOverlay
+          chart={chartRef.current}
+          candleSeries={candleSeriesRef.current}
+          pts={vwapPts}
+          color={vwapStyle.bandColor}
+          opacity={vwapStyle.fillOpacity}
+          mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
+          chartAreaWidth={chartRef.current ? chartRef.current.timeScale().width() : containerSize.width}
+        />
+      )}
+
+      {indicators.vrvp && !hidden.vrvp && (
+        <VolumeProfileOverlay
+          chart={chartRef.current}
+          candleSeries={candleSeriesRef.current}
+          candles={candlesRef.current}
+          cfg={volumeProfileCfg}
+          tickSize={symbolTickSize}
+          chartAreaWidth={chartRef.current ? chartRef.current.timeScale().width() : containerSize.width}
+          mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
+          renderTick={renderTick}
+        />
+      )}
+
       {indicators.squeeze && !subPanesHidden && paneOffsets[squeezePaneIdx] && paneOffsets[squeezePaneIdx].height > 0 && (
         <SqueezeOverlay
           chart={chartRef.current}
@@ -3231,13 +3595,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         // Resolve which indicator owns this pane (for log scale state)
         let key: "main" | IndicatorKey = "main";
         if (paneIdx > 0) {
-          for (const k of [
-            "rsi",
-            "macd",
-            "adx",
-            "squeeze",
-            "vumanchu",
-          ] as const) {
+          for (const k of SUB_PANE_KEYS) {
             if (indicatorPaneIdx[k] === paneIdx && indicators[k]) {
               key = k;
               break;
