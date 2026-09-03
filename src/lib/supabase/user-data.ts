@@ -6,6 +6,9 @@ import type {
   ChartColors,
   AdxStyle,
   SqueezeStyle,
+  BollingerStyle,
+  VwapStyle,
+  VolumeProfileConfig,
   KeyLevelsConfig,
   UserEMA,
   ChartType,
@@ -17,6 +20,9 @@ export interface VisualSettings {
   chartColors?: ChartColors;
   adxStyle?: AdxStyle;
   squeezeStyle?: SqueezeStyle;
+  bollingerStyle?: BollingerStyle;
+  vwapStyle?: VwapStyle;
+  volumeProfile?: VolumeProfileConfig;
   keyLevels?: KeyLevelsConfig;
   userEMAs?: UserEMA[];
   chartType?: ChartType;

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import {
   useChartStore,
   DEFAULT_CONFIG,
+  ALL_INDICATORS_FALSE,
   type Watchlist,
 } from "@/lib/store/chart-store";
 import {
@@ -33,6 +34,9 @@ export function useCloudSync() {
   const chartColors = useChartStore((s) => s.chartColors);
   const adxStyle = useChartStore((s) => s.adxStyle);
   const squeezeStyle = useChartStore((s) => s.squeezeStyle);
+  const bollingerStyle = useChartStore((s) => s.bollingerStyle);
+  const vwapStyle = useChartStore((s) => s.vwapStyle);
+  const volumeProfile = useChartStore((s) => s.volumeProfile);
   const keyLevels = useChartStore((s) => s.keyLevels);
   const userEMAs = useChartStore((s) => s.userEMAs);
   const chartType = useChartStore((s) => s.chartType);
@@ -56,10 +60,13 @@ export function useCloudSync() {
       if (settings) {
         setSymbol(settings.symbol);
         setTimeframe(settings.timeframe);
+        // A row written before an indicator existed has no key for it, and an
+        // undefined slot would leave `indicators`/`config` incomplete — so
+        // every load is merged onto the current defaults, never assigned raw.
         useChartStore.setState({
-          indicators: settings.indicators,
-          hidden: settings.hidden,
-          config: settings.config ?? DEFAULT_CONFIG,
+          indicators: { ...ALL_INDICATORS_FALSE, ...settings.indicators },
+          hidden: { ...ALL_INDICATORS_FALSE, ...settings.hidden },
+          config: { ...DEFAULT_CONFIG, ...(settings.config ?? {}) },
         });
 
         // Ajustes visuales: colores, estilos de indicadores, EMAs, chartType
@@ -69,6 +76,9 @@ export function useCloudSync() {
             ...(vs.chartColors   && { chartColors:   vs.chartColors }),
             ...(vs.adxStyle      && { adxStyle:      vs.adxStyle }),
             ...(vs.squeezeStyle  && { squeezeStyle:  vs.squeezeStyle }),
+            ...(vs.bollingerStyle && { bollingerStyle: vs.bollingerStyle }),
+            ...(vs.vwapStyle     && { vwapStyle:     vs.vwapStyle }),
+            ...(vs.volumeProfile && { volumeProfile: vs.volumeProfile }),
             ...(vs.keyLevels     && { keyLevels:     vs.keyLevels }),
             ...(vs.userEMAs      !== undefined && { userEMAs: vs.userEMAs }),
             ...(vs.chartType     && { chartType:     vs.chartType }),
@@ -132,6 +142,9 @@ export function useCloudSync() {
           chartColors,
           adxStyle,
           squeezeStyle,
+          bollingerStyle,
+          vwapStyle,
+          volumeProfile,
           keyLevels,
           userEMAs,
           chartType,
@@ -144,7 +157,8 @@ export function useCloudSync() {
   }, [
     user,
     symbol, timeframe, indicators, hidden, config,
-    chartColors, adxStyle, squeezeStyle, keyLevels, userEMAs, chartType,
+    chartColors, adxStyle, squeezeStyle, bollingerStyle, vwapStyle, volumeProfile,
+    keyLevels, userEMAs, chartType,
   ]);
 
   // ── Sync debounced de watchlist (items completos con labels) ─────────────
