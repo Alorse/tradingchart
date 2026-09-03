@@ -41,7 +41,7 @@ Requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env
 
 - All application UI strings are in **English**.
 - Code comments and identifiers in English (consistent with UI).
-- Commit messages and PR descriptions in **neutral Spanish** (no Argentine/Rioplatense slang: avoid "vos", "tenés", "querés", "andá", "che", etc.). Use "tú", "tienes", "quieres", "ve", "aquí".
+- Commit messages and PR descriptions in **English** (Conventional Commits).
 - README and developer-facing docs are in English too (they were translated from Spanish).
 
 ## Architecture
