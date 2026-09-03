@@ -180,7 +180,15 @@ export const usePaperTradingStore = create<PaperTradingState>()(
        */
       merge: (persisted, current) => {
         const account = (persisted as { account?: Partial<PaperAccount> } | undefined)?.account;
-        if (!account || !Array.isArray(account.positions)) return current;
+        if (
+          !account ||
+          !Array.isArray(account.positions) ||
+          !Array.isArray(account.orders) ||
+          !Array.isArray(account.history) ||
+          typeof account.balance !== "number"
+        ) {
+          return current;
+        }
         return {
           ...current,
           account: {

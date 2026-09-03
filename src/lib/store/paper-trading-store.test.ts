@@ -158,4 +158,41 @@ describe("paper-trading-store persistence", () => {
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
     expect(st().account.positions).toHaveLength(0);
   });
+
+  it("rehydrating orders:null or a non-array history falls back to defaults instead of corrupting the account (adversarial review finding 8)", async () => {
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: { account: { positions: [], orders: null, history: [], balance: 1_000 } },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
+    expect(st().account.positions).toHaveLength(0);
+    // Previously `usedMargin` (via `equity`) would crash reducing over `orders: null`.
+    expect(typeof st().equity()).toBe("number");
+
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          account: { positions: [], orders: [], history: "not-an-array", balance: 1_000 },
+        },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
+
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: { account: { positions: [], orders: [], history: [], balance: "1000" } },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
+  });
 });
