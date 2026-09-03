@@ -749,9 +749,14 @@ export function evaluateTick(
       orderId: order.id,
       now,
     });
-    // A rejected fill leaves the order resting and its reserve untouched.
     if (res.events.some((e) => e.type === "reject")) {
-      events = [...events, ...res.events];
+      // An order that can't be margined now never will be by sitting there
+      // any longer — auto-cancel it instead of leaving it to reject (and
+      // strand its reserve) on every future tick. `res.account` is `released`
+      // unchanged: the reserve is already back in `balance` and the order
+      // already dropped from `orders`.
+      acc = res.account;
+      events = [...events, ...res.events, { type: "cancel", orderId: order.id, symbol: order.symbol }];
       continue;
     }
     acc = res.account;

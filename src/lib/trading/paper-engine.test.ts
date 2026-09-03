@@ -582,3 +582,43 @@ describe("same-tick bracket evaluation (adversarial review finding 4)", () => {
     expect(stopped.account.history[0].reason).toBe("SL");
   });
 });
+
+describe("rejected crossing orders (adversarial review finding 2)", () => {
+  it("auto-cancels a resting order that a crash makes impossible to margin, refunding its reserve", () => {
+    // BUY opens a small LONG. SELL rests far below it; when both cross on the
+    // same catastrophic tick, the SELL first force-closes the LONG at a loss
+    // deep enough to wipe the free balance, then can't afford to open the
+    // short remainder — a reject that, left resting, would refire every tick.
+    let a = placeLimitOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
+      NOW,
+    ).account;
+    a = placeLimitOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 2, price: 1, leverage: 10 },
+      NOW,
+    ).account;
+    expect(a.orders).toHaveLength(2);
+    const balanceBeforeCrash = a.balance;
+    const secondOrderId = a.orders[1].id;
+
+    const res = evaluateTick(a, "BTCUSDT", 1, NOW + 1);
+
+    expect(res.account.orders).toHaveLength(0);
+    expect(res.events.some((e) => e.type === "reject")).toBe(true);
+    expect(
+      res.events.some((e) => e.type === "cancel" && e.orderId === secondOrderId),
+    ).toBe(true);
+    // The reserve is back: balance only moved by the BUY's own fill economics,
+    // never touched by the rejected SELL. (Finding 4's fix also keeps this
+    // fresh position's brackets/liquidation from evaluating on this same
+    // tick, so nothing else here moves the balance.)
+    expect(res.account.balance).toBeCloseTo(balanceBeforeCrash + 0.2004, 6);
+
+    // No reject storm: the order is gone, so a repeat tick can't reject again
+    // (whatever else happens to the now-orphaned position is a separate path).
+    const again = evaluateTick(res.account, "BTCUSDT", 1, NOW + 2);
+    expect(again.events.some((e) => e.type === "reject")).toBe(false);
+  });
+});
