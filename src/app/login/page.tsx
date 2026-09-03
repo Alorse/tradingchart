@@ -80,7 +80,7 @@ export default function LoginPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Tabs de modo */}
+            {/* Mode tabs */}
             <div className="flex rounded-lg border border-[#2a2e39] bg-[#1e222d] p-1">
               {(["magic", "password", "signup"] as Mode[]).map((m) => (
                 <button

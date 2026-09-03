@@ -1,11 +1,11 @@
--- Schema para TradingView Gratis
--- Corré esto en el SQL Editor de tu proyecto Supabase
+-- Schema for TradingView Free
+-- Run this in the SQL Editor of your Supabase project
 
--- Habilitar extensión para UUIDs
+-- Enable the extension needed for UUIDs
 create extension if not exists "pgcrypto";
 
 -- ─────────────────────────────────────────────
--- user_profiles: datos extra del usuario
+-- user_profiles: extra per-user data
 -- ─────────────────────────────────────────────
 create table if not exists public.user_profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
@@ -15,11 +15,11 @@ create table if not exists public.user_profiles (
 
 alter table public.user_profiles enable row level security;
 
-create policy "Usuarios solo ven su perfil"
+create policy "Users can only see their own profile"
   on public.user_profiles for all
   using (auth.uid() = id);
 
--- Función para crear perfil automáticamente al registrarse
+-- Function that creates a profile automatically on sign-up
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer as $$
 begin
@@ -35,13 +35,13 @@ create or replace trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ─────────────────────────────────────────────
--- user_watchlists: lista de símbolos por usuario
+-- user_watchlists: per-user symbol list
 -- ─────────────────────────────────────────────
 create table if not exists public.user_watchlists (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users(id) on delete cascade,
-  symbols    text[] not null default '{}',          -- legado: solo símbolos
-  items      jsonb not null default '[]',           -- completo: símbolos + labels
+  symbols    text[] not null default '{}',          -- legacy: symbols only
+  items      jsonb not null default '[]',           -- full: symbols + labels
   updated_at timestamptz default now()
 );
 
@@ -49,12 +49,12 @@ create unique index if not exists user_watchlists_user_id_idx on public.user_wat
 
 alter table public.user_watchlists enable row level security;
 
-create policy "Usuarios solo ven su watchlist"
+create policy "Users can only see their own watchlist"
   on public.user_watchlists for all
   using (auth.uid() = user_id);
 
 -- ─────────────────────────────────────────────
--- user_chart_settings: configuración del chart por usuario
+-- user_chart_settings: per-user chart settings
 -- ─────────────────────────────────────────────
 create table if not exists public.user_chart_settings (
   id               uuid primary key default gen_random_uuid(),
@@ -72,12 +72,12 @@ create unique index if not exists user_chart_settings_user_id_idx on public.user
 
 alter table public.user_chart_settings enable row level security;
 
-create policy "Usuarios solo ven su configuración"
+create policy "Users can only see their own settings"
   on public.user_chart_settings for all
   using (auth.uid() = user_id);
 
 -- ─────────────────────────────────────────────
--- user_price_lines: líneas horizontales de precio
+-- user_price_lines: horizontal price lines
 -- ─────────────────────────────────────────────
 create table if not exists public.user_price_lines (
   id         uuid primary key default gen_random_uuid(),
@@ -91,6 +91,6 @@ create index if not exists user_price_lines_user_symbol_idx on public.user_price
 
 alter table public.user_price_lines enable row level security;
 
-create policy "Usuarios solo ven sus price lines"
+create policy "Users can only see their own price lines"
   on public.user_price_lines for all
   using (auth.uid() = user_id);

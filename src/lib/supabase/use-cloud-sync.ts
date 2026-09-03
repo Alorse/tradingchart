@@ -25,7 +25,7 @@ export function useCloudSync() {
   const { user } = useAuth();
   const initializedRef = useRef(false);
 
-  // ── Campos que se sincronizan a la nube ──────────────────────────────────
+  // ── Fields synced to the cloud ───────────────────────────────────────────
   const symbol = useChartStore((s) => s.symbol);
   const timeframe = useChartStore((s) => s.timeframe);
   const indicators = useChartStore((s) => s.indicators);
@@ -69,7 +69,7 @@ export function useCloudSync() {
           config: { ...DEFAULT_CONFIG, ...(settings.config ?? {}) },
         });
 
-        // Ajustes visuales: colores, estilos de indicadores, EMAs, chartType
+        // Visual settings: colors, indicator styles, EMAs, chartType
         const vs = settings.visual_settings;
         if (vs) {
           useChartStore.setState({
@@ -94,11 +94,11 @@ export function useCloudSync() {
             if (w.id !== state.activeWatchlistId) return w;
 
             if (cloudHasLabels) {
-              // Nube en formato nuevo → reemplazar para preservar labels de la nube
+              // Cloud is in the new format → replace, to preserve the cloud's labels
               return { ...w, items: wl };
             }
 
-            // Formato legado (solo símbolos) → merge preservando labels locales
+            // Legacy format (symbols only) → merge, preserving local labels
             const have = new Set(
               w.items.filter((i) => i.type === "symbol").map((i) => i.value),
             );
@@ -126,7 +126,7 @@ export function useCloudSync() {
     }
   }, [user]);
 
-  // ── Sync debounced de ajustes (indicadores + visual) ─────────────────────
+  // ── Debounced settings sync (indicators + visual) ────────────────────────
   const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!user || !initializedRef.current) return;
@@ -161,7 +161,7 @@ export function useCloudSync() {
     keyLevels, userEMAs, chartType,
   ]);
 
-  // ── Sync debounced de watchlist (items completos con labels) ─────────────
+  // ── Debounced watchlist sync (full items, with labels) ───────────────────
   const wlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!user || !initializedRef.current) return;

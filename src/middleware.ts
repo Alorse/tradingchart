@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
     authenticated = false;
   }
 
-  // Redirigir a /login si no está autenticado y no está en /login ni en /auth/*
+  // Redirect to /login unless authenticated or already on /login or /auth/*
   if (
     !authenticated &&
     !request.nextUrl.pathname.startsWith("/login") &&

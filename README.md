@@ -1,68 +1,68 @@
-# TradingView Gratis 📈
+# TradingView Free 📈
 
-Regla numero 1: Nunca jamas me hables con tono, acento ni modismos argentinos. Siempre utiliza un castellano neutro. Nada de vos, ni acentos argentinos en absoluto
+Rule number 1: Never speak to me with an Argentine tone, accent or slang. Always use neutral Spanish. No "vos", and no Argentine accents whatsoever.
 
-> **Una alternativa open-source y 100% gratis a TradingView Pro, pensada para LATAM.**
-> Velas en vivo, indicadores propios, watchlist, multi-timeframe — sin pagar USD, sin login, sin ads.
+> **An open-source, 100% free alternative to TradingView Pro, built with LATAM in mind.**
+> Live candles, custom indicators, watchlist, multi-timeframe — no USD to pay, no login, no ads.
 
-Plataforma de charts crypto construida sobre los datos públicos de **Binance** (WebSocket) y la misma librería de render que usa TradingView ([`lightweight-charts`](https://github.com/tradingview/lightweight-charts)).
+A crypto charting platform built on **Binance**'s public data (WebSocket) and the same rendering library TradingView itself uses ([`lightweight-charts`](https://github.com/tradingview/lightweight-charts)).
 
 ---
 
 ## ✨ Features
 
-- 📊 **Velas en vivo** vía WebSocket de Binance (sin API key)
-- 🔍 **Búsqueda de símbolo** sobre todos los pares USDT del exchange
+- 📊 **Live candles** via Binance's WebSocket (no API key)
+- 🔍 **Symbol search** across every USDT pair on the exchange
 - ⏱️ **Multi-timeframe**: 1m / 5m / 15m / 1h / 4h / 1d / 1w
-- 📐 **Indicadores client-side**: EMA 20/50/200, RSI 14, MACD 12/26/9, Volumen
-- 👁️ **Watchlist** con precios y cambio 24h actualizándose en tiempo real
-- 🎨 **Visual idéntica a TradingView** (paleta, fuentes, layout)
-- 💾 **Persistencia** en localStorage (símbolo, timeframe, indicadores)
-- 🔌 **Reconexión robusta** del WebSocket con backoff exponencial
-- 🌐 100% client-side — deploy estático en Vercel/Cloudflare
+- 📐 **Client-side indicators**: EMA 20/50/200, RSI 14, MACD 12/26/9, Volume
+- 👁️ **Watchlist** with prices and 24h change updating in real time
+- 🎨 **Visually identical to TradingView** (palette, fonts, layout)
+- 💾 **Persistence** in localStorage (symbol, timeframe, indicators)
+- 🔌 **Robust WebSocket reconnection** with exponential backoff
+- 🌐 100% client-side — static deploy on Vercel/Cloudflare
 
-## 🚀 Empezar
+## 🚀 Getting started
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abrí [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000).
 
 ## 🛠️ Stack
 
-| Capa | Tech |
+| Layer | Tech |
 |---|---|
 | Framework | Next.js 16 (App Router) |
-| Lenguaje | TypeScript |
-| Estilos | Tailwind CSS 4 + shadcn/ui |
+| Language | TypeScript |
+| Styles | Tailwind CSS 4 + shadcn/ui |
 | Charts | [lightweight-charts](https://github.com/tradingview/lightweight-charts) v5 |
-| Estado | Zustand (con persistencia) |
-| Iconos | lucide-react |
-| Datos | Binance Public REST + WebSocket |
+| State | Zustand (with persistence) |
+| Icons | lucide-react |
+| Data | Binance Public REST + WebSocket |
 
-## 📐 Arquitectura
+## 📐 Architecture
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx          # Root, fuente Inter, TooltipProvider, dark
-│   ├── page.tsx            # Dashboard armando el layout
-│   └── globals.css         # Paleta TradingView
+│   ├── layout.tsx          # Root, Inter font, TooltipProvider, dark
+│   ├── page.tsx            # Dashboard assembling the layout
+│   └── globals.css         # TradingView palette
 ├── components/
 │   ├── chart/
 │   │   ├── PriceChart.tsx     # Chart core (lightweight-charts + panes)
-│   │   ├── SymbolSelector.tsx # Búsqueda de pares USDT
+│   │   ├── SymbolSelector.tsx # USDT pair search
 │   │   ├── TimeframeSelector.tsx
 │   │   └── IndicatorMenu.tsx  # Toggle EMA/RSI/MACD/Volume
 │   ├── layout/
 │   │   ├── Header.tsx
-│   │   ├── LeftSidebar.tsx    # Iconos drawing tools (visual)
+│   │   ├── LeftSidebar.tsx    # Drawing tool icons (visual)
 │   │   ├── RightSidebar.tsx
-│   │   └── BottomPanel.tsx    # Stats 24h
+│   │   └── BottomPanel.tsx    # 24h stats
 │   ├── watchlist/
-│   │   └── Watchlist.tsx      # Precios live multi-símbolo
+│   │   └── Watchlist.tsx      # Live multi-symbol prices
 │   └── ui/                    # shadcn primitives
 └── lib/
     ├── binance/
@@ -76,41 +76,41 @@ src/
     └── format.ts              # formatPrice / formatPct / formatVolume
 ```
 
-## 🌐 Deploy a Vercel
+## 🌐 Deploy to Vercel
 
 ```bash
 npm i -g vercel
 vercel
 ```
 
-O conectá el repo en [vercel.com/new](https://vercel.com/new) y deploy automático. No hay variables de entorno — todo es cliente.
+Or connect the repo at [vercel.com/new](https://vercel.com/new) for automatic deploys. There are no environment variables — everything is client-side.
 
-## 🧠 Cómo funciona
+## 🧠 How it works
 
-### Datos históricos
-Al abrir un símbolo se hace un `GET /api/v3/klines` (REST) que trae las últimas **1000 velas** del par + timeframe activo. Se renderizan instantáneamente.
+### Historical data
+Opening a symbol fires a `GET /api/v3/klines` (REST) that brings back the last **1000 candles** for the active pair + timeframe. They render instantly.
 
-### Datos en vivo
-Una única conexión WebSocket multiplexada (`stream.binance.com`) recibe:
-- `<symbol>@kline_<interval>` → updates de la vela actual + cierre de velas
-- `<symbol>@miniTicker` → tickers del watchlist
+### Live data
+A single multiplexed WebSocket connection (`stream.binance.com`) receives:
+- `<symbol>@kline_<interval>` → updates to the current candle + candle closes
+- `<symbol>@miniTicker` → watchlist tickers
 
-Al reconectarse (Binance corta el WS cada 24h) se vuelven a suscribir todos los streams activos con backoff exponencial.
+On reconnect (Binance drops the WS every 24h) every active stream is resubscribed with exponential backoff.
 
-### Indicadores
-Se calculan **client-side** sobre el array de velas en cada update. Implementaciones puras de TypeScript:
-- `EMA`: seeded con SMA del primer período, luego `close * k + prev * (1-k)`
-- `RSI`: Wilder (suavizado exponencial sobre ganancias/pérdidas, período 14)
-- `MACD`: EMA(12) − EMA(26), signal = EMA(9) sobre MACD line
+### Indicators
+They are computed **client-side** over the candle array on every update. Pure TypeScript implementations:
+- `EMA`: seeded with the SMA of the first period, then `close * k + prev * (1-k)`
+- `RSI`: Wilder (exponential smoothing over gains/losses, period 14)
+- `MACD`: EMA(12) − EMA(26), signal = EMA(9) over the MACD line
 
-Para 1000 velas y panes múltiples el costo es despreciable.
+For 1000 candles and multiple panes the cost is negligible.
 
-## ⚠️ Qué NO incluye (todavía)
+## ⚠️ What it does NOT include (yet)
 
-- ❌ Pine Script (propietario de TradingView, no se puede clonar)
-- ❌ Drawing tools persistentes (Fibo, trend lines arrastrables)
-- ❌ Replay bar-by-bar
-- ❌ Alertas server-side (siguiente video de la serie)
-- ❌ Trading real (bot con API privada — video 4)
+- ❌ Pine Script (proprietary to TradingView, can't be cloned)
+- ❌ Persistent drawing tools (Fibs, draggable trend lines)
+- ❌ Bar-by-bar replay
+- ❌ Server-side alerts (next video in the series)
+- ❌ Real trading (bot with a private API — video 4)
 
-`lightweight-charts` es Apache 2.0 con atribución a TradingView — la atribución vive en el footer/UI por requerimiento de la licencia.
+`lightweight-charts` is Apache 2.0 with attribution to TradingView — the attribution lives in the footer/UI as the license requires.

@@ -75,7 +75,7 @@ export function MeasureOverlay({
           </marker>
         </defs>
 
-        {/* Rectángulo del rango */}
+        {/* Range rectangle */}
         <rect
           x={left}
           y={top}
@@ -99,7 +99,7 @@ export function MeasureOverlay({
           opacity={0.7}
         />
 
-        {/* Flecha vertical en el centro indicando dirección */}
+        {/* Vertical arrow in the center indicating direction */}
         <line
           x1={centerX}
           x2={centerX}

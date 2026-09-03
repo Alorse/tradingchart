@@ -1,10 +1,10 @@
--- Migración 03: visual_settings en chart y watchlist items con labels
--- Correr en el SQL Editor de Supabase
+-- Migration 03: visual_settings on chart, and watchlist items with labels
+-- Run this in the Supabase SQL Editor
 
--- Ajustes visuales (colores de vela, estilos de indicadores, EMAs, chartType)
+-- Visual settings (candle colors, indicator styles, EMAs, chartType)
 ALTER TABLE public.user_chart_settings
   ADD COLUMN IF NOT EXISTS visual_settings JSONB NOT NULL DEFAULT '{}';
 
--- Watchlist completa con labels/separadores (no solo símbolos)
+-- Full watchlist with labels/separators (not just symbols)
 ALTER TABLE public.user_watchlists
   ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]';

@@ -61,7 +61,7 @@ export async function saveChartSettings(settings: CloudChartSettings) {
 
 // ─── Watchlist ────────────────────────────────────────────────────────────────
 
-/** Carga la watchlist activa. Prefiere `items` (con labels) sobre `symbols` (legado). */
+/** Loads the active watchlist. Prefers `items` (with labels) over `symbols` (legacy). */
 export async function loadWatchlistItems(): Promise<WatchlistItem[] | null> {
   const supabase = createClient();
   const { data } = await supabase
@@ -70,12 +70,12 @@ export async function loadWatchlistItems(): Promise<WatchlistItem[] | null> {
     .single();
   if (!data) return null;
 
-  // Columna nueva: items con labels
+  // New column: items with labels
   if (Array.isArray(data.items) && data.items.length > 0) {
     return data.items as WatchlistItem[];
   }
 
-  // Fallback legado: solo símbolos como texto
+  // Legacy fallback: plain symbol strings only
   const syms: string[] = Array.isArray(data.symbols) ? data.symbols : [];
   if (syms.length === 0) return null;
   return syms.map((s) => ({
@@ -85,7 +85,7 @@ export async function loadWatchlistItems(): Promise<WatchlistItem[] | null> {
   }));
 }
 
-/** Guarda la watchlist activa. Persiste tanto `symbols` (legado) como `items` (completo). */
+/** Saves the active watchlist. Persists both `symbols` (legacy) and `items` (full). */
 export async function saveWatchlistItems(items: WatchlistItem[]) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -93,13 +93,13 @@ export async function saveWatchlistItems(items: WatchlistItem[]) {
 
   const symbols = items.filter((i) => i.type === "symbol").map((i) => i.value);
 
-  // Intentar guardar con la columna `items` (migración 03)
+  // Try saving with the `items` column (migration 03)
   const { error } = await supabase.from("user_watchlists").upsert(
     { user_id: user.id, symbols, items, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   );
 
-  // Si falla (columna items no existe aún), guardar solo symbols como fallback
+  // If that fails (the items column doesn't exist yet), fall back to symbols only
   if (error) {
     await supabase.from("user_watchlists").upsert(
       { user_id: user.id, symbols, updated_at: new Date().toISOString() },
@@ -108,7 +108,7 @@ export async function saveWatchlistItems(items: WatchlistItem[]) {
   }
 }
 
-// Mantener para compatibilidad con código legado que pueda existir
+// Kept for compatibility with any legacy code that may still exist
 export async function loadWatchlist(): Promise<string[] | null> {
   const items = await loadWatchlistItems();
   if (!items) return null;
