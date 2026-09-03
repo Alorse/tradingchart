@@ -136,9 +136,12 @@ describe("paper-trading-store persistence", () => {
     // Live marks are session data, not account state.
     expect(parsed.state.marks).toBe(undefined);
 
-    // Blow the in-memory state away, then restore it from storage.
+    // Blow the in-memory state away, then restore it from storage. `setState`
+    // is itself wrapped by `persist`, so wiping the store also rewrites the
+    // blob — put the snapshot back first, the way a page reload would find it.
     usePaperTradingStore.setState({ account: createAccount(), marks: {} });
     expect(st().account.positions).toHaveLength(0);
+    localStorage.setItem(PAPER_STORAGE_KEY, raw as string);
 
     await usePaperTradingStore.persist.rehydrate();
     expect(st().account.positions).toHaveLength(1);
