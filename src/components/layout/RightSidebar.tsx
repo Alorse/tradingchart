@@ -51,7 +51,7 @@ export function RightSidebar() {
 
   return (
     <aside
-      className="relative flex shrink-0 flex-col border-l border-tv-border bg-tv-panel"
+      className="relative flex shrink-0 flex-row border-l border-tv-border bg-tv-panel"
       style={{ width }}
     >
       {/* Resize handle — drag the left edge to resize */}
@@ -64,76 +64,87 @@ export function RightSidebar() {
           resizing && "bg-tv-blue/30",
         )}
       />
-      {/* Tab bar */}
-      <div className="flex border-b border-tv-border">
-        <button
-          onClick={() => setTab("watchlist")}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors",
-            tab === "watchlist"
-              ? "border-b-2 border-tv-blue text-tv-blue"
-              : "text-tv-text-muted hover:text-tv-text",
-          )}
-        >
-          <List className="h-3.5 w-3.5" />
-          Watchlist
-        </button>
-        <button
-          onClick={() => setTab("objects")}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors",
-            tab === "objects"
-              ? "border-b-2 border-tv-blue text-tv-blue"
-              : "text-tv-text-muted hover:text-tv-text",
-          )}
-        >
-          <Layers className="h-3.5 w-3.5" />
-          Objects
-        </button>
-        <button
-          onClick={() => setTab("trade")}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors",
-            tab === "trade"
-              ? "border-b-2 border-tv-blue text-tv-blue"
-              : "text-tv-text-muted hover:text-tv-text",
-          )}
-        >
-          <BarChart2 className="h-3.5 w-3.5" />
-          Trade
-        </button>
-        <button
-          onClick={() => setTab("alerts")}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors",
-            tab === "alerts"
-              ? "border-b-2 border-tv-blue text-tv-blue"
-              : "text-tv-text-muted hover:text-tv-text",
-          )}
-        >
-          <Bell className="h-3.5 w-3.5" />
-          Alerts
-          {activeAlertCount > 0 && (
-            <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-tv-blue px-1 text-[9px] font-semibold text-white">
-              {activeAlertCount}
-            </span>
-          )}
-        </button>
-      </div>
 
       {/* Content */}
-      <div className={cn("flex-1 overflow-hidden", tab !== "watchlist" && "hidden")}>
-        <Watchlist />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className={cn("flex-1 overflow-hidden", tab !== "watchlist" && "hidden")}>
+          <Watchlist />
+        </div>
+        <div className={cn("flex-1 overflow-hidden", tab !== "objects" && "hidden")}>
+          <ObjectTreePanel />
+        </div>
+        <div className={cn("flex-1 overflow-hidden", tab !== "trade" && "hidden")}>
+          <TradePanel />
+        </div>
+        <div className={cn("flex-1 overflow-hidden", tab !== "alerts" && "hidden")}>
+          <AlertsPanel />
+        </div>
       </div>
-      <div className={cn("flex-1 overflow-hidden", tab !== "objects" && "hidden")}>
-        <ObjectTreePanel />
-      </div>
-      <div className={cn("flex-1 overflow-hidden", tab !== "trade" && "hidden")}>
-        <TradePanel />
-      </div>
-      <div className={cn("flex-1 overflow-hidden", tab !== "alerts" && "hidden")}>
-        <AlertsPanel />
+
+      {/* Vertical tab rail, flush against the right edge */}
+      <div className="flex w-12 shrink-0 flex-col border-l border-tv-border bg-tv-panel">
+        <RailTab
+          active={tab === "watchlist"}
+          onClick={() => setTab("watchlist")}
+          icon={List}
+          label="Watchlist"
+        />
+        <RailTab
+          active={tab === "objects"}
+          onClick={() => setTab("objects")}
+          icon={Layers}
+          label="Objects"
+        />
+        <RailTab
+          active={tab === "trade"}
+          onClick={() => setTab("trade")}
+          icon={BarChart2}
+          label="Trade"
+        />
+        <RailTab
+          active={tab === "alerts"}
+          onClick={() => setTab("alerts")}
+          icon={Bell}
+          label="Alerts"
+          badge={activeAlertCount}
+        />
       </div>
     </aside>
+  );
+}
+
+function RailTab({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof List;
+  label: string;
+  badge?: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative flex flex-col items-center gap-1 border-l-2 py-2.5 text-[9px] font-medium transition-colors",
+        active
+          ? "border-tv-blue bg-tv-panel-hover text-tv-blue"
+          : "border-transparent text-tv-text-muted hover:bg-tv-bg hover:text-tv-text",
+      )}
+    >
+      <span className="relative">
+        <Icon className="h-4 w-4" />
+        {!!badge && badge > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-tv-blue px-0.5 text-[8px] font-semibold leading-none text-white">
+            {badge}
+          </span>
+        )}
+      </span>
+      {label}
+    </button>
   );
 }
