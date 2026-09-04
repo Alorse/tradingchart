@@ -622,3 +622,56 @@ describe("rejected crossing orders (adversarial review finding 2)", () => {
     expect(again.events.some((e) => e.type === "reject")).toBe(false);
   });
 });
+
+describe("event payloads and flips against a resting order (adversarial review finding 11)", () => {
+  it("a market fill's event carries a null orderId and a taker fee proportional to qty*price*rate", () => {
+    const res = fillMarketOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 2, leverage: 10 },
+      20_000,
+      NOW,
+    );
+    const fill = res.events.find((e) => e.type === "fill");
+    if (!fill || fill.type !== "fill") throw new Error("expected a fill event");
+    expect(fill.orderId).toBe(null);
+    expect(fill.fee).toBeCloseTo(2 * 20_000 * S.takerFeeRate, 6);
+  });
+
+  it("a limit fill's event carries the resting order's id and the maker fee", () => {
+    const a = placeLimitOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
+      NOW,
+    ).account;
+    const orderId = a.orders[0].id;
+
+    const res = evaluateTick(a, "BTCUSDT", 19_000, NOW + 1);
+    const fill = res.events.find((e) => e.type === "fill");
+    if (!fill || fill.type !== "fill") throw new Error("expected a fill event");
+    expect(fill.orderId).toBe(orderId);
+    expect(fill.fee).toBeCloseTo(1 * 19_000 * S.makerFeeRate, 6);
+  });
+
+  it("flips a position via market order while a resting limit on the same symbol is untouched", () => {
+    let a = openLong(acct(), 20_000, 1, 10);
+    a = placeLimitOrder(
+      a,
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 18_000, leverage: 10 },
+      NOW,
+    ).account;
+    expect(a.orders).toHaveLength(1);
+
+    a = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 3, leverage: 10 },
+      21_000,
+      NOW + 1,
+    ).account;
+    const p = pos(a);
+    expect(p.side).toBe("SHORT");
+    expect(p.qty).toBeCloseTo(2, 8);
+    // The unrelated resting order survives the flip untouched.
+    expect(a.orders).toHaveLength(1);
+    expect(a.orders[0].price).toBe(18_000);
+  });
+});
