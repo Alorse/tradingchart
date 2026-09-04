@@ -103,34 +103,34 @@ export function MobileAlertsSheet() {
                   : `${SOURCE_LABELS[source]} ${CONDITION_LABELS[a.condition]} ${
                       source === "rsi" ? a.value : formatPrice(a.value)
                     }`;
+              const tone = a.enabled ? "text-tv-text-muted" : "text-tv-text-disabled";
               return (
                 <div
                   key={a.id}
-                  className={cn(
-                    "flex items-start gap-2 border-b border-tv-border/60 px-3 py-2.5",
-                    !a.enabled && "opacity-50",
-                  )}
+                  className="flex items-start gap-2 border-b border-tv-border/60 px-3 py-2.5"
                 >
                   <button
                     onClick={() => toggleAlert(a.id)}
                     aria-label={a.enabled ? "Pause alert" : "Resume alert"}
                     className={cn(
                       "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded",
-                      a.enabled ? "text-tv-yellow" : "text-tv-text-dim active:text-tv-text",
+                      a.enabled ? "text-tv-yellow" : "text-tv-text-muted active:text-tv-text",
                     )}
                   >
                     {a.enabled ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
                   </button>
                   <button onClick={() => jumpTo(a.symbol)} className="min-w-0 flex-1 text-left">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-medium">{a.symbol}</span>
+                      <span className={cn("truncate text-sm font-medium", !a.enabled && "text-tv-text-disabled")}>
+                        {a.symbol}
+                      </span>
                       {a.trigger === "once" && (
-                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-tv-text-muted">once</span>
+                        <span className={cn("shrink-0 text-[9px] uppercase tracking-wider", tone)}>once</span>
                       )}
                     </div>
-                    <div className="truncate text-[11px] text-tv-text-muted">{desc}</div>
+                    <div className={cn("truncate text-[11px]", tone)}>{desc}</div>
                     {a.message && (
-                      <div className="truncate text-[10px] text-tv-text-muted">{a.message}</div>
+                      <div className={cn("truncate text-[10px]", tone)}>{a.message}</div>
                     )}
                   </button>
                   <button
@@ -165,27 +165,27 @@ export function MobileAlertsSheet() {
                   : d.alert?.direction === "cross-down"
                     ? "Crossing down"
                     : "Crossing";
+              const tone = enabled ? "text-tv-text-muted" : "text-tv-text-disabled";
               return (
                 <div
                   key={d.id}
-                  className={cn(
-                    "flex items-start gap-2 border-b border-tv-border/60 px-3 py-2.5",
-                    !enabled && "opacity-50",
-                  )}
+                  className="flex items-start gap-2 border-b border-tv-border/60 px-3 py-2.5"
                 >
                   <button
                     onClick={() => toggleDrawingAlert(d)}
                     aria-label={enabled ? "Pause alert" : "Resume alert"}
                     className={cn(
                       "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded",
-                      enabled ? "text-tv-yellow" : "text-tv-text-dim active:text-tv-text",
+                      enabled ? "text-tv-yellow" : "text-tv-text-muted active:text-tv-text",
                     )}
                   >
                     {enabled ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
                   </button>
                   <button onClick={() => jumpTo(d.symbol, d.id)} className="min-w-0 flex-1 text-left">
-                    <div className="truncate text-sm font-medium">{d.symbol}</div>
-                    <div className="truncate text-[11px] text-tv-text-muted">
+                    <div className={cn("truncate text-sm font-medium", !enabled && "text-tv-text-disabled")}>
+                      {d.symbol}
+                    </div>
+                    <div className={cn("truncate text-[11px]", tone)}>
                       {kindLabel} · {dirLabel}
                     </div>
                   </button>

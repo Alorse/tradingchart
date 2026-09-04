@@ -252,7 +252,6 @@ export function ObjectTreePanel() {
                   "group flex cursor-grab items-center gap-1.5 px-2 py-1 text-[12px] transition-colors active:cursor-grabbing",
                   isSelected && !isMultiSelected ? "bg-tv-blue/15" : "hover:bg-tv-panel-hover",
                   isMultiSelected && "bg-tv-blue/25",
-                  d.hidden && "opacity-50",
                   dragOverId === d.id && "border-t-2 border-t-tv-blue",
                 )}
               >
@@ -262,7 +261,9 @@ export function ObjectTreePanel() {
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </span>
-                <span className="min-w-0 flex-1 truncate">{label}</span>
+                <span className={cn("min-w-0 flex-1 truncate", d.hidden && "text-tv-text-disabled")}>
+                  {label}
+                </span>
 
                 {/* Reorder */}
                 <button

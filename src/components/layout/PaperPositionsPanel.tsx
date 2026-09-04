@@ -158,7 +158,7 @@ function AccountStats({
           }
         }}
         title="Reset paper account to seed balance"
-        className="rounded border border-tv-red/30 px-2 py-1 text-[10px] font-semibold text-tv-red/70 transition-colors hover:border-tv-red hover:bg-tv-red/10 hover:text-tv-red"
+        className="rounded border border-tv-red/30 px-2 py-1 text-[10px] font-semibold text-tv-red transition-colors hover:border-tv-red hover:bg-tv-red/10 hover:text-tv-red"
       >
         Reset account
       </button>
