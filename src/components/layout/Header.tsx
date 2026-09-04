@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Code2, LogOut, Redo2, Rewind, Settings2, Undo2 } from "lucide-react";
+import { Bell, LogOut, Redo2, Rewind, Settings2, Undo2 } from "lucide-react";
 import { SymbolSelector } from "@/components/chart/SymbolSelector";
 import { TimeframeSelector } from "@/components/chart/TimeframeSelector";
 import { ChartTypeSelector } from "@/components/chart/ChartTypeSelector";
@@ -114,16 +114,6 @@ export function Header() {
             Chart settings
           </TooltipContent>
         </Tooltip>
-        <a
-          href="https://github.com/KisuShotto15/tradingview"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
-        >
-          <Code2 className="h-3.5 w-3.5" />
-          <span>Source</span>
-        </a>
-
         {user && (
           <>
             <Separator orientation="vertical" className="h-6 bg-tv-border" />
