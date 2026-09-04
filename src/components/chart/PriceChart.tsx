@@ -53,6 +53,7 @@ import { MeasureOverlay } from "./MeasureOverlay";
 import { DrawingsLayer } from "./drawings/DrawingsLayer";
 import { PlacementPreview, MagnetIndicator } from "./PlacementPreview";
 import { OrderLinesLayer } from "@/components/trading/OrderLinesLayer";
+import { PaperOrderLinesLayer } from "@/components/trading/PaperOrderLinesLayer";
 import { BuySellOverlay } from "@/components/trading/BuySellOverlay";
 import { FloatingContextToolbar } from "./FloatingContextToolbar";
 import { BarCountdown } from "./BarCountdown";
@@ -3459,6 +3460,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
         renderTick={renderTick}
       />
+      <PaperOrderLinesLayer candleSeries={candleSeriesRef.current} symbol={symbol} />
 
       {indicators.keylevels && !hidden.keylevels && (
         <KeyLevelsOverlay
