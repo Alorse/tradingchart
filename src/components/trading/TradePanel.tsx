@@ -2,6 +2,7 @@
 
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useTradingStore } from "@/lib/store/trading-store";
+import { useChartStore } from "@/lib/store/chart-store";
 import { OrderPanel } from "@/components/trading/OrderPanel/OrderPanel";
 import { PaperOrderPanel } from "@/components/trading/OrderPanel/PaperOrderPanel";
 import { TradeModeToggle } from "@/components/trading/TradeModeToggle";
@@ -18,6 +19,7 @@ export function TradePanel() {
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);
   const setKeyDialogOpen = useTradingStore((s) => s.setApiKeyDialogOpen);
+  const symbol = useChartStore((s) => s.symbol);
 
   function handleModeChange(next: TradingMode) {
     setMode(next);
@@ -33,7 +35,7 @@ export function TradePanel() {
     <div className="flex h-full flex-col overflow-hidden">
       <TradeModeToggle mode={mode} onChange={handleModeChange} />
       <div className="flex-1 overflow-hidden">
-        {mode === "paper" ? <PaperOrderPanel /> : <OrderPanel />}
+        {mode === "paper" ? <PaperOrderPanel key={symbol} /> : <OrderPanel />}
       </div>
     </div>
   );
