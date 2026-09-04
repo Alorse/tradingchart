@@ -66,6 +66,10 @@ interface PaperTradingState {
   /** Drive fills and bracket triggers off one live tick. Safe on every WS message. */
   evaluateTick: (symbol: string, price: number) => void;
   resetAccount: () => void;
+  /** Replaces the whole account wholesale — the cloud-sync hook's "cloud wins
+   *  on load" adoption path. Not for in-app mutations; those go through the
+   *  engine actions above so history/undo stays consistent. */
+  setAccount: (account: PaperAccount) => void;
   updateSettings: (patch: Partial<PaperSettings>) => void;
   /** Free balance + locked margin + open P&L, valued at the current marks. */
   equity: () => number;
@@ -155,6 +159,38 @@ function isUntouched(account: PaperAccount): boolean {
   );
 }
 
+/**
+ * Validates and repairs an arbitrary blob into a `PaperAccount`, or returns
+ * `null` if it isn't shaped like one at all. Shared by the localStorage
+ * `merge` below and `loadPaperAccount` (src/lib/supabase/paper-account-data.ts)
+ * so a corrupt cloud row is rejected with the exact same rules as a corrupt
+ * localStorage blob, rather than a second hand-rolled check drifting from
+ * this one over time.
+ */
+export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const account = raw as Partial<PaperAccount>;
+  if (
+    !Array.isArray(account.positions) ||
+    !Array.isArray(account.orders) ||
+    !Array.isArray(account.history) ||
+    !isFiniteNumber(account.balance)
+  ) {
+    return null;
+  }
+  return {
+    ...createAccount(),
+    ...account,
+    positions: account.positions.filter(isValidPersistedPosition),
+    orders: account.orders.filter(isValidPersistedOrder),
+    history: account.history.filter(isValidPersistedTrade),
+    settings: {
+      ...DEFAULT_PAPER_SETTINGS,
+      ...sanitizePersistedSettings(account.settings),
+    },
+  } as PaperAccount;
+}
+
 export const usePaperTradingStore = create<PaperTradingState>()(
   persist(
     (set, get) => ({
@@ -239,6 +275,8 @@ export const usePaperTradingStore = create<PaperTradingState>()(
        */
       resetAccount: () => set({ account: createAccount(), marks: {}, lastEvents: [] }),
 
+      setAccount: (account) => set({ account }),
+
       updateSettings: (patch) => {
         const account = engineUpdateSettings(get().account, patch);
         // Changing the seed on an account that has never traded re-seeds it;
@@ -273,30 +311,9 @@ export const usePaperTradingStore = create<PaperTradingState>()(
        * still worth keeping.
        */
       merge: (persisted, current) => {
-        const account = (persisted as { account?: Partial<PaperAccount> } | undefined)?.account;
-        if (
-          !account ||
-          !Array.isArray(account.positions) ||
-          !Array.isArray(account.orders) ||
-          !Array.isArray(account.history) ||
-          !isFiniteNumber(account.balance)
-        ) {
-          return current;
-        }
-        return {
-          ...current,
-          account: {
-            ...createAccount(),
-            ...account,
-            positions: account.positions.filter(isValidPersistedPosition),
-            orders: account.orders.filter(isValidPersistedOrder),
-            history: account.history.filter(isValidPersistedTrade),
-            settings: {
-              ...DEFAULT_PAPER_SETTINGS,
-              ...sanitizePersistedSettings(account.settings),
-            },
-          } as PaperAccount,
-        };
+        const raw = (persisted as { account?: unknown } | undefined)?.account;
+        const account = sanitizePaperAccount(raw);
+        return account ? { ...current, account } : current;
       },
     },
   ),
