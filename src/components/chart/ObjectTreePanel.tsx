@@ -256,7 +256,7 @@ export function ObjectTreePanel() {
                 onDragEnd={() => { draggedId.current = null; setDragOverId(null); }}
                 onClick={(e) => handleRowClick(e, d)}
                 className={cn(
-                  "group flex cursor-grab items-center gap-1.5 px-2 py-1 text-[12px] transition-colors active:cursor-grabbing",
+                  "group flex cursor-grab items-center gap-1.5 px-2 py-1.5 text-[12px] transition-colors active:cursor-grabbing",
                   isSelected && !isMultiSelected ? "bg-tv-blue/15" : "hover:bg-tv-panel-hover",
                   isMultiSelected && "bg-tv-blue/25",
                   dragOverId === d.id && "border-t-2 border-t-tv-blue",

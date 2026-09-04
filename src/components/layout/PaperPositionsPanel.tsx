@@ -53,45 +53,43 @@ export function PaperPositionsPanel() {
       )}
       style={fullscreen ? {} : { maxHeight: collapsed ? 32 : "45vh", minHeight: 32 }}
     >
-      <div className="flex h-8 shrink-0 items-center border-b border-tv-border text-[11px] font-semibold">
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex h-8 flex-1 items-center gap-2 px-3 transition-colors hover:bg-tv-panel-hover"
-        >
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-tv-yellow" />
-            Paper Trading Account
+      {/* Title bar — same structure as PositionsPanel's, so the live and paper
+          panels hit-align and hover identically. */}
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex h-8 shrink-0 items-center gap-2 border-b border-tv-border px-3 text-[11px] font-semibold transition-colors hover:bg-tv-panel-hover"
+      >
+        <span className="inline-flex items-center gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-tv-yellow" />
+          Paper Trading Account
+        </span>
+        {positions.length > 0 && (
+          <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue-text">
+            {positions.length} pos
           </span>
-          {positions.length > 0 && (
-            <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue-text">
-              {positions.length} pos
-            </span>
-          )}
-          {restingOrders.length > 0 && (
-            <span className="rounded bg-tv-yellow/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-yellow">
-              {restingOrders.length} orders
-            </span>
-          )}
-        </button>
-        <span className="flex items-center gap-1 pr-3">
+        )}
+        {restingOrders.length > 0 && (
+          <span className="rounded bg-tv-yellow/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-yellow">
+            {restingOrders.length} orders
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-1">
           {!collapsed && (
-            <button
-              onClick={() => setFullscreen((f) => !f)}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setFullscreen((f) => !f);
+              }}
               title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
               className="rounded p-1 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
+              role="button"
             >
               {fullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-            </button>
+            </span>
           )}
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? "Expand" : "Collapse"}
-            className="rounded p-1 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
-          >
-            {collapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          </button>
+          {collapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </span>
-      </div>
+      </button>
 
       {!collapsed && (
         <>
