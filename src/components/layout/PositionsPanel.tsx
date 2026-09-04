@@ -76,7 +76,7 @@ export function PositionsPanel() {
           Trading Account
         </span>
         {positionsCount > 0 && (
-          <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue">
+          <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue-text">
             {positionsCount} pos
           </span>
         )}
@@ -165,7 +165,7 @@ function Stat({ label, value, valueClass }: { label: string; value: string; valu
 }
 
 function Badge({ n }: { n: number }) {
-  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue">{n}</span>;
+  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue-text">{n}</span>;
 }
 
 function TabBtn({
@@ -276,7 +276,7 @@ function PositionsTable({
           return (
             <tr key={rowKey} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{p.symbol}.P</td>
-              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
               </td>
               <td className="px-3 py-1.5 font-mono tabular-nums">
@@ -509,7 +509,7 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
                 <td className="px-3 py-1.5 font-semibold">{o.symbol}</td>
                 <td className={cn(
                   "px-3 py-1.5 font-semibold",
-                  o.side === "BUY" ? "text-tv-blue" : "text-tv-red",
+                  o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red",
                 )}>
                   {o.side === "BUY" ? "Buy" : "Sell"}
                 </td>
@@ -528,7 +528,7 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
                     "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
                     o.status === "FILLED" && "bg-tv-green/20 text-tv-green",
                     (o.status === "CANCELED" || o.status === "EXPIRED" || o.status === "REJECTED") && "bg-tv-red/15 text-tv-red",
-                    (o.status === "NEW" || o.status === "PARTIALLY_FILLED") && "bg-tv-blue/15 text-tv-blue",
+                    (o.status === "NEW" || o.status === "PARTIALLY_FILLED") && "bg-tv-blue/15 text-tv-blue-text",
                   )}>
                     {o.status === "NEW" ? "Working" : o.status}
                   </span>

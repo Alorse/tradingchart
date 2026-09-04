@@ -362,7 +362,7 @@ export function Watchlist() {
                 }}
                 className={cn(
                   "text-xs",
-                  w.id === activeWatchlistId && "bg-tv-blue/15 text-tv-blue",
+                  w.id === activeWatchlistId && "bg-tv-blue/15 text-tv-blue-text",
                 )}
               >
                 {w.name}

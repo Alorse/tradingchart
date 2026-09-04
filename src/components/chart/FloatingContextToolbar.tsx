@@ -129,7 +129,7 @@ export function FloatingContextToolbar({ containerSize, onOpenSettings }: Props)
                     className={cn(
                       "flex h-5 w-5 items-center justify-center rounded text-[9px] font-bold",
                       (drawing.lineWidth ?? 1) === w
-                        ? "bg-tv-blue/20 text-tv-blue"
+                        ? "bg-tv-blue/20 text-tv-blue-text"
                         : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text",
                     )}
                   >
@@ -251,7 +251,7 @@ function LockBtn({ drawing, onPatch }: { drawing: Drawing; onPatch: (p: Partial<
       className={cn(
         "flex h-5 w-5 items-center justify-center rounded transition-colors",
         locked
-          ? "text-tv-blue hover:bg-tv-blue/15"
+          ? "text-tv-blue-text hover:bg-tv-blue/15"
           : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text",
       )}
     >
@@ -474,7 +474,7 @@ function LimitOrderButton({ drawing }: { drawing: Drawing }) {
           className={cn(
             "flex items-center gap-1 rounded px-1.5 text-[10px] font-medium transition-colors",
             connected
-              ? "text-tv-blue hover:bg-tv-blue/15"
+              ? "text-tv-blue-text hover:bg-tv-blue/15"
               : "text-tv-text-muted/40",
           )}
         >

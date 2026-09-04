@@ -64,7 +64,7 @@ function BottomTabBar() {
             aria-selected={active}
             className={cn(
               "flex flex-col items-center gap-0.5 py-2 transition-colors",
-              active ? "text-tv-blue" : "text-tv-text-muted active:text-tv-text",
+              active ? "text-tv-blue-text" : "text-tv-text-muted active:text-tv-text",
             )}
           >
             <Icon className="h-5 w-5" />

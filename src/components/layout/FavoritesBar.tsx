@@ -139,7 +139,7 @@ export function FavoritesBar() {
               aria-label={t.label}
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
-                active ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text-muted hover:text-tv-text",
+                active ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted hover:text-tv-text",
                 dragOverKey === t.key && "ring-1 ring-tv-blue",
               )}
             >

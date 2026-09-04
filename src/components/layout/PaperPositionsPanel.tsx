@@ -63,7 +63,7 @@ export function PaperPositionsPanel() {
             Paper Trading Account
           </span>
           {positions.length > 0 && (
-            <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue">
+            <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue-text">
               {positions.length} pos
             </span>
           )}
@@ -178,7 +178,7 @@ function Stat({ label, value, valueClass }: { label: string; value: string; valu
 }
 
 function Badge({ n }: { n: number }) {
-  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue">{n}</span>;
+  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue-text">{n}</span>;
 }
 
 function TabBtn({
@@ -246,7 +246,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
           return (
             <tr key={p.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{displaySymbol}</td>
-              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
               </td>
               <td className="px-3 py-1.5 font-mono tabular-nums">{p.qty}</td>
@@ -450,7 +450,7 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
         {orders.map((o) => (
           <tr key={o.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
             <td className="px-3 py-1.5 font-semibold">{o.feedSymbol ?? o.symbol}</td>
-            <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue" : "text-tv-red")}>
+            <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red")}>
               {o.side === "BUY" ? "Buy" : "Sell"}
             </td>
             <td className="px-3 py-1.5 capitalize">{o.type.toLowerCase()}</td>
@@ -524,7 +524,7 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
           return (
             <tr key={t.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{t.symbol}</td>
-              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
               </td>
               <td className="px-3 py-1.5 font-mono tabular-nums">{t.qty}</td>

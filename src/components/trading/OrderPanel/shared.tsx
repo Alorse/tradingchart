@@ -171,8 +171,8 @@ export function BidAskBar({
           side === "BUY" ? "bg-tv-blue/20" : "bg-tv-panel hover:bg-tv-panel-hover",
         )}
       >
-        <span className="text-[9px] uppercase tracking-wider text-tv-blue">Buy</span>
-        <span className="font-mono text-sm font-semibold text-tv-blue tabular-nums">
+        <span className="text-[9px] uppercase tracking-wider text-tv-blue-text">Buy</span>
+        <span className="font-mono text-sm font-semibold text-tv-blue-text tabular-nums">
           {ask ? ask.toFixed(2) : "—"}
         </span>
       </button>
@@ -414,7 +414,7 @@ export function ExitsSection({
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setSlMenuOpen((o) => !o)}
-                className="flex items-center gap-1 text-[10px] text-tv-text hover:text-tv-blue"
+                className="flex items-center gap-1 text-[10px] text-tv-text hover:text-tv-blue-text"
               >
                 Stop loss, {SL_MODE_LABELS[slMode]}
                 {slMenuOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}

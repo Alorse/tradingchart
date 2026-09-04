@@ -51,7 +51,7 @@ function ToolButton({
         aria-label={t.label}
         className={cn(
           "relative flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
-          active ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text-muted hover:text-tv-text",
+          active ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted hover:text-tv-text",
         )}
       >
         <Icon className="h-7 w-7" />
@@ -150,7 +150,7 @@ export function LeftSidebar() {
                 aria-label={activeTool.label}
                 className={cn(
                   "relative flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
-                  groupHasActive ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text-muted hover:text-tv-text",
+                  groupHasActive ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted hover:text-tv-text",
                 )}
               >
                 <ActiveIcon className="h-7 w-7" />
@@ -187,7 +187,7 @@ export function LeftSidebar() {
                             setTool(t.key);
                             setCategoryActive((m) => ({ ...m, [group.label!]: t.key }));
                           }}
-                          className={cn("flex items-center gap-2.5 text-xs", isActive && "bg-tv-blue/15 text-tv-blue")}
+                          className={cn("flex items-center gap-2.5 text-xs", isActive && "bg-tv-blue/15 text-tv-blue-text")}
                         >
                           {/* `size-7` (not h-7 w-7) so it beats the menu's default svg size-4 rule */}
                           <Icon className="size-7" />
@@ -227,7 +227,7 @@ export function LeftSidebar() {
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded transition-colors",
               magnetMode
-                ? "bg-tv-blue/15 text-tv-blue"
+                ? "bg-tv-blue/15 text-tv-blue-text"
                 : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text",
             )}
           >

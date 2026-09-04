@@ -293,7 +293,7 @@ export function SymbolSelector({ noTrigger = false }: { noTrigger?: boolean } = 
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-tv-blue" />
+                  <Sparkles className="h-3.5 w-3.5 text-tv-blue-text" />
                   <span className="font-mono font-semibold text-tv-text">
                     {trimmed}
                   </span>

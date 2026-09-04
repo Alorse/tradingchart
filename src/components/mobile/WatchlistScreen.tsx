@@ -500,7 +500,7 @@ export function WatchlistScreen() {
               }}
               className={cn(
                 "flex w-full items-center justify-between border-b border-tv-border/60 px-4 py-3 text-left text-sm",
-                w.id === activeWatchlistId ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text active:bg-tv-panel-hover",
+                w.id === activeWatchlistId ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text active:bg-tv-panel-hover",
               )}
             >
               {w.name}
@@ -859,7 +859,7 @@ function SortHeader({
       onClick={onClick}
       className={cn(
         "flex items-center justify-end gap-0.5 text-right uppercase tracking-wider",
-        active ? "text-tv-blue" : "text-tv-text-dim",
+        active ? "text-tv-blue-text" : "text-tv-text-dim",
       )}
     >
       <span>{label}</span>

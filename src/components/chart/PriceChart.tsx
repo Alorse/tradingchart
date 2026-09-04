@@ -3679,7 +3679,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               title="Auto scale"
               className={`flex h-5 w-5 items-center justify-center rounded border border-tv-border text-[10px] font-semibold transition-colors ${
                 autoScaleActive
-                  ? "bg-tv-blue/20 text-tv-blue"
+                  ? "bg-tv-blue/20 text-tv-blue-text"
                   : "bg-tv-panel text-tv-text-muted hover:text-tv-text"
               }`}
             >
@@ -3690,7 +3690,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               title={isLog ? "Switch to linear" : "Switch to logarithmic"}
               className={`flex h-5 w-5 items-center justify-center rounded border border-tv-border text-[10px] font-semibold transition-colors ${
                 isLog
-                  ? "bg-tv-blue/20 text-tv-blue"
+                  ? "bg-tv-blue/20 text-tv-blue-text"
                   : "bg-tv-panel text-tv-text-muted hover:text-tv-text"
               }`}
             >

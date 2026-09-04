@@ -209,7 +209,7 @@ function Form({
                       className={cn(
                         "flex h-7 w-7 items-center justify-center rounded border text-[10px]",
                         lineWidth === w
-                          ? "border-tv-blue bg-tv-blue/15 text-tv-blue"
+                          ? "border-tv-blue bg-tv-blue/15 text-tv-blue-text"
                           : "border-tv-border text-tv-text-muted hover:bg-tv-panel-hover",
                       )}
                     >

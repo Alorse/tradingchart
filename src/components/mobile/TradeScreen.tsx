@@ -147,7 +147,7 @@ export function TradeScreen() {
                       {p.symbol}{" "}
                       <span className={cn(
                         "rounded px-1 text-[9px]",
-                        isLong ? "bg-tv-blue/15 text-tv-blue" : "bg-tv-red/15 text-tv-red",
+                        isLong ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
                       )}>
                         {isLong ? "LONG" : "SHORT"}
                       </span>
@@ -215,7 +215,7 @@ export function TradeScreen() {
                   {o.symbol}{" "}
                   <span className={cn(
                     "rounded px-1 text-[9px]",
-                    o.side === "BUY" ? "bg-tv-blue/15 text-tv-blue" : "bg-tv-red/15 text-tv-red",
+                    o.side === "BUY" ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
                   )}>
                     {o.side}
                   </span>
