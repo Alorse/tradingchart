@@ -7,6 +7,7 @@ import {
   closePosition,
   createAccount,
   equity,
+  evaluateAllTicks,
   evaluateTick,
   fillMarketOrder,
   liquidationPrice,
@@ -929,5 +930,50 @@ describe("floating-point dust after full netting (adversarial re-audit finding 7
       NOW + 2,
     ).account;
     expect(a.positions).toHaveLength(0);
+  });
+});
+
+describe("evaluateAllTicks (adversarial re-audit finding 10)", () => {
+  it("evaluates every symbol the account has exposure to, using each one's own mark", () => {
+    let a = openLong(acct(), 20_000, 1, 10); // position on BTCUSDT
+    a = { ...a, positions: [{ ...pos(a), sl: 19_000 }] };
+    a = placeLimitOrder(
+      a,
+      { symbol: "ETHUSDT", side: "BUY", qty: 1, price: 1_000, leverage: 10 },
+      NOW,
+    ).account;
+
+    const res = evaluateAllTicks(a, { BTCUSDT: 18_900, ETHUSDT: 1_000 }, NOW + 1);
+
+    // BTCUSDT's stop fired against its own mark.
+    expect(res.account.positions).toHaveLength(1);
+    expect(res.account.positions[0].symbol).toBe("ETHUSDT");
+    expect(res.account.history[0].symbol).toBe("BTCUSDT");
+    expect(res.account.history[0].reason).toBe("SL");
+    // ETHUSDT's resting limit crossed against its own mark and filled.
+    expect(res.account.orders).toHaveLength(0);
+  });
+
+  it("skips a symbol the account is exposed to but has no mark for yet", () => {
+    let a = openLong(acct(), 20_000, 1, 10);
+    a = { ...a, positions: [{ ...pos(a), sl: 19_000 }] };
+    a = placeLimitOrder(
+      a,
+      { symbol: "ETHUSDT", side: "BUY", qty: 1, price: 1_000, leverage: 10 },
+      NOW,
+    ).account;
+
+    // No ETHUSDT mark yet — its resting order is left exactly as it was.
+    const res = evaluateAllTicks(a, { BTCUSDT: 18_900 }, NOW + 1);
+    expect(res.account.history[0].symbol).toBe("BTCUSDT");
+    expect(res.account.orders).toHaveLength(1);
+    expect(res.account.orders[0].symbol).toBe("ETHUSDT");
+  });
+
+  it("is a no-op over marks for symbols the account has no exposure to", () => {
+    const a = acct();
+    const res = evaluateAllTicks(a, { BTCUSDT: 20_000, ETHUSDT: 1_000 }, NOW);
+    expect(res.account).toBe(a);
+    expect(res.events).toHaveLength(0);
   });
 });
