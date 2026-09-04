@@ -8,46 +8,67 @@
  *
  * The literal `FALLBACK` documents the expected keys and is returned during SSR
  * (before a `document` exists) and for any variable the stylesheet doesn't
- * define. Keep it in sync with `globals.css`; if they ever diverge, CSS wins on
- * the client.
+ * define. Keep it in sync with `globals.css` — a stale entry here paints the
+ * previous palette for the first frame; if they diverge, CSS wins on the
+ * client. The `--color-tv-*` properties now resolve through a `--tv-*`
+ * indirection (so a theme class can swap them), which `getComputedStyle` flattens
+ * to a real color string for us — nothing here has to know about it.
  */
 export interface TvColors {
   bg: string;
   panel: string;
+  panelHover: string;
+  popup: string;
   border: string;
+  borderStrong: string;
   text: string;
   textMuted: string;
+  textDim: string;
+  textDisabled: string;
   green: string;
   red: string;
   blue: string;
+  blueText: string;
   yellow: string;
   purple: string;
   grid: string;
 }
 
 const FALLBACK: TvColors = {
-  bg: "#000000",
-  panel: "#0a0a0a",
-  border: "#1a1a1a",
-  text: "#e6e6e6",
-  textMuted: "#8a8a8a",
-  green: "#26a69a",
-  red: "#ef5350",
+  bg: "#0f0f0f",
+  panel: "#171717",
+  panelHover: "#2e2e2e",
+  popup: "#1f1f1f",
+  border: "#2e2e2e",
+  borderStrong: "#3d3d3d",
+  text: "#dbdbdb",
+  textMuted: "#8c8c8c",
+  textDim: "#636363",
+  textDisabled: "#575757",
+  green: "#089981",
+  red: "#f23645",
   blue: "#2962ff",
-  yellow: "#ffb74d",
+  blueText: "#5b9cf6",
+  yellow: "#ff9800",
   purple: "#ab47bc",
-  grid: "#0e0e0e",
+  grid: "#2a2a2a",
 };
 
 const CSS_VAR: Record<keyof TvColors, string> = {
   bg: "--color-tv-bg",
   panel: "--color-tv-panel",
+  panelHover: "--color-tv-panel-hover",
+  popup: "--color-tv-popup",
   border: "--color-tv-border",
+  borderStrong: "--color-tv-border-strong",
   text: "--color-tv-text",
   textMuted: "--color-tv-text-muted",
+  textDim: "--color-tv-text-dim",
+  textDisabled: "--color-tv-text-disabled",
   green: "--color-tv-green",
   red: "--color-tv-red",
   blue: "--color-tv-blue",
+  blueText: "--color-tv-blue-text",
   yellow: "--color-tv-yellow",
   purple: "--color-tv-purple",
   grid: "--color-tv-grid",
