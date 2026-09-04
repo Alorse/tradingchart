@@ -2,13 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { OrderPanel } from "@/components/trading/OrderPanel/OrderPanel";
+import { PaperOrderPanel } from "@/components/trading/OrderPanel/PaperOrderPanel";
+import { PaperPositionsPanel } from "@/components/layout/PaperPositionsPanel";
+import { TradeModeToggle } from "@/components/trading/TradeModeToggle";
 import { matchTpSl, EditOrderPopover } from "@/components/layout/PositionsPanel";
 import { useTradingStore } from "@/lib/store/trading-store";
+import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
 import type { Order } from "@/lib/binance/trading-types";
+import type { TradingMode } from "@/lib/store/trading-mode-store";
 
 /**
  * Mobile Trade tab — combined view with the order form on top and the user's
@@ -19,10 +24,22 @@ import type { Order } from "@/lib/binance/trading-types";
  * (PositionEditPanel) in place of the form whenever a position is being
  * edited. The form internally handles credentials and shows the API-key
  * gate when not connected.
+ *
+ * Gated on `trading-mode-store` the same way desktop's `TradePanel` is: the
+ * live order form/positions/orders (and the live-only position-edit panel)
+ * are unreachable whenever `mode !== "live"` — this used to render the live
+ * `OrderPanel` and live close/cancel buttons unconditionally, so a mobile
+ * user who had switched to Paper could still fire real orders (finding 1).
+ * The paper branch reuses `PaperOrderPanel` and `PaperPositionsPanel` as-is:
+ * neither has hover-only affordances, so both work on touch unmodified (see
+ * CLAUDE.md's "Responsive shell" reuse checklist).
  */
 export function TradeScreen() {
+  const mode = useTradingModeStore((s) => s.mode);
+  const setMode = useTradingModeStore((s) => s.setMode);
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);
+  const setKeyDialogOpen = useTradingStore((s) => s.setApiKeyDialogOpen);
   const symbol = useChartStore((s) => s.symbol);
   // Account-wide, not scoped to the chart's current symbol — otherwise an
   // open position on a different symbol than the one charted would never
@@ -53,6 +70,30 @@ export function TradeScreen() {
   const totalEquity = balance.reduce((acc, b) => acc + b.free + b.locked, 0);
   const unrealizedPnL = activePositions.reduce((acc, p) => acc + p.unrealizedProfit, 0);
 
+  function handleModeChange(next: TradingMode) {
+    setMode(next);
+    if (next === "live" && (!apiKey || !apiSecret)) {
+      setKeyDialogOpen(true);
+    }
+  }
+
+  // Paper mode: the live order form, live positions/orders and the live-only
+  // position-edit panel are all unreachable — only the paper equivalents
+  // render, matching desktop's `TradePanel` gate (finding 1).
+  if (mode !== "live") {
+    return (
+      <div className="flex h-full flex-col overflow-hidden">
+        <TradeModeToggle mode={mode} onChange={handleModeChange} />
+        <div className="flex-1 overflow-y-auto">
+          <div className="shrink-0 border-b border-tv-border">
+            <PaperOrderPanel key={symbol} />
+          </div>
+          <PaperPositionsPanel />
+        </div>
+      </div>
+    );
+  }
+
   // While a position is being edited (typed TP/SL panel replaces the order
   // form), skip the rest of this screen — same "just the panel" behavior
   // the desktop right-click → Modify order flow gets.
@@ -66,6 +107,7 @@ export function TradeScreen() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
+      <TradeModeToggle mode={mode} onChange={handleModeChange} />
       {/* Stats */}
       {connected && (
         <div className="grid shrink-0 grid-cols-3 gap-2 border-b border-tv-border bg-tv-panel px-3 py-2 text-[11px]">
