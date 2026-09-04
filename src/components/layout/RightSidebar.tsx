@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { BarChart2, Bell, Layers, List } from "lucide-react";
 import { Watchlist } from "@/components/watchlist/Watchlist";
-import { OrderPanel } from "@/components/trading/OrderPanel/OrderPanel";
+import { TradePanel } from "@/components/trading/TradePanel";
 import { ObjectTreePanel } from "@/components/chart/ObjectTreePanel";
 import { AlertsPanel } from "@/components/alerts/AlertsPanel";
 import { useAlertsStore } from "@/lib/store/alerts-store";
@@ -129,7 +129,7 @@ export function RightSidebar() {
         <ObjectTreePanel />
       </div>
       <div className={cn("flex-1 overflow-hidden", tab !== "trade" && "hidden")}>
-        <OrderPanel />
+        <TradePanel />
       </div>
       <div className={cn("flex-1 overflow-hidden", tab !== "alerts" && "hidden")}>
         <AlertsPanel />
