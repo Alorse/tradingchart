@@ -244,11 +244,14 @@ function PositionsTable({
                   <button
                     onClick={() => {
                       if (window.confirm(`Close ${displaySymbol} ${isLong ? "Long" : "Short"} ${p.qty}?`)) {
-                        // `mark` already falls back to entry price when no live
-                        // tick has arrived yet — passing it explicitly avoids
-                        // the store's own fallback silently no-op'ing on a
-                        // missing `marks[symbol]` (e.g. a feedless position).
-                        closePosition(p.symbol, mark);
+                        // Read the mark fresh rather than the render-time `mark`
+                        // prop, which can lag behind the store between renders
+                        // and book the close at a stale price; falls back to
+                        // entry price the same way the store's own fallback
+                        // would, so a feedless position still closes.
+                        const liveMark =
+                          usePaperTradingStore.getState().marks[p.symbol] ?? p.entryPrice;
+                        closePosition(p.symbol, liveMark);
                       }
                     }}
                     title="Close position (at the current mark)"
@@ -280,11 +283,21 @@ function EditBracketsPopover({
   const slNum = sl.trim() === "" ? null : parseFloat(sl);
   const tpValid = tpNum === null || isFinite(tpNum);
   const slValid = slNum === null || isFinite(slNum);
-  const warning = !tpValid || !slValid
-    ? "Enter a valid number, or leave blank to remove"
-    : bracketEditReason(position.side, mark, tpNum, slNum);
+
+  function warningAt(referenceMark: number): string | null {
+    if (!tpValid || !slValid) return "Enter a valid number, or leave blank to remove";
+    return bracketEditReason(position.side, referenceMark, tpNum, slNum);
+  }
+
+  const warning = warningAt(mark);
 
   function save() {
+    // Re-validate against the live mark rather than the render-time `mark`
+    // prop — the engine does the same inside `setBrackets`, and a stale
+    // prop could let a submit through that the engine would then silently
+    // re-clamp.
+    const liveMark = usePaperTradingStore.getState().marks[position.symbol] ?? position.entryPrice;
+    if (warningAt(liveMark)) return;
     setBrackets(position.symbol, {
       tp: tpValid ? tpNum : undefined,
       sl: slValid ? slNum : undefined,
@@ -340,7 +353,8 @@ function EditBracketsPopover({
           </button>
           <button
             onClick={save}
-            className="rounded bg-tv-blue px-3 py-1 text-xs font-semibold text-white hover:bg-tv-blue/90"
+            disabled={warning !== null}
+            className="rounded bg-tv-blue px-3 py-1 text-xs font-semibold text-white hover:bg-tv-blue/90 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-tv-blue"
           >
             Apply
           </button>
