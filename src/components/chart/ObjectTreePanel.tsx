@@ -225,7 +225,7 @@ export function ObjectTreePanel() {
       )}
 
       {items.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-dim">
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-muted">
           No drawings on {symbol}. Pick a tool from the left toolbar to start.
         </div>
       ) : (

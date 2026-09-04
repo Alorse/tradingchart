@@ -71,7 +71,7 @@ export function AlertsPanel() {
       </div>
 
       {total === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-dim">
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-muted">
           No alerts yet. Use the bell icon (Alt+A) or right-click the chart to create one.
         </div>
       ) : (
