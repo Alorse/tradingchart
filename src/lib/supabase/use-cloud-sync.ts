@@ -23,7 +23,20 @@ function activeItems(watchlists: Watchlist[], activeId: string) {
 
 export function useCloudSync() {
   const { user } = useAuth();
+  /** Load *attempted* — guards the one-shot init effect against re-running. */
   const initializedRef = useRef(false);
+  /**
+   * Load *succeeded* — guards both debounced saves below.
+   *
+   * These used to share `initializedRef`, which flips synchronously at the
+   * top of the init effect: the save effects then ran on the very same
+   * sign-in render, saw it already set, and scheduled an upsert of this
+   * device's local state 1.5s later. A load slower than that debounce (or one
+   * that failed outright) therefore overwrote the cloud row with whatever
+   * localStorage happened to hold, before ever seeing what was up there. Same
+   * split, and same reasoning, as `usePaperAccountSync`.
+   */
+  const loadedRef = useRef(false);
 
   // ── Fields synced to the cloud ───────────────────────────────────────────
   const symbol = useChartStore((s) => s.symbol);
@@ -116,20 +129,33 @@ export function useCloudSync() {
       }
     }
 
-    init();
+    init()
+      .then(() => {
+        loadedRef.current = true;
+      })
+      .catch((err) => {
+        // Leave `loadedRef` false so the debounced saves stay gated off for
+        // the rest of the session: better to sync nothing than to upsert
+        // local state over a cloud row the load never actually read.
+        console.error(
+          "Failed to load settings/watchlist from Supabase; skipping cloud sync this session",
+          err,
+        );
+      });
   }, [user, setSymbol, setTimeframe]);
 
   // ── Reset al hacer sign-out ───────────────────────────────────────────────
   useEffect(() => {
     if (!user) {
       initializedRef.current = false;
+      loadedRef.current = false;
     }
   }, [user]);
 
   // ── Debounced settings sync (indicators + visual) ────────────────────────
   const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!user || !initializedRef.current) return;
+    if (!user || !loadedRef.current) return;
     if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
     settingsTimerRef.current = setTimeout(() => {
       saveChartSettings({
@@ -164,7 +190,7 @@ export function useCloudSync() {
   // ── Debounced watchlist sync (full items, with labels) ───────────────────
   const wlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!user || !initializedRef.current) return;
+    if (!user || !loadedRef.current) return;
     if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
     const items = activeItems(watchlists, activeWatchlistId);
     wlTimerRef.current = setTimeout(() => {
