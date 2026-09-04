@@ -218,7 +218,7 @@ export function LeftSidebar() {
       })}
 
       <div className="mt-auto flex w-full flex-col items-center gap-0.5 pb-0.5">
-        <div className="my-1 h-px w-6 bg-tv-border" />
+        <div className="my-1 h-px w-6 bg-tv-border-strong" />
 
         <Tooltip>
           <TooltipTrigger

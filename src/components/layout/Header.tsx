@@ -34,13 +34,13 @@ export function Header() {
           className="mr-1 rounded-md"
         />
         <SymbolSelector />
-        <Separator orientation="vertical" className="h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
         <TimeframeSelector />
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <ChartTypeSelector />
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <IndicatorMenu />
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <Tooltip>
           <TooltipTrigger
             onClick={() => openAlertDialog(currentLivePrice ?? undefined)}
@@ -71,7 +71,7 @@ export function Header() {
             </TooltipContent>
           </Tooltip>
         )}
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <Tooltip>
           <TooltipTrigger
             onClick={() => void undo()}
@@ -116,7 +116,7 @@ export function Header() {
         </Tooltip>
         {user && (
           <>
-            <Separator orientation="vertical" className="h-6 bg-tv-border" />
+            <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
             <div className="flex items-center gap-2">
               <span className="max-w-[140px] truncate text-xs text-tv-text-muted">
                 {user.email}
