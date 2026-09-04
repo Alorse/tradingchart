@@ -1,6 +1,14 @@
 import { describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
-import { formatPrice, formatPct, formatVolume, pricePrecisionFor, priceFormatFor } from "./format";
+import {
+  formatPrice,
+  formatPct,
+  formatVolume,
+  pricePrecisionFor,
+  priceFormatFor,
+  cappedPricePrecision,
+  exchangePriceFormatFor,
+} from "./format";
 
 describe("formatPrice", () => {
   it("uses thousands separators above 1000", () => {
@@ -70,5 +78,39 @@ describe("formatVolume", () => {
     expect(formatVolume(3_400_000)).toBe("3.40M");
     expect(formatVolume(7_800)).toBe("7.80K");
     expect(formatVolume(42)).toBe("42.00");
+  });
+});
+
+describe("cappedPricePrecision", () => {
+  it("caps a sub-$1 coin's exchange precision at 4", () => {
+    // The bug this exists for: the exchange quotes a cheap altcoin to 8
+    // decimals, which overrode the magnitude guess's 4-decimal cap and left
+    // the price ruler showing "0.00012340" instead of "0.0001".
+    expect(cappedPricePrecision(0.0001234, 8)).toBe(4);
+    expect(cappedPricePrecision(0.0814, 6)).toBe(4);
+    expect(cappedPricePrecision(0.5, 5)).toBe(4);
+  });
+  it("keeps the exchange precision at $1 and above", () => {
+    expect(cappedPricePrecision(3.421, 3)).toBe(3); // NEAR-like
+    expect(cappedPricePrecision(64320.6, 1)).toBe(1); // BTC-like
+    expect(cappedPricePrecision(2450.75, 2)).toBe(2); // ETH-like
+    expect(cappedPricePrecision(1, 2)).toBe(2);
+  });
+  it("does not raise a sub-$1 coin already quoted below the cap", () => {
+    expect(cappedPricePrecision(0.5, 2)).toBe(2);
+  });
+  it("falls back to the magnitude guess for a nonsense exchange precision", () => {
+    expect(cappedPricePrecision(0.0814, NaN)).toBe(4);
+    expect(cappedPricePrecision(64320.6, -1)).toBe(2);
+  });
+});
+
+describe("exchangePriceFormatFor", () => {
+  it("derives minMove from the capped precision, not the raw tick", () => {
+    expect(exchangePriceFormatFor(0.0001234, 8)).toEqual({ precision: 4, minMove: 0.0001 });
+  });
+  it("passes an above-$1 precision through with a matching minMove", () => {
+    expect(exchangePriceFormatFor(64320.6, 1)).toEqual({ precision: 1, minMove: 0.1 });
+    expect(exchangePriceFormatFor(3.421, 3)).toEqual({ precision: 3, minMove: 0.001 });
   });
 });

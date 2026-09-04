@@ -67,3 +67,26 @@ export function getTvColors(): TvColors {
   }
   return out;
 }
+
+/** Font stack used when `--font-sans` can't be read (SSR, or before next/font). */
+const FALLBACK_FONT_FAMILY = "Inter, system-ui, sans-serif";
+
+/**
+ * Font family for the chart canvas, with `--font-sans` resolved to real family
+ * names — for exactly the reason the colors are resolved above, and with a
+ * sharper failure mode.
+ *
+ * lightweight-charts builds the canvas font as `` `${fontSize}px ${fontFamily}` ``
+ * and assigns it to `ctx.font`. The canvas 2D font setter parses that as a CSS
+ * `font` shorthand with no element to substitute against, so a literal
+ * `var(--font-sans)` makes the *whole* declaration syntactically invalid — and
+ * an invalid `ctx.font` is **ignored entirely**, leaving the canvas default
+ * `10px sans-serif`. The size is part of the same string, so passing `var(...)`
+ * here silently discards `layout.fontSize` too: the axis labels stay 10px no
+ * matter what size is configured. Resolve it here instead of inlining `var()`.
+ */
+export function getTvFontFamily(): string {
+  if (typeof document === "undefined") return FALLBACK_FONT_FAMILY;
+  const v = getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim();
+  return v ? `${v}, ${FALLBACK_FONT_FAMILY}` : FALLBACK_FONT_FAMILY;
+}

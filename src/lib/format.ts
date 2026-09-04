@@ -24,6 +24,38 @@ export function priceFormatFor(price: number): { precision: number; minMove: num
   return { precision, minMove: Math.pow(10, -precision) };
 }
 
+/**
+ * Reconcile the exchange's own tick-size precision with our readability cap.
+ *
+ * An exchange quotes a cheap altcoin to 6-8 decimals, which is the truth for
+ * *order placement* but far more digits than the price ruler should carry —
+ * applying it verbatim is what made the axis noisy again after
+ * `pricePrecisionFor` had already capped the magnitude-based guess at 4.
+ * Below $1 we therefore clamp to that same cap; at $1 and above the exchange
+ * value is kept as-is, since that's what gives BTC 1 decimal, ETH 2 and NEAR 3
+ * instead of flattening every symbol to the library's default 2.
+ */
+export function cappedPricePrecision(price: number, exchangePrecision: number): number {
+  if (!isFinite(exchangePrecision) || exchangePrecision < 0) return pricePrecisionFor(price);
+  const abs = Math.abs(price);
+  if (!isFinite(abs) || abs >= 1) return exchangePrecision;
+  return Math.min(exchangePrecision, 4);
+}
+
+/**
+ * `priceFormat` fields from an exchange precision, capped for readability.
+ * `minMove` is derived from the *capped* precision rather than reusing the raw
+ * tick size — pairing a 4-decimal precision with an 0.00000001 tick makes
+ * lightweight-charts round labels to a step the axis can no longer show.
+ */
+export function exchangePriceFormatFor(
+  price: number,
+  exchangePrecision: number,
+): { precision: number; minMove: number } {
+  const precision = cappedPricePrecision(price, exchangePrecision);
+  return { precision, minMove: Math.pow(10, -precision) };
+}
+
 export function formatPrice(n: number): string {
   if (!isFinite(n)) return "—";
   if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
