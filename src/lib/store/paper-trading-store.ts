@@ -20,6 +20,8 @@ import type {
   MarketOrderRequest,
   PaperAccount,
   PaperEvent,
+  PaperOrder,
+  PaperPosition,
   PaperSettings,
 } from "@/lib/trading/paper-engine";
 
@@ -94,6 +96,48 @@ function createPaperStorage(): PersistStorage<Persisted> {
 
 function isQuote(price: number | undefined): price is number {
   return price !== undefined && Number.isFinite(price) && price > 0;
+}
+
+function isFiniteNumber(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+/**
+ * A persisted position/order needs its money-math fields intact — anything
+ * else (a stray `null` from a corrupted write, a field that lost its type
+ * across a schema change) would crash `equity()`/`usedMargin()`, which
+ * reduce over these arrays unconditionally, or silently rehydrate NaN
+ * margin/fees into every calculation downstream (adversarial re-audit
+ * finding 4).
+ */
+function isValidPersistedPosition(p: unknown): p is PaperPosition {
+  if (typeof p !== "object" || p === null) return false;
+  const pos = p as Partial<PaperPosition>;
+  return isFiniteNumber(pos.qty) && isFiniteNumber(pos.entryPrice) && isFiniteNumber(pos.margin);
+}
+
+function isValidPersistedOrder(o: unknown): o is PaperOrder {
+  if (typeof o !== "object" || o === null) return false;
+  const ord = o as Partial<PaperOrder>;
+  return isFiniteNumber(ord.price) && isFiniteNumber(ord.qty);
+}
+
+function isValidPersistedTrade(t: unknown): boolean {
+  return typeof t === "object" && t !== null;
+}
+
+/** Keeps a persisted settings key only when it survives as a finite number — a
+ *  string or NaN left in place would rehydrate straight into every fee/margin
+ *  calculation that reads `settings` (adversarial re-audit finding 4). */
+function sanitizePersistedSettings(raw: unknown): Partial<PaperSettings> {
+  if (typeof raw !== "object" || raw === null) return {};
+  const settings = raw as Record<string, unknown>;
+  const out: Partial<PaperSettings> = {};
+  for (const key of Object.keys(DEFAULT_PAPER_SETTINGS) as (keyof PaperSettings)[]) {
+    const value = settings[key];
+    if (isFiniteNumber(value)) out[key] = value;
+  }
+  return out;
 }
 
 /** True while the account still looks exactly as it was seeded. */
@@ -215,7 +259,12 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       /**
        * Defensive merge: a blob written before a settings key existed (or a
        * corrupted one) must not leave the account half-built, since every fee
-       * and margin calculation reads off `settings`.
+       * and margin calculation reads off `settings`. Beyond the top-level
+       * shape, every array item and every settings value is validated
+       * individually (adversarial re-audit finding 4) — a single bad
+       * position/order/setting is dropped rather than sinking the whole
+       * account back to `current`, since the rest of a mostly-intact blob is
+       * still worth keeping.
        */
       merge: (persisted, current) => {
         const account = (persisted as { account?: Partial<PaperAccount> } | undefined)?.account;
@@ -224,7 +273,7 @@ export const usePaperTradingStore = create<PaperTradingState>()(
           !Array.isArray(account.positions) ||
           !Array.isArray(account.orders) ||
           !Array.isArray(account.history) ||
-          typeof account.balance !== "number"
+          !isFiniteNumber(account.balance)
         ) {
           return current;
         }
@@ -233,7 +282,13 @@ export const usePaperTradingStore = create<PaperTradingState>()(
           account: {
             ...createAccount(),
             ...account,
-            settings: { ...DEFAULT_PAPER_SETTINGS, ...(account.settings ?? {}) },
+            positions: account.positions.filter(isValidPersistedPosition),
+            orders: account.orders.filter(isValidPersistedOrder),
+            history: account.history.filter(isValidPersistedTrade),
+            settings: {
+              ...DEFAULT_PAPER_SETTINGS,
+              ...sanitizePersistedSettings(account.settings),
+            },
           } as PaperAccount,
         };
       },

@@ -209,6 +209,106 @@ describe("paper-trading-store persistence", () => {
   });
 });
 
+describe("persist merge validation (adversarial re-audit finding 4)", () => {
+  it("rejects a NaN balance instead of accepting it (typeof NaN === 'number', so a naive check passes it)", async () => {
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: { account: { positions: [], orders: [], history: [], balance: Number.NaN } },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
+    // The rejected blob's account never applies, so a normal order still works.
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    expect(st().account.positions).toHaveLength(1);
+    expect(Number.isFinite(st().account.balance)).toBe(true);
+  });
+
+  it("drops a null entry inside a persisted positions array instead of letting it crash equity()", async () => {
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: { account: { positions: [null], orders: [], history: [], balance: 1_000 } },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.positions).toHaveLength(0);
+    expect(typeof st().equity()).toBe("number");
+  });
+
+  it("drops a position whose numeric fields are missing or non-finite", async () => {
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          account: {
+            positions: [
+              { id: "p1", symbol: "BTCUSDT", qty: Number.NaN, entryPrice: 20_000, margin: 2_000 },
+              { id: "p2", symbol: "ETHUSDT", qty: 1, entryPrice: 1_000, margin: 100 },
+            ],
+            orders: [],
+            history: [],
+            balance: 1_000,
+          },
+        },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.positions).toHaveLength(1);
+    expect(st().account.positions[0].symbol).toBe("ETHUSDT");
+  });
+
+  it("drops an order whose price or qty is missing or non-finite", async () => {
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          account: {
+            positions: [],
+            orders: [
+              { id: "o1", symbol: "BTCUSDT", price: "abc", qty: 1 },
+              { id: "o2", symbol: "ETHUSDT", price: 1_000, qty: 1 },
+            ],
+            history: [],
+            balance: 1_000,
+          },
+        },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.orders).toHaveLength(1);
+    expect(st().account.orders[0].symbol).toBe("ETHUSDT");
+  });
+
+  it("ignores a non-finite persisted settings value instead of rehydrating a NaN fee rate", async () => {
+    localStorage.setItem(
+      PAPER_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          account: {
+            positions: [],
+            orders: [],
+            history: [],
+            balance: 10_000,
+            settings: { takerFeeRate: "abc" },
+          },
+        },
+        version: 1,
+      }),
+    );
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().account.settings.takerFeeRate).toBe(DEFAULT_PAPER_SETTINGS.takerFeeRate);
+    // A normal fill's fee is a real number, not NaN.
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    expect(Number.isFinite(st().account.balance)).toBe(true);
+  });
+});
+
 describe("persist write skipping (adversarial review finding 7)", () => {
   it("does not re-write localStorage on a tick that only moves the mark", () => {
     st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
