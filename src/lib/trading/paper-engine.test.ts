@@ -564,65 +564,132 @@ describe("bracket normalization on open (adversarial review finding 6)", () => {
 });
 
 describe("same-tick bracket evaluation (adversarial review finding 4)", () => {
-  it("does not evaluate brackets against the tick price for a position this tick just opened", () => {
-    // A SELL limit @19_000 with a valid SL above entry (19_500). A tick that
-    // both crosses the limit and blows through 19_500 must not stop the
-    // position out on the very tick that created it.
-    const a = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 19_000, leverage: 10, sl: 19_500 },
+  it("does not evaluate a freshly-opened position's liquidation on the tick that opened it", () => {
+    // maintMarginRate == 1/leverage clamps the liquidation buffer to zero, so
+    // liquidationPrice lands exactly on the entry price — the position opens
+    // already "at" its own liquidation level. (A tp/sl can't set up this
+    // same-tick edge case any more: since adversarial re-audit finding 1,
+    // a crossing limit fills at the tick price, and open-time bracket
+    // normalization checks against that same price, so a bracket that
+    // survives normalization can never immediately trigger — see the
+    // re-audit finding 1/3 tests below. Liquidation has no such
+    // normalization, so this is the one case left where "just opened" still
+    // matters.)
+    let a = createAccount({ maintMarginRate: 0.1 });
+    a = placeLimitOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 19_000, leverage: 10 },
       NOW,
     ).account;
 
-    const opened = evaluateTick(a, "BTCUSDT", 19_600, NOW + 1);
+    const opened = evaluateTick(a, "BTCUSDT", 19_000, NOW + 1);
     expect(opened.account.positions).toHaveLength(1);
-    expect(pos(opened.account).side).toBe("SHORT");
-    expect(pos(opened.account).sl).toBe(19_500);
+    expect(pos(opened.account).liquidationPrice).toBe(19_000);
+    // Liquidation price already equals the tick that opened it — a bracket
+    // pass that ran anyway would liquidate it on the spot.
     expect(opened.account.history).toHaveLength(0);
 
-    const stopped = evaluateTick(opened.account, "BTCUSDT", 19_500, NOW + 2);
-    expect(stopped.account.positions).toHaveLength(0);
-    expect(stopped.account.history[0].reason).toBe("SL");
+    // The very next tick, at the same price, is a different story: the
+    // position now existed *before* this tick, so its liquidation is live.
+    const again = evaluateTick(opened.account, "BTCUSDT", 19_000, NOW + 2);
+    expect(again.account.positions).toHaveLength(0);
+    expect(again.account.history[0].reason).toBe("LIQUIDATION");
+    expect(again.account.history[0].exitPrice).toBe(19_000);
   });
 });
 
 describe("rejected crossing orders (adversarial review finding 2)", () => {
-  it("auto-cancels a resting order that a crash makes impossible to margin, refunding its reserve", () => {
-    // BUY opens a small LONG. SELL rests far below it; when both cross on the
-    // same catastrophic tick, the SELL first force-closes the LONG at a loss
-    // deep enough to wipe the free balance, then can't afford to open the
-    // short remainder — a reject that, left resting, would refire every tick.
-    let a = placeLimitOrder(
+  // Rewritten for adversarial re-audit finding 1: a crossing limit now fills
+  // at the tick price rather than its own resting price (see the
+  // "crossing limit fills at the tick price" describe block below), so the
+  // original version of this test — a SELL resting at 1 that "force-closed"
+  // an unrelated LONG at exactly 1 — no longer demonstrates an overdraw at
+  // all once both legs price off the same tick. This realistic replacement
+  // exercises the *other* half of the same auto-cancel mechanism: a resting
+  // order whose reserve was sized off its own (lower) resting price, crossed
+  // by a gap tick so far above it that the position it would open needs far
+  // more margin than was ever reserved.
+  it("auto-cancels a resting order whose reserve a gap tick outgrows, refunding it", () => {
+    const a = placeLimitOrder(
       acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
+      { symbol: "BTCUSDT", side: "SELL", qty: 3, price: 1_000, leverage: 10 },
       NOW,
     ).account;
-    a = placeLimitOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 2, price: 1, leverage: 10 },
-      NOW,
-    ).account;
-    expect(a.orders).toHaveLength(2);
-    const balanceBeforeCrash = a.balance;
-    const secondOrderId = a.orders[1].id;
+    const orderId = a.orders[0].id;
+    const balanceBeforeGap = a.balance;
 
-    const res = evaluateTick(a, "BTCUSDT", 1, NOW + 1);
+    // A violent short-squeeze gap, far above the resting price that sized
+    // the reserve.
+    const res = evaluateTick(a, "BTCUSDT", 50_000, NOW + 1);
 
     expect(res.account.orders).toHaveLength(0);
     expect(res.events.some((e) => e.type === "reject")).toBe(true);
-    expect(
-      res.events.some((e) => e.type === "cancel" && e.orderId === secondOrderId),
-    ).toBe(true);
-    // The reserve is back: balance only moved by the BUY's own fill economics,
-    // never touched by the rejected SELL. (Finding 4's fix also keeps this
-    // fresh position's brackets/liquidation from evaluating on this same
-    // tick, so nothing else here moves the balance.)
-    expect(res.account.balance).toBeCloseTo(balanceBeforeCrash + 0.2004, 6);
+    expect(res.events.some((e) => e.type === "cancel" && e.orderId === orderId)).toBe(
+      true,
+    );
+    // Reserve refunded in full; nothing else touched the balance.
+    expect(res.account.balance).toBeCloseTo(balanceBeforeGap + 300.6, 6);
+    expect(res.account.positions).toHaveLength(0);
 
-    // No reject storm: the order is gone, so a repeat tick can't reject again
-    // (whatever else happens to the now-orphaned position is a separate path).
-    const again = evaluateTick(res.account, "BTCUSDT", 1, NOW + 2);
+    // No reject storm: the order is gone, so a repeat tick can't reject again.
+    const again = evaluateTick(res.account, "BTCUSDT", 50_000, NOW + 2);
     expect(again.events.some((e) => e.type === "reject")).toBe(false);
+  });
+});
+
+describe("crossing limit fills at the tick price (adversarial re-audit finding 1)", () => {
+  it("fills a crossing limit at the tick price, not its own resting price", () => {
+    // A SELL limit resting well below market, as if mistaken for a stop.
+    // Before this fix it filled at its own 15_000, booking a $5,000 phantom
+    // loss on an ordinary tick that barely moved the market.
+    let a = openLong(acct(), 20_000, 1, 10);
+    a = placeLimitOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 15_000, leverage: 10 },
+      NOW,
+    ).account;
+
+    const res = evaluateTick(a, "BTCUSDT", 19_999, NOW + 1);
+    const trade = res.account.history[0];
+    expect(trade.exitPrice).toBe(19_999);
+    expect(trade.grossPnl).toBeCloseTo(-1, 6);
+    expect(res.account.positions).toHaveLength(0);
+    expect(res.account.balance).toBeCloseTo(9_985.0002, 6);
+  });
+
+  it("refuses a reducing crossing fill that would overdraw the account on a gap tick, leaving liquidation to settle it at its clamped price", () => {
+    // Thin margin (125x): a SELL limit resting far below market never fires
+    // while price stays above it, but a violent single-tick gap can cross it
+    // at a tick price whose loss is far deeper than the position's own
+    // margin — even though the fill price is now the (real, no-look-ahead)
+    // tick, not a phantom order price.
+    let a = openLong(acct(), 20_000, 1, 125);
+    a = placeLimitOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 100, leverage: 10 },
+      NOW,
+    ).account;
+    const orderId = a.orders[0].id;
+
+    const res = evaluateTick(a, "BTCUSDT", 150, NOW + 1);
+
+    // The reducing fill is refused whole rather than booking a loss deeper
+    // than the position's margin, and auto-cancelled like any other crossing
+    // order the account can't afford.
+    expect(res.events[0].type).toBe("reject");
+    expect(res.events.some((e) => e.type === "cancel" && e.orderId === orderId)).toBe(
+      true,
+    );
+    expect(res.account.orders).toHaveLength(0);
+
+    // The position itself is liquidated on the very same tick — its id
+    // survived the rejected fill untouched — settling at the computed
+    // liquidation price, never at the raw gap price.
+    expect(res.account.positions).toHaveLength(0);
+    const trade = res.account.history[0];
+    expect(trade.reason).toBe("LIQUIDATION");
+    expect(trade.exitPrice).toBe(19_940);
+    expect(res.account.balance).toBeCloseTo(9_920.03, 6);
   });
 });
 

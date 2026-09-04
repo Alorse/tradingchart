@@ -508,7 +508,21 @@ function applyFill(
   if (existing && side === closingSide(existing.side)) {
     const reduceQty = Math.min(qty, existing.qty);
     const slice = closeSlice(existing, reduceQty, price, feeRate, "MANUAL", now);
-    balance += slice.balanceDelta;
+    const tentativeBalance = balance + slice.balanceDelta;
+    // The reducing leg must never overdraw the account on its own, however
+    // bad the fill price is (a crossing limit order now fills at the tick
+    // that crossed it — see `evaluateTick` — so a violent gap tick can still
+    // book a loss deeper than the position's own margin backs). Refuse the
+    // whole fill rather than clamp it to a synthetic "worst affordable"
+    // price: the caller's crossing loop already auto-cancels a resting order
+    // that lands here (same as the margin check below), and the position is
+    // left untouched for the ordinary per-tick liquidation check — which
+    // *does* clamp, at the position's own computed liquidation price — to
+    // settle on this same tick or the next one.
+    if (tentativeBalance < -1e-9) {
+      return reject(account, symbol, "Insufficient paper balance");
+    }
+    balance = tentativeBalance;
     positions = slice.position
       ? positions.map((p) => (p.id === existing.id ? slice.position! : p))
       : positions.filter((p) => p.id !== existing.id);
@@ -830,7 +844,13 @@ export function evaluateTick(
       symbol: order.symbol,
       side: order.side,
       qty: order.qty,
-      price: order.price,
+      // The tick, not the order's own resting price: crossing guarantees
+      // the tick is on the fill side of the limit, so filling at the tick is
+      // the no-look-ahead choice — the order's own price could be wildly
+      // stale (e.g. a limit resting far through the current market), and
+      // filling there books a phantom gain or loss the market never offered
+      // (adversarial re-audit finding 1).
+      price,
       leverage: order.leverage,
       feeRate: acc.settings.makerFeeRate,
       tp: order.tp,
