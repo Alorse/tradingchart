@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, X } from "lucide-react";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
@@ -325,6 +325,14 @@ function EditBracketsPopover({
   const [tp, setTp] = useState(position.tp !== null ? String(position.tp) : "");
   const [sl, setSl] = useState(position.sl !== null ? String(position.sl) : "");
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const tpNum = tp.trim() === "" ? null : parseFloat(tp);
   const slNum = sl.trim() === "" ? null : parseFloat(sl);
   const tpValid = tpNum === null || isFinite(tpNum);
@@ -368,6 +376,7 @@ function EditBracketsPopover({
           <input
             type="number"
             step="any"
+            autoFocus
             value={tp}
             onChange={(e) => setTp(e.target.value)}
             placeholder="empty = remove"
