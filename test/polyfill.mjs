@@ -22,6 +22,26 @@ class MemStorage {
   }
 }
 
-if (typeof globalThis.localStorage === "undefined") {
-  globalThis.localStorage = new MemStorage();
+// Node 24 ships a built-in `localStorage` global, but it throws (and zustand's
+// persist middleware then disables itself) unless the process was started with
+// `--localstorage-file`. Probing it is the only way to tell the two apart, so
+// install the in-memory stand-in whenever the real one can't be written to.
+function localStorageWorks() {
+  try {
+    const ls = globalThis.localStorage;
+    if (!ls) return false;
+    ls.setItem("__probe__", "1");
+    ls.removeItem("__probe__");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (!localStorageWorks()) {
+  Object.defineProperty(globalThis, "localStorage", {
+    value: new MemStorage(),
+    configurable: true,
+    writable: true,
+  });
 }
