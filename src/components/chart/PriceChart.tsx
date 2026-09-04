@@ -3778,7 +3778,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           [order[i - 1], order[i]] = [order[i], order[i - 1]];
                           setMainPaneOrder(order);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === 0 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${i === 0 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
                       >
                         ▲
                       </button>
@@ -3790,7 +3790,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           [order[i], order[i + 1]] = [order[i + 1], order[i]];
                           setMainPaneOrder(order);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === mainPaneEntries.length - 1 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${i === mainPaneEntries.length - 1 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
                       >
                         ▼
                       </button>
@@ -3911,7 +3911,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           const newOrder = [...effectiveZOrder.filter((k) => k !== entry.key), entry.key];
                           setPaneZOrder(p.key, newOrder);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${isOnTop ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${isOnTop ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
                       >
                         ▲
                       </button>
@@ -3922,7 +3922,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           const newOrder = [entry.key, ...effectiveZOrder.filter((k) => k !== entry.key)];
                           setPaneZOrder(p.key, newOrder);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${isOnBottom ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${isOnBottom ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
                       >
                         ▼
                       </button>
