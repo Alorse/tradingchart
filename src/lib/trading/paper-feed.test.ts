@@ -101,4 +101,21 @@ describe("paperFeedExposure", () => {
     ).account;
     expect(paperFeedExposure(a).binance).toEqual(["BTCUSDT.P"]);
   });
+
+  it("prefers a position's venue over a resting order's for the same bare symbol", () => {
+    let a = fillMarketOrder(
+      acct(),
+      { symbol: "SOLUSDT", side: "BUY", qty: 1, leverage: 10, feedSymbol: "BYBIT:SOLUSDT.P" },
+      100,
+      NOW,
+    ).account;
+    a = placeLimitOrder(
+      a,
+      { symbol: "SOLUSDT", side: "BUY", qty: 1, price: 90, leverage: 10, feedSymbol: "SOLUSDT.P" },
+      NOW,
+    ).account;
+    const exposure = paperFeedExposure(a);
+    expect(exposure.bybit).toEqual(["BYBIT:SOLUSDT.P"]);
+    expect(exposure.binance).toHaveLength(0);
+  });
 });
