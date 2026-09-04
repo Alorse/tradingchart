@@ -244,7 +244,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
           const pnlColor = pnl >= 0 ? "text-tv-green" : "text-tv-red";
           const displaySymbol = p.feedSymbol ?? p.symbol;
           return (
-            <tr key={p.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+            <tr key={p.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{displaySymbol}</td>
               <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
@@ -448,7 +448,7 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
       </thead>
       <tbody>
         {orders.map((o) => (
-          <tr key={o.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+          <tr key={o.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
             <td className="px-3 py-1.5 font-semibold">{o.feedSymbol ?? o.symbol}</td>
             <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red")}>
               {o.side === "BUY" ? "Buy" : "Sell"}
@@ -522,7 +522,7 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
           const pnlColor = t.realizedPnl >= 0 ? "text-tv-green" : "text-tv-red";
           const roi = t.roi * 100;
           return (
-            <tr key={t.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+            <tr key={t.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{t.symbol}</td>
               <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}

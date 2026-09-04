@@ -274,7 +274,7 @@ function PositionsTable({
           // always applies (see isPerp()/cleanSym() in binance/rest.ts).
           const posSymbol = `${p.symbol}.P`;
           return (
-            <tr key={rowKey} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+            <tr key={rowKey} className="border-b border-tv-border hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{p.symbol}.P</td>
               <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
@@ -505,7 +505,7 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
           </thead>
           <tbody>
             {filtered.map((o) => (
-              <tr key={o.orderId} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+              <tr key={o.orderId} className="border-b border-tv-border hover:bg-tv-panel-hover">
                 <td className="px-3 py-1.5 font-semibold">{o.symbol}</td>
                 <td className={cn(
                   "px-3 py-1.5 font-semibold",
@@ -701,7 +701,7 @@ function AccountSummary({
               <tr><td colSpan={3} className="py-2 text-tv-text-muted">No balances</td></tr>
             )}
             {balance.map((b) => (
-              <tr key={b.asset} className="border-b border-tv-border/50">
+              <tr key={b.asset} className="border-b border-tv-border">
                 <td className="py-1 font-semibold">{b.asset}</td>
                 <td className="py-1 text-right font-mono tabular-nums">{b.free.toFixed(4)}</td>
                 <td className="py-1 text-right font-mono tabular-nums">{b.locked.toFixed(4)}</td>
