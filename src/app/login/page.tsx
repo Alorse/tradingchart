@@ -59,21 +59,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#131722]">
+    <div className="flex min-h-screen items-center justify-center bg-tv-bg">
       <div className="w-full max-w-sm space-y-8 px-6">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#2962ff]/15">
-            <TrendingUp className="h-6 w-6 text-[#2962ff]" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-tv-blue/15">
+            <TrendingUp className="h-6 w-6 text-tv-blue-text" />
           </div>
           <div className="text-center">
-            <h1 className="text-xl font-semibold text-[#d1d4dc]">TradingView Free</h1>
-            <p className="mt-1 text-sm text-[#787b86]">Real-time crypto charts</p>
+            <h1 className="text-xl font-semibold text-tv-text">TradingView Free</h1>
+            <p className="mt-1 text-sm text-tv-text-muted">Real-time crypto charts</p>
           </div>
         </div>
 
         {status === "sent" ? (
-          <div className="rounded-lg border border-[#26a69a]/30 bg-[#26a69a]/10 p-4 text-center text-sm text-[#26a69a]">
+          <div className="rounded-lg border border-tv-green/30 bg-tv-green/10 p-4 text-center text-sm text-tv-green">
             {mode === "magic"
               ? "Check your email — we sent you a sign-in link."
               : "Account created. Check your email to confirm."}
@@ -81,7 +81,7 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Mode tabs */}
-            <div className="flex rounded-lg border border-[#2a2e39] bg-[#1e222d] p-1">
+            <div className="flex rounded-lg border border-tv-border bg-tv-panel p-1">
               {(["magic", "password", "signup"] as Mode[]).map((m) => (
                 <button
                   key={m}
@@ -89,8 +89,8 @@ export default function LoginPage() {
                   onClick={() => { setMode(m); setError(""); setStatus("idle"); }}
                   className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
                     mode === m
-                      ? "bg-[#2962ff] text-white"
-                      : "text-[#787b86] hover:text-[#d1d4dc]"
+                      ? "bg-tv-blue text-white"
+                      : "text-tv-text-muted hover:text-tv-text"
                   }`}
                 >
                   {m === "magic" ? "Magic Link" : m === "password" ? "Password" : "Sign up"}
@@ -105,7 +105,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@email.com"
                 required
-                className="w-full rounded-lg border border-[#2a2e39] bg-[#1e222d] px-3 py-2.5 text-sm text-[#d1d4dc] placeholder-[#787b86] outline-none focus:border-[#2962ff] transition-colors"
+                className="w-full rounded-lg border border-tv-border bg-tv-panel px-3 py-2.5 text-sm text-tv-text transition-colors outline-none placeholder:text-tv-text-muted focus:border-tv-blue"
               />
 
               {(mode === "password" || mode === "signup") && (
@@ -116,19 +116,19 @@ export default function LoginPage() {
                   placeholder="Password"
                   required
                   minLength={6}
-                  className="w-full rounded-lg border border-[#2a2e39] bg-[#1e222d] px-3 py-2.5 text-sm text-[#d1d4dc] placeholder-[#787b86] outline-none focus:border-[#2962ff] transition-colors"
+                  className="w-full rounded-lg border border-tv-border bg-tv-panel px-3 py-2.5 text-sm text-tv-text transition-colors outline-none placeholder:text-tv-text-muted focus:border-tv-blue"
                 />
               )}
             </div>
 
             {error && (
-              <p className="text-xs text-[#ef5350]">{error}</p>
+              <p className="text-xs text-tv-red">{error}</p>
             )}
 
             <button
               type="submit"
               disabled={status === "loading"}
-              className="w-full rounded-lg bg-[#2962ff] py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="w-full rounded-lg bg-tv-blue py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {status === "loading"
                 ? "Loading…"
@@ -141,7 +141,7 @@ export default function LoginPage() {
           </form>
         )}
 
-        <p className="text-center text-[10px] text-[#787b86]">
+        <p className="text-center text-[10px] text-tv-text-dim">
           Free · No card · No ads
         </p>
       </div>
