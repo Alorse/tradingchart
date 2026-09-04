@@ -212,9 +212,20 @@ Known remaining gap: there's no mobile equivalent of the desktop "Objects" tab (
 
 ### Typography
 
-The app leans heavily on very small arbitrary text sizes (`text-[9px]`…`text-[12px]`). [src/app/globals.css](src/app/globals.css) overrides these **globally**, enforcing an 11px floor, and also raises Tailwind's `--text-xs`/`--text-sm` tokens. The overrides are declared *unlayered* (outside `@layer`) so they beat Tailwind's generated utilities regardless of source order. So a `text-[10px]` in a component does not render at 10px — change the sizing scale there, not per-component, and verify against the compiled CSS.
+The app leans heavily on very small arbitrary text sizes (`text-[9px]`…`text-[12px]`). [src/app/globals.css](src/app/globals.css) overrides these **globally**, collapsing them onto a four-step ladder, and also raises Tailwind's `--text-xs`/`--text-sm` tokens:
 
-SVG overlays (chart drawings, order lines) size text with the numeric `fontSize` attribute instead, which those CSS rules do **not** affect — they must be adjusted in the components themselves.
+| Written | Renders | Role |
+|---|---|---|
+| `text-[7px]` `text-[8px]` `text-[9px]` | **11px** | micro — badges, superscript counts |
+| `text-[10px]` `text-[11px]` `text-[12px]` | **12px** | dense — table cells, sub-labels, chip text |
+| `text-xs` | **14px** | body |
+| `text-sm` | **15px** | section titles |
+
+The two dense steps used to be three (11/12/13), which put five sizes inside a 4px span and collapsed pairs that were written to contrast. Keep it at two: the point of the ladder is the 2px gap between "dense" and "body". The overrides are declared *unlayered* (outside `@layer`) so they beat Tailwind's generated utilities regardless of source order. So a `text-[10px]` in a component does not render at 10px — change the sizing scale there, not per-component, and verify against the compiled CSS. Note the block only matches integer-px utilities: an off-scale value like `text-[0.8rem]` slips through it entirely.
+
+**Icons** use three sizes and no others: `size-4` inline with text, `size-5` for toolbar buttons, `size-7` for the drawing-tool rail. Icon *buttons* want a 24px (`h-6 w-6`) minimum target.
+
+SVG overlays (chart drawings, order lines) size text with the numeric `fontSize` attribute instead, which those CSS rules do **not** affect — they must be adjusted in the components themselves, and they observe the same 11px floor by hand (11 and 13 only). Watch for labels sitting in a fixed-size `rect`: the pill has to grow with the type or the text runs past its own background.
 
 ## Keyboard shortcuts
 
