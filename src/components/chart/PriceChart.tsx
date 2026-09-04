@@ -46,7 +46,7 @@ import {
   type SubPaneKey,
   DEFAULT_CHART_COLORS,
 } from "@/lib/store/chart-store";
-import { formatPrice, formatVolume, priceFormatFor } from "@/lib/format";
+import { formatPrice, formatVolume, priceFormatFor, exchangePriceFormatFor } from "@/lib/format";
 import { ArrowUpDown, Bell, ChevronUp, Maximize2, Settings2 } from "lucide-react";
 import { IndicatorPill } from "./IndicatorPill";
 import { MeasureOverlay } from "./MeasureOverlay";
@@ -2649,7 +2649,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
             try {
               const info = await getSymbolInfo(symbol, false, source.kind);
               if (!cancelled && info.tickSize > 0) {
-                applyPrecision(info.pricePrecision, info.tickSize);
+                // Cap the exchange's precision the same way the magnitude guess
+                // is capped, or a sub-$1 altcoin quoted to 8 decimals undoes it.
+                const exact = exchangePriceFormatFor(lastClose, info.pricePrecision);
+                applyPrecision(exact.precision, exact.minMove);
                 setSymbolTickSize(info.tickSize);
               }
             } catch {
