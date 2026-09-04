@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
 import {
   DEFAULT_PAPER_SETTINGS,
+  MAX_LEVERAGE,
   cancelOrder,
   closePosition,
   createAccount,
@@ -12,7 +13,9 @@ import {
   placeLimitOrder,
   positionRoi,
   resetAccount,
+  setBrackets,
   unrealizedPnl,
+  updateSettings,
   usedMargin,
 } from "./paper-engine";
 import type { PaperAccount } from "./paper-engine";
@@ -673,5 +676,71 @@ describe("event payloads and flips against a resting order (adversarial review f
     // The unrelated resting order survives the flip untouched.
     expect(a.orders).toHaveLength(1);
     expect(a.orders[0].price).toBe(18_000);
+  });
+});
+
+describe("setBrackets reference-price validation (adversarial re-audit finding 2)", () => {
+  it("drops a setBrackets stop that sits on the wrong side of the reference price", () => {
+    let a = openLong(acct(), 20_000, 1, 10);
+    a = setBrackets(a, "BTCUSDT", { sl: 30_000 }, 20_000);
+    expect(pos(a).sl).toBe(null);
+
+    const res = evaluateTick(a, "BTCUSDT", 20_000, NOW + 1);
+    expect(res.account.positions).toHaveLength(1);
+    expect(res.account.history).toHaveLength(0);
+  });
+
+  it("setBrackets falls back to the position's entry price when no reference is given", () => {
+    let a = openLong(acct(), 20_000, 1, 10);
+    a = setBrackets(a, "BTCUSDT", { sl: 21_000 }); // above entry on a LONG: invalid
+    expect(pos(a).sl).toBe(null);
+
+    a = openLong(acct(), 20_000, 1, 10);
+    a = setBrackets(a, "BTCUSDT", { sl: 19_000 }); // below entry on a LONG: valid
+    expect(pos(a).sl).toBe(19_000);
+  });
+});
+
+describe("updateSettings validation (adversarial re-audit finding 5)", () => {
+  it("ignores a negative fee rate, keeping the previous value", () => {
+    const a = updateSettings(acct(), { takerFeeRate: -1 });
+    expect(a.settings.takerFeeRate).toBe(S.takerFeeRate);
+  });
+
+  it("ignores a fee rate above the 1% ceiling", () => {
+    const a = updateSettings(acct(), { makerFeeRate: 0.02 });
+    expect(a.settings.makerFeeRate).toBe(S.makerFeeRate);
+  });
+
+  it("ignores a NaN maintenance margin rate rather than zeroing every liquidation buffer", () => {
+    const a = updateSettings(acct(), { maintMarginRate: Number.NaN });
+    expect(a.settings.maintMarginRate).toBe(S.maintMarginRate);
+  });
+
+  it("ignores a maintenance margin rate at or above 1/MAX_LEVERAGE", () => {
+    const a = updateSettings(acct(), { maintMarginRate: 1 / MAX_LEVERAGE });
+    expect(a.settings.maintMarginRate).toBe(S.maintMarginRate);
+  });
+
+  it("ignores a NaN or non-positive seed balance rather than bricking the account", () => {
+    let a = updateSettings(acct(), { seedBalance: Number.NaN });
+    expect(a.settings.seedBalance).toBe(S.seedBalance);
+    a = updateSettings(acct(), { seedBalance: -100 });
+    expect(a.settings.seedBalance).toBe(S.seedBalance);
+    a = updateSettings(acct(), { seedBalance: 0 });
+    expect(a.settings.seedBalance).toBe(S.seedBalance);
+  });
+
+  it("clamps a non-finite default leverage instead of dropping it, same as a per-order leverage", () => {
+    const a = updateSettings(acct(), { defaultLeverage: Number.NaN });
+    expect(a.settings.defaultLeverage).toBe(S.defaultLeverage);
+    const hi = updateSettings(acct(), { defaultLeverage: 1_000 });
+    expect(hi.settings.defaultLeverage).toBe(125);
+  });
+
+  it("accepts a valid patch and leaves untouched keys alone", () => {
+    const a = updateSettings(acct(), { takerFeeRate: 0.001 });
+    expect(a.settings.takerFeeRate).toBe(0.001);
+    expect(a.settings.makerFeeRate).toBe(S.makerFeeRate);
   });
 });

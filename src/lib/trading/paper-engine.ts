@@ -297,12 +297,55 @@ export function resetAccount(account: PaperAccount): PaperAccount {
   return createAccount(account.settings);
 }
 
-/** Patch the account's settings, leaving its balance and open state alone. */
+/** A fee rate above 1% is not a real venue's, and a negative one pays the trader to trade. */
+const MAX_FEE_RATE = 0.01;
+
+/** Inclusive on both ends. */
+function isFiniteInRange(n: unknown, min: number, max: number): n is number {
+  return typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+}
+
+/**
+ * Patch the account's settings, leaving its balance and open state alone.
+ * Each key is validated independently against the range a real venue could
+ * plausibly have, and — like a corrupted persisted blob (see the store's
+ * `merge`) — a key that fails validation is silently dropped rather than
+ * thrown: this runs off a live settings form, and one bad field (a stray
+ * "-" mid-edit, a paste gone wrong) shouldn't discard the rest of an
+ * otherwise-valid patch or blow up the form (adversarial re-audit finding 5).
+ */
 export function updateSettings(
   account: PaperAccount,
   patch: Partial<PaperSettings>,
 ): PaperAccount {
-  return { ...account, settings: { ...account.settings, ...patch } };
+  const settings = { ...account.settings };
+  if (isFiniteInRange(patch.takerFeeRate, 0, MAX_FEE_RATE)) {
+    settings.takerFeeRate = patch.takerFeeRate;
+  }
+  if (isFiniteInRange(patch.makerFeeRate, 0, MAX_FEE_RATE)) {
+    settings.makerFeeRate = patch.makerFeeRate;
+  }
+  // Strictly under 1/MAX_LEVERAGE, not inclusive: at exactly 1/MAX_LEVERAGE,
+  // `liquidationPrice`'s buffer clamps to zero for a position at that same
+  // leverage, liquidating it on its very first tick.
+  if (
+    typeof patch.maintMarginRate === "number" &&
+    Number.isFinite(patch.maintMarginRate) &&
+    patch.maintMarginRate >= 0 &&
+    patch.maintMarginRate < 1 / MAX_LEVERAGE
+  ) {
+    settings.maintMarginRate = patch.maintMarginRate;
+  }
+  if (typeof patch.seedBalance === "number" && Number.isFinite(patch.seedBalance) && patch.seedBalance > 0) {
+    settings.seedBalance = patch.seedBalance;
+  }
+  if (patch.defaultLeverage !== undefined) {
+    // Reuses the same clamp a per-order leverage gets; a non-finite value
+    // falls back to the previous default rather than being dropped, since
+    // there's always a valid default to fall back to.
+    settings.defaultLeverage = clampLeverage(patch.defaultLeverage, account.settings.defaultLeverage);
+  }
+  return { ...account, settings };
 }
 
 /* ── fills ───────────────────────────────────────────────────────────────── */
@@ -645,25 +688,31 @@ export function closePosition(
   };
 }
 
-/** Attach or clear a position's brackets. Absent keys are left alone. */
+/**
+ * Attach or clear a position's brackets. Absent keys are left alone. Both
+ * the resulting tp and sl are re-validated against `referencePrice` (the
+ * caller's current mark for the symbol — the store passes the last live
+ * tick; falls back to the position's own entry price when no mark is
+ * available yet, e.g. right after a reload before the socket connects) so a
+ * bracket typed in on the wrong side of the market is dropped rather than
+ * left to fire an instant phantom-gain stop-out (adversarial re-audit
+ * finding 2).
+ */
 export function setBrackets(
   account: PaperAccount,
   symbol: string,
   brackets: { tp?: number | null; sl?: number | null },
+  referencePrice?: number,
 ): PaperAccount {
   const position = account.positions.find((p) => p.symbol === symbol);
   if (!position) return account;
+  const candidateTp = brackets.tp === undefined ? position.tp : brackets.tp;
+  const candidateSl = brackets.sl === undefined ? position.sl : brackets.sl;
+  const ref = isPositive(referencePrice ?? NaN) ? (referencePrice as number) : position.entryPrice;
+  const { tp, sl } = normalizeBrackets(position.side, ref, candidateTp, candidateSl);
   return {
     ...account,
-    positions: account.positions.map((p) =>
-      p.id === position.id
-        ? {
-            ...p,
-            tp: brackets.tp === undefined ? p.tp : brackets.tp,
-            sl: brackets.sl === undefined ? p.sl : brackets.sl,
-          }
-        : p,
-    ),
+    positions: account.positions.map((p) => (p.id === position.id ? { ...p, tp, sl } : p)),
   };
 }
 
