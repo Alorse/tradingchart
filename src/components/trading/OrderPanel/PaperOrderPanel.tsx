@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useBookTicker } from "@/lib/binance/use-book-ticker";
@@ -87,6 +87,19 @@ export function PaperOrderPanel() {
 
   const qtyNum = parseFloat(form.qty) || 0;
   const derived = useMemo(() => qtyToSizings(qtyNum, ctx), [qtyNum, ctx]);
+
+  // In the risk modes the typed risk is the fixed side, so moving the stop
+  // re-sizes the position instead of changing what's at stake — same effect
+  // as the live OrderPanel's, so a RISK_USD/RISK_PCT ticket isn't stuck at
+  // whatever qty it had when the mode was picked.
+  useEffect(() => {
+    if (!modeRequiresSl(form.sizingMode) || sl === null) return;
+    const risk = parseFloat(form.sizingInput);
+    if (!isFinite(risk) || risk <= 0) return;
+    const newQty = sizingToQty(form.sizingMode, risk, ctx);
+    const formatted = newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "";
+    if (formatted !== form.qty) patchForm({ qty: formatted });
+  }, [form.sizingMode, form.sizingInput, form.qty, sl, ctx, symInfo.quantityPrecision]);
 
   const lastReject = lastEvents.find((e) => e.type === "reject");
 
