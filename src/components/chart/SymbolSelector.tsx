@@ -341,12 +341,12 @@ export function SymbolSelector({ noTrigger = false }: { noTrigger?: boolean } = 
                             / {s.quoteAsset}
                           </span>
                         </div>
-                        <span className="truncate text-[10px] text-tv-text-dim">
+                        <span className="truncate text-[10px] text-tv-text-muted">
                           {s.description}
                         </span>
                       </div>
                     </div>
-                    <span className="shrink-0 rounded bg-tv-bg px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-tv-text-dim">
+                    <span className="shrink-0 rounded bg-tv-panel-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-tv-text-muted">
                       {s.exchange}
                     </span>
                   </button>
