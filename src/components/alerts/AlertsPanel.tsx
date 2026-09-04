@@ -95,7 +95,7 @@ export function AlertsPanel() {
                   aria-label={a.enabled ? "Pause alert" : "Resume alert"}
                   title={a.enabled ? "Pause alert" : "Resume alert"}
                   className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded",
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded",
                     a.enabled ? "text-tv-yellow" : "text-tv-text-muted hover:text-tv-text",
                   )}
                 >
@@ -123,7 +123,7 @@ export function AlertsPanel() {
                   onClick={() => openEditAlertDialog(a.id)}
                   aria-label="Edit alert"
                   title="Edit alert"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -131,7 +131,7 @@ export function AlertsPanel() {
                   onClick={() => removeAlert(a.id)}
                   aria-label="Delete alert"
                   title="Delete alert"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -164,7 +164,7 @@ export function AlertsPanel() {
                   aria-label={enabled ? "Pause alert" : "Resume alert"}
                   title={enabled ? "Pause alert" : "Resume alert"}
                   className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded",
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded",
                     enabled ? "text-tv-yellow" : "text-tv-text-muted hover:text-tv-text",
                   )}
                 >
@@ -186,7 +186,7 @@ export function AlertsPanel() {
                   onClick={() => removeDrawingAlert(d)}
                   aria-label="Delete alert"
                   title="Delete alert"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

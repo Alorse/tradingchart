@@ -202,7 +202,7 @@ export function LeftSidebar() {
                               e.stopPropagation();
                               toggleFavoriteTool(t.key);
                             }}
-                            className="ml-auto flex h-5 w-5 items-center justify-center rounded text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-yellow"
+                            className="ml-auto flex h-6 w-6 items-center justify-center rounded text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-yellow"
                           >
                             <Star className={cn("h-3.5 w-3.5", isFav && "fill-tv-yellow text-tv-yellow")} />
                           </span>
