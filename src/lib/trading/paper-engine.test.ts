@@ -744,3 +744,71 @@ describe("updateSettings validation (adversarial re-audit finding 5)", () => {
     expect(a.settings.makerFeeRate).toBe(S.makerFeeRate);
   });
 });
+
+describe("fill event fee semantics and ordering (adversarial re-audit finding 6)", () => {
+  it("reports zero fee on a fill event for a pure reduce, since the exit fee is already in the close's trade.fees", () => {
+    const a = openLong(acct(), 20_000, 2, 10);
+    const res = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
+      20_000,
+      NOW + 1,
+    );
+    const fill = res.events.find((e) => e.type === "fill");
+    const close = res.events.find((e) => e.type === "close");
+    if (!fill || fill.type !== "fill" || !close || close.type !== "close") {
+      throw new Error("expected both a fill and a close event");
+    }
+    expect(fill.fee).toBe(0);
+    expect(close.trade.fees).toBeGreaterThan(0);
+  });
+
+  it("emits the fill event before the close event it caused", () => {
+    const a = openLong(acct(), 20_000, 1, 10);
+    const res = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
+      21_000,
+      NOW + 1,
+    );
+    expect(res.events.map((e) => e.type)).toEqual(["fill", "close"]);
+  });
+
+  it("reports only the opening leg's fee on a flip's single fill event", () => {
+    const a = openLong(acct(), 20_000, 1, 10);
+    const res = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 3, leverage: 10 },
+      21_000,
+      NOW + 1,
+    );
+    const fill = res.events.find((e) => e.type === "fill");
+    if (!fill || fill.type !== "fill") throw new Error("expected a fill event");
+    // qty on the event is the full requested size...
+    expect(fill.qty).toBe(3);
+    // ...but the fee is only the 2-unit opening leg's, since the 1-unit
+    // reducing leg's fee already rode along inside the close event.
+    expect(fill.fee).toBeCloseTo(2 * 21_000 * S.takerFeeRate, 6);
+  });
+});
+
+describe("floating-point dust after full netting (adversarial re-audit finding 7)", () => {
+  it("does not leave a dust-sized phantom position after netting to exactly flat", () => {
+    let a = createAccount();
+    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 0.3, leverage: 10 }, 20_000, NOW)
+      .account;
+    a = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 0.1, leverage: 10 },
+      20_000,
+      NOW + 1,
+    ).account;
+    a = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "SELL", qty: 0.2, leverage: 10 },
+      20_000,
+      NOW + 2,
+    ).account;
+    expect(a.positions).toHaveLength(0);
+  });
+});

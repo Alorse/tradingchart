@@ -23,9 +23,12 @@ import { pnlAtExit } from "@/lib/trading/sizing";
  * reimplemented here rather than vendored — see the prior-art notes on #5.
  *
  * Deliberate simplifications, all of them worth revisiting once the UI exists:
- * no slippage (a bracket fills at its own price, not at the tick that crossed
- * it), no partial fills, no funding, and liquidation settles at the computed
- * liquidation price instead of walking an order book.
+ * no slippage on TP/SL/liquidation triggers (a bracket still fills at its own
+ * price, never the tick that crossed it — see `triggeredExit`), no partial
+ * fills, no funding, and liquidation settles at the computed liquidation
+ * price instead of walking an order book. A resting *limit order*, unlike a
+ * bracket, fills at the tick that crosses it rather than its own price — see
+ * `evaluateTick`.
  */
 
 export type PaperSide = "BUY" | "SELL";
@@ -138,6 +141,14 @@ export type PaperEvent =
       side: PaperSide;
       qty: number;
       price: number;
+      /**
+       * Fee charged by *this* fill that isn't already reported by an
+       * accompanying "close" event's `trade.fees` — zero on a pure reduce
+       * (the exit fee is already in `trade.fees`), the opening leg's fee
+       * alone on a flip (the reducing leg's fee is, likewise, already in
+       * `trade.fees`), and the whole fee on a fresh open, which has no
+       * accompanying close event at all.
+       */
       fee: number;
     }
   | { type: "close"; symbol: string; reason: CloseReason; trade: PaperTrade }
@@ -362,6 +373,16 @@ interface CloseSlice {
 }
 
 /**
+ * Relative floating-point tolerance for "is this position fully closed" —
+ * relative rather than a flat epsilon so it scales with position size (a
+ * fraction of a satoshi is real dust on a 10 BTC position but not on a
+ * 0.0001 BTC one). Netting several fills against each other (see the fp-dust
+ * regression test) can leave a remainder on the order of 1e-17 for a
+ * qty ~0.1, which is what this needs to catch.
+ */
+const DUST_QTY_TOLERANCE = 1e-9;
+
+/**
  * Close `qty` of `position` at `exitPrice`. Returns the cash to credit and the
  * booked trade. The entry fee was charged when the position opened, so it is
  * reported in the trade but *not* deducted from the balance a second time.
@@ -375,7 +396,11 @@ function closeSlice(
   now: number,
 ): CloseSlice {
   const closedQty = Math.min(qty, position.qty);
-  const fraction = closedQty / position.qty;
+  const remainder = position.qty - closedQty;
+  // A remainder too small to represent a real position is folded into this
+  // close rather than left behind as an untradeable, un-closeable dust row.
+  const isDust = remainder > 0 && remainder <= position.qty * DUST_QTY_TOLERANCE;
+  const fraction = isDust ? 1 : closedQty / position.qty;
   const releasedMargin = position.margin * fraction;
   const entryFeeShare = position.feesPaid * fraction;
   const exitFee = closedQty * exitPrice * feeRate;
@@ -406,15 +431,14 @@ function closeSlice(
     durationMs: now - position.openedAt,
   };
 
-  const remaining = position.qty - closedQty;
   return {
     balanceDelta: releasedMargin + grossPnl - exitFee,
     trade,
     position:
-      remaining > 0
+      remainder > 0 && !isDust
         ? {
             ...position,
-            qty: remaining,
+            qty: remainder,
             margin: position.margin - releasedMargin,
             feesPaid: position.feesPaid - entryFeeShare,
           }
@@ -468,10 +492,14 @@ function applyFill(
     return reject(account, symbol, "Invalid quantity or price");
   }
 
-  const events: PaperEvent[] = [];
   let balance = account.balance;
   let positions = account.positions;
   let history = account.history;
+  // Set once the reducing leg below computes a trade; pushed to `events`
+  // *after* the fill event that caused it (see the two returns below), not
+  // as soon as it's known, so a close is always reported as a consequence of
+  // a fill rather than the other way around.
+  let closeEvent: PaperEvent | null = null;
 
   const existing = positions.find((p) => p.symbol === symbol) ?? null;
   let openQty = qty;
@@ -485,12 +513,19 @@ function applyFill(
       ? positions.map((p) => (p.id === existing.id ? slice.position! : p))
       : positions.filter((p) => p.id !== existing.id);
     history = [...history, slice.trade];
-    events.push({ type: "close", symbol, reason: "MANUAL", trade: slice.trade });
+    closeEvent = { type: "close", symbol, reason: "MANUAL", trade: slice.trade };
     openQty = qty - reduceQty;
   }
 
-  if (openQty <= 0) {
-    events.push({ type: "fill", orderId, symbol, side, qty, price, fee: qty * price * feeRate });
+  // A remainder too small to represent a real position (see
+  // `DUST_QTY_TOLERANCE`): the reduce above already absorbed the whole
+  // request in every way that matters, so don't flip into a dust-sized
+  // position over it.
+  if (openQty <= qty * DUST_QTY_TOLERANCE) {
+    // Pure reduce: the exit fee is already inside the close event's
+    // `trade.fees`, so the fill event reports zero rather than double-billing it.
+    const events: PaperEvent[] = [{ type: "fill", orderId, symbol, side, qty, price, fee: 0 }];
+    if (closeEvent) events.push(closeEvent);
     return { account: { ...account, balance, positions, history }, events };
   }
 
@@ -560,7 +595,12 @@ function applyFill(
     ];
   }
 
-  events.push({ type: "fill", orderId, symbol, side, qty, price, fee });
+  // `qty` (not `openQty`) so a flip's single fill event still reports the
+  // full requested size; `fee` here is only the opening leg's, per the
+  // `PaperEvent["fee"]` doc — the reducing leg's fee is already counted in
+  // `closeEvent`'s `trade.fees`.
+  const events: PaperEvent[] = [{ type: "fill", orderId, symbol, side, qty, price, fee }];
+  if (closeEvent) events.push(closeEvent);
   return { account: { ...account, balance, positions, history }, events };
 }
 
