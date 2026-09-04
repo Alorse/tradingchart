@@ -401,7 +401,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         // canvas font string invalid, which silently drops fontSize too.
         fontFamily: getTvFontFamily(),
         fontSize: 14,
-        panes: { separatorColor: TV_COLORS.border, separatorHoverColor: TV_COLORS.border },
+        panes: { separatorColor: TV_COLORS.border, separatorHoverColor: TV_COLORS.borderStrong },
       },
       grid: {
         vertLines: { color: initColors.gridLines },
@@ -413,14 +413,16 @@ export function PriceChart({ symbol, timeframe }: Props) {
         horzLine: { color: TV_COLORS.textMuted, width: 1, style: 3, labelBackgroundColor: TV_COLORS.panel },
       },
       rightPriceScale: {
-        borderColor: TV_COLORS.border,
+        // The axis frames the plot, so it reads one step above the pane
+        // separators rather than at the same weight.
+        borderColor: TV_COLORS.borderStrong,
         textColor: TV_COLORS.text,
         // Less headroom above the highest bar (default top is ~0.2, which on a
         // log scale squeezes the candles). Bottom leaves room for the volume overlay.
         scaleMargins: { top: 0.06, bottom: 0.08 },
       },
       timeScale: {
-        borderColor: TV_COLORS.border,
+        borderColor: TV_COLORS.borderStrong,
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 12,
