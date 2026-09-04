@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useChartStore } from "@/lib/store/chart-store";
-import { timeToX, timeframeToSeconds } from "@/lib/chart/coords";
+import { timeToX, fractionalLogicalToX, timeframeToSeconds } from "@/lib/chart/coords";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import type { Drawing } from "@/lib/drawings/types";
 import { HLineDraw } from "./HLineDraw";
@@ -240,8 +240,11 @@ function renderDrawing(args: RenderArgs) {
       }
       const barSpan = Math.max(1, (Number(d.timeB) - Number(d.timeA)) / _intervalSec);
       const logicalA = chart.timeScale().coordinateToLogical(xA);
+      // `logicalA + barSpan` is fractional (a 1h-spanning position on a 4h chart
+      // is 0.25 bars wide), so it must go through the interpolating helper — the
+      // raw logicalToCoordinate() returns 0 for fractional logicals.
       const xB = logicalA !== null
-        ? ((chart.timeScale().logicalToCoordinate((logicalA + barSpan) as never) as number | null) ?? xA + barSpan * 8)
+        ? (fractionalLogicalToX(chart, logicalA + barSpan) ?? xA + barSpan * 8)
         : (timeToX(chart, Number(d.timeB), globalCandlesRef.current, _intervalSec) ?? xA + 100);
       return (
         <PositionDraw
