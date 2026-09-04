@@ -78,7 +78,7 @@ export function MobileAlertsSheet() {
     <MobileSheet title="Alerts" onClose={closeSheet}>
       <div>
         <div className="flex items-center justify-between border-b border-tv-border px-3 py-2">
-          <span className="text-[11px] text-tv-text-dim">{total} alert{total === 1 ? "" : "s"}</span>
+          <span className="text-[11px] text-tv-text-muted">{total} alert{total === 1 ? "" : "s"}</span>
           <button
             onClick={() => openAlertDialog()}
             className="flex items-center gap-1 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover active:text-tv-text"
@@ -125,12 +125,12 @@ export function MobileAlertsSheet() {
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-medium">{a.symbol}</span>
                       {a.trigger === "once" && (
-                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-tv-text-dim">once</span>
+                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-tv-text-muted">once</span>
                       )}
                     </div>
                     <div className="truncate text-[11px] text-tv-text-muted">{desc}</div>
                     {a.message && (
-                      <div className="truncate text-[10px] text-tv-text-dim">{a.message}</div>
+                      <div className="truncate text-[10px] text-tv-text-muted">{a.message}</div>
                     )}
                   </button>
                   <button
@@ -152,7 +152,7 @@ export function MobileAlertsSheet() {
             })}
 
             {drawingAlerts.length > 0 && (
-              <div className="border-t border-tv-border bg-tv-panel/60 px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-dim">
+              <div className="border-t border-tv-border bg-tv-panel/60 px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-muted">
                 From drawings
               </div>
             )}

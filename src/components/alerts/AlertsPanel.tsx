@@ -67,7 +67,7 @@ export function AlertsPanel() {
         <span className="text-[11px] font-semibold uppercase tracking-wider text-tv-text-muted">
           Alerts
         </span>
-        <span className="text-[11px] text-tv-text-dim">{total}</span>
+        <span className="text-[11px] text-tv-text-muted">{total}</span>
       </div>
 
       {total === 0 ? (
@@ -111,12 +111,12 @@ export function AlertsPanel() {
                   <div className="flex items-center gap-1.5">
                     <span className="truncate font-medium">{a.symbol}</span>
                     {a.trigger === "once" && (
-                      <span className="shrink-0 text-[9px] uppercase tracking-wider text-tv-text-dim">once</span>
+                      <span className="shrink-0 text-[9px] uppercase tracking-wider text-tv-text-muted">once</span>
                     )}
                   </div>
                   <div className="truncate text-[11px] text-tv-text-muted">{desc}</div>
                   {a.message && (
-                    <div className="truncate text-[10px] text-tv-text-dim">{a.message}</div>
+                    <div className="truncate text-[10px] text-tv-text-muted">{a.message}</div>
                   )}
                 </button>
                 <button
@@ -140,7 +140,7 @@ export function AlertsPanel() {
           })}
 
           {drawingAlerts.length > 0 && (
-            <div className="mt-1 border-t border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-dim">
+            <div className="mt-1 border-t border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-muted">
               From drawings
             </div>
           )}
