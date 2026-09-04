@@ -76,7 +76,7 @@ function Stat({
 }) {
   return (
     <div className="flex items-center gap-1.5 border-r border-tv-border px-3">
-      <span className="text-tv-text-dim">{label}</span>
+      <span className="text-tv-text-muted">{label}</span>
       <span className={cn("font-medium tabular-nums", valueClass ?? "text-tv-text")}>
         {value}
       </span>
