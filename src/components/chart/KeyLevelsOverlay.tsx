@@ -22,9 +22,9 @@ interface Props {
 }
 
 const TEXT_PX: Record<Props["textSize"], number> = {
-  Small: 9,
-  Medium: 11,
-  Large: 13,
+  Small: 11,
+  Medium: 13,
+  Large: 15,
 };
 const LINE_PX: Record<Props["lineWidth"], number> = {
   Small: 1,

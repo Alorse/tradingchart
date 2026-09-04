@@ -117,23 +117,23 @@ export function HRayDraw({
       <g style={{ pointerEvents: "none" }}>
         <rect
           x={anchorX + 8}
-          y={y - 8}
-          width={drawing.alert?.enabled ? 84 : 70}
-          height={16}
+          y={y - 9}
+          width={drawing.alert?.enabled ? 94 : 78}
+          height={18}
           fill={color}
           rx={2}
         />
         <text
           x={anchorX + 12}
-          y={y + 3}
+          y={y + 4}
           fill="#ffffff"
-          fontSize={10}
+          fontSize={11}
           fontFamily="var(--font-mono), monospace"
         >
           {formatPrice(drawing.anchor.price)}
         </text>
         {drawing.alert?.enabled && (
-          <text x={anchorX + 80} y={y + 3} fill="#ffffff" fontSize={11}>
+          <text x={anchorX + 88} y={y + 4} fill="#ffffff" fontSize={11}>
             🔔
           </text>
         )}

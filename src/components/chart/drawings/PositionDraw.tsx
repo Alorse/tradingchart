@@ -287,7 +287,7 @@ export function PositionDraw({
           />
           <text
             x={left + 4} y={y - 3}
-            fill={profitColor} fontSize={9} opacity={0.65}
+            fill={profitColor} fontSize={11} opacity={0.65}
             fontFamily="var(--font-mono), monospace"
           >
             {n}R
@@ -332,7 +332,7 @@ export function PositionDraw({
             <text
               x={textX} y={profitCenterY + 12}
               textAnchor="middle" fill={profitColor}
-              fontSize={10} opacity={0.5}
+              fontSize={11} opacity={0.5}
               fontFamily="var(--font-mono), monospace"
             >
               RR {rr.toFixed(2)}

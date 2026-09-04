@@ -106,7 +106,7 @@ export function XabcdDraw({
             {LABELS[i]}
           </text>
           {ratioLabels.find((l) => l.i === i)?.text && (
-            <text x={p.x + 5} y={p.y + 12} fill="var(--color-tv-text-muted)" fontSize={10} fontFamily="var(--font-mono), monospace" style={{ pointerEvents: "none" }}>
+            <text x={p.x + 5} y={p.y + 12} fill="var(--color-tv-text-muted)" fontSize={11} fontFamily="var(--font-mono), monospace" style={{ pointerEvents: "none" }}>
               {ratioLabels.find((l) => l.i === i)!.text}
             </text>
           )}

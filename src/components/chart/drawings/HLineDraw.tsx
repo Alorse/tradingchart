@@ -102,23 +102,23 @@ export function HLineDraw({
       <g style={{ pointerEvents: "none" }}>
         <rect
           x={4}
-          y={y - 8}
-          width={drawing.alert?.enabled ? 84 : 70}
-          height={16}
+          y={y - 9}
+          width={drawing.alert?.enabled ? 94 : 78}
+          height={18}
           fill={color}
           rx={2}
         />
         <text
           x={8}
-          y={y + 3}
+          y={y + 4}
           fill="#ffffff"
-          fontSize={10}
+          fontSize={11}
           fontFamily="var(--font-mono), monospace"
         >
           {formatPrice(drawing.price)}
         </text>
         {drawing.alert?.enabled && (
-          <text x={76} y={y + 3} fill="#ffffff" fontSize={11}>
+          <text x={84} y={y + 4} fill="#ffffff" fontSize={11}>
             🔔
           </text>
         )}

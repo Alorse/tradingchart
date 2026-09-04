@@ -131,7 +131,7 @@ export function FibRetracementDraw({
               x={left + 4}
               y={y - 3}
               fill={color}
-              fontSize={10}
+              fontSize={11}
               fontFamily="var(--font-mono), monospace"
               style={{ pointerEvents: "none" }}
             >
