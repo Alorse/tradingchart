@@ -837,7 +837,7 @@ function PositionSideBadge({ side }: { side: "LONG" | "SHORT" }) {
   const color = isLong ? "#2962ff" : "#ef5350";
   return (
     <span
-      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold"
+      className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[9px] font-bold"
       style={{ borderColor: color, color }}
     >
       {isLong ? "L" : "S"}
