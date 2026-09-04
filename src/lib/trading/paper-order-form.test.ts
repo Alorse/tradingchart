@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
 import {
   defaultPaperOrderForm,
+  invalidBracketReason,
   isPaperOrderReady,
   paperFormToLimitRequest,
   paperFormToMarketRequest,
@@ -37,9 +38,9 @@ describe("isPaperOrderReady", () => {
 });
 
 describe("paperFormToMarketRequest / paperFormToLimitRequest", () => {
-  it("carries side, qty and leverage through", () => {
+  it("carries side, qty and leverage through (leverage only applies to perps, see below)", () => {
     const form = { ...defaultPaperOrderForm(25), side: "SELL" as const, qty: "0.5" };
-    const req = paperFormToMarketRequest(form, "BTCUSDT");
+    const req = paperFormToMarketRequest(form, "BTCUSDT.P");
     expect(req.symbol).toBe("BTCUSDT");
     expect(req.side).toBe("SELL");
     expect(req.qty).toBe(0.5);
@@ -77,5 +78,63 @@ describe("paperFormToMarketRequest / paperFormToLimitRequest", () => {
     expect(limitReq.price).toBe(27000);
     const marketReq = paperFormToMarketRequest(form, "ETHUSDT") as unknown as Record<string, unknown>;
     expect(marketReq.price).toBe(undefined);
+  });
+
+  it("canonicalizes a decorated symbol to its bare exchange symbol (adversarial review finding 3)", () => {
+    const form = { ...defaultPaperOrderForm(10), qty: "1" };
+    expect(paperFormToMarketRequest(form, "BTCUSDT.P").symbol).toBe("BTCUSDT");
+    expect(paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P").symbol).toBe("SOLUSDT");
+    expect(paperFormToLimitRequest({ ...form, type: "LIMIT" as const, price: "100" }, "BYBIT:SOLUSDT.P").symbol).toBe(
+      "SOLUSDT",
+    );
+  });
+
+  it("forces leverage to 1 for a non-perp (spot) symbol regardless of the form's leverage (adversarial review finding 8)", () => {
+    const form = { ...defaultPaperOrderForm(25), qty: "1" };
+    expect(paperFormToMarketRequest(form, "BTCUSDT").leverage).toBe(1);
+    expect(paperFormToMarketRequest(form, "BYBIT:SOLUSDT").leverage).toBe(1);
+  });
+
+  it("passes the form's leverage through for a perp symbol", () => {
+    const form = { ...defaultPaperOrderForm(25), qty: "1" };
+    expect(paperFormToMarketRequest(form, "BTCUSDT.P").leverage).toBe(25);
+    expect(paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P").leverage).toBe(25);
+  });
+});
+
+describe("invalidBracketReason", () => {
+  it("allows a long with no brackets set", () => {
+    const form = { ...defaultPaperOrderForm(10), qty: "1" };
+    expect(invalidBracketReason(form, 100)).toBe(null);
+  });
+
+  it("flags a long's take-profit at or below the reference price", () => {
+    const form = { ...defaultPaperOrderForm(10), qty: "1", tpEnabled: true, tp: "100" };
+    expect(invalidBracketReason(form, 100) === null).toBe(false);
+    expect(invalidBracketReason({ ...form, tp: "90" }, 100) === null).toBe(false);
+    expect(invalidBracketReason({ ...form, tp: "110" }, 100)).toBe(null);
+  });
+
+  it("flags a long's stop-loss at or above the reference price", () => {
+    const form = { ...defaultPaperOrderForm(10), qty: "1", slEnabled: true, sl: "100" };
+    expect(invalidBracketReason(form, 100) === null).toBe(false);
+    expect(invalidBracketReason({ ...form, sl: "110" }, 100) === null).toBe(false);
+    expect(invalidBracketReason({ ...form, sl: "90" }, 100)).toBe(null);
+  });
+
+  it("mirrors the rule for a short", () => {
+    const form = { ...defaultPaperOrderForm(10), side: "SELL" as const, qty: "1", tpEnabled: true, tp: "110" };
+    expect(invalidBracketReason(form, 100) === null).toBe(false);
+    expect(invalidBracketReason({ ...form, tp: "90" }, 100)).toBe(null);
+
+    const slForm = { ...defaultPaperOrderForm(10), side: "SELL" as const, qty: "1", slEnabled: true, sl: "90" };
+    expect(invalidBracketReason(slForm, 100) === null).toBe(false);
+    expect(invalidBracketReason({ ...slForm, sl: "110" }, 100)).toBe(null);
+  });
+
+  it("skips validation without a usable reference price", () => {
+    const form = { ...defaultPaperOrderForm(10), qty: "1", tpEnabled: true, tp: "90" };
+    expect(invalidBracketReason(form, 0)).toBe(null);
+    expect(invalidBracketReason(form, NaN)).toBe(null);
   });
 });

@@ -1,4 +1,5 @@
 import type { SizingMode, SlMode } from "@/lib/binance/trading-types";
+import { cleanSym, isPerp } from "@/lib/binance/rest";
 import type {
   LimitOrderRequest,
   MarketOrderRequest,
@@ -67,15 +68,29 @@ function bracket(enabled: boolean, value: string): number | null {
   return isFinite(n) && n > 0 ? n : null;
 }
 
+/**
+ * Builds the engine request from the raw chart symbol — `symbol` here may
+ * carry the `.P` perp suffix and/or a `BYBIT:` exchange prefix (see
+ * CLAUDE.md's "Symbol identity"). `isPerp` needs to see the undecorated
+ * symbol (it's what the suffix means), so it runs before `cleanSym` strips
+ * it; the request itself stores the cleaned symbol, the one canonical key
+ * `evaluateTick`, the store's positions/orders and the chart's price-line
+ * layer all key off of (adversarial review finding 3).
+ *
+ * Leverage only means anything for a perp — `LeverageSlider` is hidden for
+ * spot symbols, so a spot order forces 1x rather than silently inheriting
+ * whatever `form.leverage` was left at (adversarial review finding 8).
+ */
 export function paperFormToMarketRequest(
   form: PaperOrderForm,
   symbol: string,
 ): MarketOrderRequest {
+  const perp = isPerp(symbol);
   return {
-    symbol,
+    symbol: cleanSym(symbol),
     side: form.side,
     qty: parseFloat(form.qty) || 0,
-    leverage: form.leverage,
+    leverage: perp ? form.leverage : 1,
     tp: bracket(form.tpEnabled, form.tp),
     sl: bracket(form.slEnabled, form.sl),
   };
@@ -89,4 +104,25 @@ export function paperFormToLimitRequest(
     ...paperFormToMarketRequest(form, symbol),
     price: parseFloat(form.price) || 0,
   };
+}
+
+/**
+ * Mirrors the engine's own bracket-side rule (`normalizeBrackets` in
+ * paper-engine.ts: long TP > price > SL, short the other way) so the panel
+ * can block a submission the engine would otherwise silently drop instead of
+ * leaving the user to notice a missing TP/SL only after the fill (adversarial
+ * review finding 7). `null` means the brackets (if any) are fine to submit.
+ */
+export function invalidBracketReason(form: PaperOrderForm, referencePrice: number): string | null {
+  if (!isFinite(referencePrice) || referencePrice <= 0) return null;
+  const long = form.side === "BUY";
+  const tp = bracket(form.tpEnabled, form.tp);
+  const sl = bracket(form.slEnabled, form.sl);
+  if (tp !== null && (long ? tp <= referencePrice : tp >= referencePrice)) {
+    return `Take-profit must be ${long ? "above" : "below"} the current price`;
+  }
+  if (sl !== null && (long ? sl >= referencePrice : sl <= referencePrice)) {
+    return `Stop-loss must be ${long ? "below" : "above"} the current price`;
+  }
+  return null;
 }

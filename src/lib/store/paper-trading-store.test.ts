@@ -5,6 +5,7 @@ import {
   usePaperTradingStore,
 } from "./paper-trading-store";
 import { DEFAULT_PAPER_SETTINGS, createAccount } from "@/lib/trading/paper-engine";
+import { defaultPaperOrderForm, paperFormToMarketRequest } from "@/lib/trading/paper-order-form";
 
 const st = () => usePaperTradingStore.getState();
 
@@ -119,6 +120,21 @@ describe("paper-trading-store actions", () => {
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
     expect(st().account.history).toHaveLength(0);
     expect(st().marks).toEqual({});
+  });
+
+  it("placing an order built from a decorated symbol records the canonical key (adversarial review finding 3)", () => {
+    const form = { ...defaultPaperOrderForm(10), qty: "1" };
+    const req = paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P");
+    st().placeOrder(req, 100);
+    expect(st().account.positions).toHaveLength(1);
+    expect(st().account.positions[0].symbol).toBe("SOLUSDT");
+    expect(st().marks.SOLUSDT).toBe(100);
+
+    // A tick keyed by the same canonical symbol (as `usePaperPriceFeed`
+    // now emits after cleaning) reaches the position it opened.
+    st().evaluateTick("SOLUSDT", 110);
+    expect(st().account.positions).toHaveLength(1);
+    expect(st().marks.SOLUSDT).toBe(110);
   });
 
   it("updateSettings re-seeds the balance only while the account is untouched", () => {
