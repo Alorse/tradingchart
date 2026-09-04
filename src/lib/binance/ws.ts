@@ -70,12 +70,27 @@ class BinanceWSConn {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private nextId = 1;
   private klineSubs = new Map<string, KlineSubscription>();
-  private tickerSubs = new Map<string, (m: MiniTickerMsg["data"]) => void>();
+  // stream -> listeners. Two independent components can watch the same
+  // symbol's mini-ticker at once (the watchlist row and `usePaperPriceFeed`
+  // driving the paper engine, both riding this same process-wide singleton) —
+  // a single-callback map here silently drops whichever subscriber isn't
+  // "last in", and the first one to unsubscribe deletes the stream out from
+  // under the other. Fan out to a Set of listeners per stream instead, the
+  // same shape `BybitWS.tickerSubs` already uses.
+  private tickerSubs = new Map<
+    string,
+    Set<{ onTick: (s: { symbol: string; close: number; open: number; pct: number }) => void; symbol: string }>
+  >();
   private bookTickerSubs = new Map<string, (m: { bid: number; ask: number }) => void>();
   private connected = false;
   private closing = false;
+  private url: string;
+  private symbolDecorator: (s: string) => string;
 
-  constructor(private url: string, private symbolDecorator: (s: string) => string) {}
+  constructor(url: string, symbolDecorator: (s: string) => string) {
+    this.url = url;
+    this.symbolDecorator = symbolDecorator;
+  }
 
   connect() {
     if (this.ws || this.closing) return;
@@ -142,8 +157,16 @@ class BinanceWSConn {
         isFinal: k.x,
       });
     } else if (msg.stream.includes("@miniTicker")) {
-      const handler = this.tickerSubs.get(msg.stream);
-      if (handler) handler((msg as MiniTickerMsg).data);
+      const listeners = this.tickerSubs.get(msg.stream);
+      if (listeners) {
+        const d = (msg as MiniTickerMsg).data;
+        const close = parseFloat(d.c);
+        const open = parseFloat(d.o);
+        const pct = open === 0 ? 0 : ((close - open) / open) * 100;
+        for (const { onTick, symbol } of listeners) {
+          onTick({ symbol: this.symbolDecorator(symbol), close, open, pct });
+        }
+      }
     } else if (msg.stream.includes("@bookTicker")) {
       const handler = this.bookTickerSubs.get(msg.stream);
       if (handler) {
@@ -176,29 +199,34 @@ class BinanceWSConn {
     const streams = symbols.map(
       (s) => `${cleanSym(s).toLowerCase()}@miniTicker`,
     );
+    const listeners = streams.map((_, i) => ({ onTick, symbol: symbols[i] }));
+    const newStreams: string[] = [];
     streams.forEach((stream, i) => {
-      const inputSym = symbols[i];
-      this.tickerSubs.set(stream, (d) => {
-        const close = parseFloat(d.c);
-        const open = parseFloat(d.o);
-        onTick({
-          symbol: this.symbolDecorator(inputSym),
-          close,
-          open,
-          pct: open === 0 ? 0 : ((close - open) / open) * 100,
-        });
-      });
+      let set = this.tickerSubs.get(stream);
+      if (!set) {
+        set = new Set();
+        this.tickerSubs.set(stream, set);
+        newStreams.push(stream);
+      }
+      set.add(listeners[i]);
     });
-    if (this.connected) {
-      this.send({ method: "SUBSCRIBE", params: streams, id: this.nextId++ });
+    if (this.connected && newStreams.length > 0) {
+      this.send({ method: "SUBSCRIBE", params: newStreams, id: this.nextId++ });
     } else if (!this.ws) {
       this.connect();
     }
     return () => {
-      streams.forEach((s) => this.tickerSubs.delete(s));
-      if (this.connected) {
-        this.send({ method: "UNSUBSCRIBE", params: streams, id: this.nextId++ });
-      }
+      streams.forEach((stream, i) => {
+        const set = this.tickerSubs.get(stream);
+        if (!set) return;
+        set.delete(listeners[i]);
+        if (set.size === 0) {
+          this.tickerSubs.delete(stream);
+          if (this.connected) {
+            this.send({ method: "UNSUBSCRIBE", params: [stream], id: this.nextId++ });
+          }
+        }
+      });
     };
   }
 
