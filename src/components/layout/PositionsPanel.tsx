@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, X } from "lucide-react";
 import { useTradingStore } from "@/lib/store/trading-store";
+import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/format";
@@ -17,6 +18,10 @@ type Tab = "positions" | "orders" | "history" | "summary" | "notifications";
 type OrderFilter = "all" | "working" | "inactive" | "filled" | "cancelled" | "rejected";
 
 export function PositionsPanel() {
+  // Suppressed entirely in Paper mode — this shows/edits/closes the LIVE
+  // account, and live credentials can still be configured while the Trade
+  // tab is toggled to Paper (adversarial review finding 1).
+  const mode = useTradingModeStore((s) => s.mode);
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);
   const testnet = useTradingStore((s) => s.testnet);
@@ -51,7 +56,7 @@ export function PositionsPanel() {
   const positionsCount = activePositions.length;
   const ordersCount = orders.length;
 
-  if (!apiKey || !apiSecret) return null;
+  if (mode !== "live" || !apiKey || !apiSecret) return null;
 
   return (
     <div

@@ -53,6 +53,7 @@ import { MeasureOverlay } from "./MeasureOverlay";
 import { DrawingsLayer } from "./drawings/DrawingsLayer";
 import { PlacementPreview, MagnetIndicator } from "./PlacementPreview";
 import { OrderLinesLayer } from "@/components/trading/OrderLinesLayer";
+import { PaperOrderLinesLayer } from "@/components/trading/PaperOrderLinesLayer";
 import { BuySellOverlay } from "@/components/trading/BuySellOverlay";
 import { FloatingContextToolbar } from "./FloatingContextToolbar";
 import { BarCountdown } from "./BarCountdown";
@@ -75,6 +76,8 @@ import { registerChartCapture, composeChartPng } from "@/lib/chart/snapshot";
 import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
 import { useAlertMonitor } from "@/hooks/useAlertMonitor";
+import { usePaperPriceFeed } from "@/hooks/usePaperPriceFeed";
+import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 
 interface MeasurePoint {
   time: number;
@@ -337,6 +340,15 @@ export function PriceChart({ symbol, timeframe }: Props) {
 
   // Drive alerts off the live price tick
   useAlertMonitor(symbol, lastPrice?.value ?? null);
+  // Drive the paper-trading engine's fills/brackets off the same live feed.
+  usePaperPriceFeed(symbol);
+  // Live credentials can still be configured while the Trade tab is toggled
+  // to Paper — OrderLinesLayer draws/drags/right-click-modifies the LIVE
+  // account's orders and positions, so it's unmounted outright rather than
+  // just hidden, since its price lines are created imperatively in an effect
+  // (a JSX-level `return null` inside it wouldn't stop those). PaperOrderLinesLayer
+  // covers the paper markers independently of this gate (adversarial review finding 1).
+  const tradingMode = useTradingModeStore((s) => s.mode);
 
   // Helper — compute pane top offsets from chart layout
   function recomputePaneOffsets() {
@@ -3448,14 +3460,17 @@ export function PriceChart({ symbol, timeframe }: Props) {
         chartAreaWidth={chartRef.current ? chartRef.current.timeScale().width() : containerSize.width}
         renderTick={renderTick}
       />
-      <OrderLinesLayer
-        chart={chartRef.current}
-        candleSeries={candleSeriesRef.current}
-        container={containerRef.current}
-        width={containerSize.width}
-        mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
-        renderTick={renderTick}
-      />
+      {tradingMode === "live" && (
+        <OrderLinesLayer
+          chart={chartRef.current}
+          candleSeries={candleSeriesRef.current}
+          container={containerRef.current}
+          width={containerSize.width}
+          mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
+          renderTick={renderTick}
+        />
+      )}
+      <PaperOrderLinesLayer candleSeries={candleSeriesRef.current} symbol={symbol} />
 
       {indicators.keylevels && !hidden.keylevels && (
         <KeyLevelsOverlay

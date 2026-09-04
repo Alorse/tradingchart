@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTradingStore } from "@/lib/store/trading-store";
+import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
@@ -20,6 +21,10 @@ export function BuySellOverlay() {
   const exchange = useTradingStore((s) => s.exchange);
   const placeOrder = useTradingStore((s) => s.placeOrder);
   const isLoading = useTradingStore((s) => s.isLoading);
+  // Live credentials stay configured while the Trade tab is toggled to
+  // Paper — this quote/quick-order surface must never place a real order
+  // just because it's still mounted (adversarial review finding 1).
+  const mode = useTradingModeStore((s) => s.mode);
 
   const panelOpen = sidebarTab === "trade";
   // The chart's venue vs the connected account's. Blocks the double-click
@@ -72,7 +77,7 @@ export function BuySellOverlay() {
     await placeOrder(symbol, { side, type: "MARKET" });
   }
 
-  if (!apiKey) return null;
+  if (mode !== "live" || !apiKey) return null;
 
   return (
     <div className="pointer-events-auto flex items-center gap-1">
