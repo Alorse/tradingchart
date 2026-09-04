@@ -16,6 +16,14 @@ import type { PaperOrder, PaperPosition, PaperTrade } from "@/lib/trading/paper-
  * but reading `paper-trading-store` instead of exchange credentials. Both
  * panels are mounted side by side in `page.tsx`; each self-gates on
  * `trading-mode-store`'s `mode`, so only one is ever visible.
+ *
+ * This shell deliberately subscribes to `account` only — never `marks` or
+ * `equity()`. Marks change on every raw WS tick (Bybit's feed is uncapped,
+ * several a second), so subscribing here re-rendered the panel on every tick
+ * even while collapsed to a 32px bar, or mounted-but-null in live mode, with
+ * nothing on screen that could show the new number (holistic review finding
+ * 7). The mark-driven subscriptions live in `AccountStats`/`PositionsTable`
+ * below, which only mount once the panel is expanded onto the relevant tab.
  */
 
 type Tab = "positions" | "orders" | "history";
@@ -23,8 +31,6 @@ type Tab = "positions" | "orders" | "history";
 export function PaperPositionsPanel() {
   const mode = useTradingModeStore((s) => s.mode);
   const account = usePaperTradingStore((s) => s.account);
-  const marks = usePaperTradingStore((s) => s.marks);
-  const equity = usePaperTradingStore((s) => s.equity());
   const resetAccount = usePaperTradingStore((s) => s.resetAccount);
 
   const [collapsed, setCollapsed] = useState(true);
@@ -36,7 +42,6 @@ export function PaperPositionsPanel() {
     () => account.orders.filter((o) => o.status === "NEW"),
     [account.orders],
   );
-  const unrealized = useMemo(() => totalUnrealizedPnl(positions, marks), [positions, marks]);
 
   if (mode !== "paper") return null;
 
@@ -90,33 +95,11 @@ export function PaperPositionsPanel() {
 
       {!collapsed && (
         <>
-          <div className="flex items-center gap-6 border-b border-tv-border px-4 py-2 text-[11px]">
-            <Stat label="Balance (USDT)" value={account.balance.toFixed(2)} />
-            <Stat
-              label="Unrealized PnL (USDT)"
-              value={`${unrealized >= 0 ? "+" : ""}${unrealized.toFixed(2)}`}
-              valueClass={unrealized >= 0 ? "text-tv-green" : "text-tv-red"}
-            />
-            <Stat label="Equity (USDT)" value={equity.toFixed(2)} />
-            <span className="ml-auto text-[9px] uppercase tracking-wider text-tv-text-muted">
-              Paper · Simulated
-            </span>
-            <button
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Reset the paper account? This clears every position, order and closed trade, and restores the balance to its seed value. This cannot be undone.",
-                  )
-                ) {
-                  resetAccount();
-                }
-              }}
-              title="Reset paper account to seed balance"
-              className="rounded border border-tv-red/30 px-2 py-1 text-[10px] font-semibold text-tv-red/70 transition-colors hover:border-tv-red hover:bg-tv-red/10 hover:text-tv-red"
-            >
-              Reset account
-            </button>
-          </div>
+          <AccountStats
+            balance={account.balance}
+            positions={positions}
+            onReset={resetAccount}
+          />
 
           <div className="flex shrink-0 border-b border-tv-border">
             <TabBtn active={tab === "positions"} onClick={() => setTab("positions")}>
@@ -131,7 +114,7 @@ export function PaperPositionsPanel() {
           </div>
 
           <div className="flex-1 overflow-auto">
-            {tab === "positions" && <PositionsTable positions={positions} marks={marks} />}
+            {tab === "positions" && <PositionsTable positions={positions} />}
             {tab === "orders" && <OrdersTable orders={restingOrders} />}
             {tab === "history" && <HistoryTable trades={account.history} />}
           </div>
@@ -142,6 +125,46 @@ export function PaperPositionsPanel() {
 }
 
 /* ─── helpers ─── */
+
+/** The two mark-driven figures (unrealized P&L, equity), split out of the
+ *  shell so the tick-rate subscriptions only exist while the panel is open. */
+function AccountStats({
+  balance, positions, onReset,
+}: { balance: number; positions: PaperPosition[]; onReset: () => void }) {
+  const marks = usePaperTradingStore((s) => s.marks);
+  const equity = usePaperTradingStore((s) => s.equity());
+  const unrealized = useMemo(() => totalUnrealizedPnl(positions, marks), [positions, marks]);
+
+  return (
+    <div className="flex items-center gap-6 border-b border-tv-border px-4 py-2 text-[11px]">
+      <Stat label="Balance (USDT)" value={balance.toFixed(2)} />
+      <Stat
+        label="Unrealized PnL (USDT)"
+        value={`${unrealized >= 0 ? "+" : ""}${unrealized.toFixed(2)}`}
+        valueClass={unrealized >= 0 ? "text-tv-green" : "text-tv-red"}
+      />
+      <Stat label="Equity (USDT)" value={equity.toFixed(2)} />
+      <span className="ml-auto text-[9px] uppercase tracking-wider text-tv-text-muted">
+        Paper · Simulated
+      </span>
+      <button
+        onClick={() => {
+          if (
+            window.confirm(
+              "Reset the paper account? This clears every position, order and closed trade, and restores the balance to its seed value. This cannot be undone.",
+            )
+          ) {
+            onReset();
+          }
+        }}
+        title="Reset paper account to seed balance"
+        className="rounded border border-tv-red/30 px-2 py-1 text-[10px] font-semibold text-tv-red/70 transition-colors hover:border-tv-red hover:bg-tv-red/10 hover:text-tv-red"
+      >
+        Reset account
+      </button>
+    </div>
+  );
+}
 
 function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
@@ -178,9 +201,11 @@ function TabBtn({
 
 /* ───────────────────────── Positions table ───────────────────────── */
 
-function PositionsTable({
-  positions, marks,
-}: { positions: PaperPosition[]; marks: Record<string, number> }) {
+function PositionsTable({ positions }: { positions: PaperPosition[] }) {
+  // Subscribed here rather than passed down from the shell: this table is the
+  // only thing that renders a per-tick mark, and it only exists while the
+  // Positions tab is open (holistic review finding 7).
+  const marks = usePaperTradingStore((s) => s.marks);
   const closePosition = usePaperTradingStore((s) => s.closePosition);
   const [editing, setEditing] = useState<string | null>(null);
 
