@@ -2,6 +2,7 @@ import { beforeEach, describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
 import {
   PAPER_STORAGE_KEY,
+  sanitizePaperAccount,
   usePaperTradingStore,
 } from "./paper-trading-store";
 import { DEFAULT_PAPER_SETTINGS, createAccount } from "@/lib/trading/paper-engine";
@@ -322,6 +323,49 @@ describe("persist merge validation (adversarial re-audit finding 4)", () => {
     // A normal fill's fee is a real number, not NaN.
     st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
     expect(Number.isFinite(st().account.balance)).toBe(true);
+  });
+});
+
+describe("sanitizePaperAccount (shared by localStorage merge and cloud sync)", () => {
+  it("rejects a non-object and a shape missing the required arrays/balance", () => {
+    expect(sanitizePaperAccount(null)).toBe(null);
+    expect(sanitizePaperAccount(undefined)).toBe(null);
+    expect(sanitizePaperAccount("not-an-object")).toBe(null);
+    expect(sanitizePaperAccount({})).toBe(null);
+    expect(sanitizePaperAccount({ positions: [], orders: [], history: [] })).toBe(null);
+    expect(
+      sanitizePaperAccount({ positions: [], orders: [], history: [], balance: Number.NaN }),
+    ).toBe(null);
+  });
+
+  it("accepts a well-formed account and drops invalid array entries/settings", () => {
+    const account = sanitizePaperAccount({
+      positions: [
+        { id: "p1", symbol: "BTCUSDT", qty: 1, entryPrice: 20_000, margin: 2_000 },
+        null,
+      ],
+      orders: [{ id: "o1", symbol: "ETHUSDT", price: "abc", qty: 1 }],
+      history: [{}],
+      balance: 5_000,
+      settings: { takerFeeRate: "abc", makerFeeRate: 0.001 },
+    });
+    expect(account === null).toBe(false);
+    expect(account?.balance).toBe(5_000);
+    expect(account?.positions).toHaveLength(1);
+    expect(account?.orders).toHaveLength(0);
+    expect(account?.history).toHaveLength(1);
+    expect(account?.settings.takerFeeRate).toBe(DEFAULT_PAPER_SETTINGS.takerFeeRate);
+    expect(account?.settings.makerFeeRate).toBe(0.001);
+  });
+});
+
+describe("setAccount (cloud-adoption path)", () => {
+  it("replaces the account wholesale without touching marks", () => {
+    usePaperTradingStore.setState({ marks: { BTCUSDT: 123 } });
+    const incoming = { ...createAccount(), balance: 42_000 };
+    st().setAccount(incoming);
+    expect(st().account.balance).toBe(42_000);
+    expect(st().marks.BTCUSDT).toBe(123);
   });
 });
 
