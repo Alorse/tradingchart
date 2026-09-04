@@ -10,6 +10,24 @@ import { defaultPaperOrderForm, paperFormToMarketRequest } from "@/lib/trading/p
 
 const st = () => usePaperTradingStore.getState();
 
+/** Fully-formed persisted shapes — every field the sanitizer checks, so a
+ *  test can spread one and corrupt exactly the field it's about. */
+const VALID_POSITION = {
+  id: "p", symbol: "ETHUSDT", side: "LONG", qty: 1, entryPrice: 1_000,
+  leverage: 10, margin: 100, feesPaid: 0.5, tp: null, sl: null,
+  liquidationPrice: 900, feedSymbol: null, openedAt: 0,
+};
+const VALID_ORDER = {
+  id: "o", symbol: "ETHUSDT", side: "BUY", type: "LIMIT", price: 1_000, qty: 1,
+  leverage: 10, status: "NEW", tp: null, sl: null, reserved: 100,
+  feedSymbol: null, createdAt: 0, updatedAt: 0,
+};
+const VALID_TRADE = {
+  id: "t", symbol: "ETHUSDT", side: "LONG", qty: 1, entryPrice: 1_000, exitPrice: 1_100,
+  leverage: 10, margin: 100, fees: 1, grossPnl: 100, realizedPnl: 99, roi: 0.99,
+  reason: "MANUAL", openedAt: 0, closedAt: 1, durationMs: 1,
+};
+
 beforeEach(() => {
   localStorage.removeItem(PAPER_STORAGE_KEY);
   st().resetAccount();
@@ -263,8 +281,8 @@ describe("persist merge validation (adversarial re-audit finding 4)", () => {
         state: {
           account: {
             positions: [
-              { id: "p1", symbol: "BTCUSDT", qty: Number.NaN, entryPrice: 20_000, margin: 2_000 },
-              { id: "p2", symbol: "ETHUSDT", qty: 1, entryPrice: 1_000, margin: 100 },
+              { ...VALID_POSITION, id: "p1", symbol: "BTCUSDT", qty: Number.NaN },
+              { ...VALID_POSITION, id: "p2", symbol: "ETHUSDT" },
             ],
             orders: [],
             history: [],
@@ -287,8 +305,8 @@ describe("persist merge validation (adversarial re-audit finding 4)", () => {
           account: {
             positions: [],
             orders: [
-              { id: "o1", symbol: "BTCUSDT", price: "abc", qty: 1 },
-              { id: "o2", symbol: "ETHUSDT", price: 1_000, qty: 1 },
+              { ...VALID_ORDER, id: "o1", symbol: "BTCUSDT", price: "abc" },
+              { ...VALID_ORDER, id: "o2", symbol: "ETHUSDT" },
             ],
             history: [],
             balance: 1_000,
@@ -340,12 +358,9 @@ describe("sanitizePaperAccount (shared by localStorage merge and cloud sync)", (
 
   it("accepts a well-formed account and drops invalid array entries/settings", () => {
     const account = sanitizePaperAccount({
-      positions: [
-        { id: "p1", symbol: "BTCUSDT", qty: 1, entryPrice: 20_000, margin: 2_000 },
-        null,
-      ],
-      orders: [{ id: "o1", symbol: "ETHUSDT", price: "abc", qty: 1 }],
-      history: [{}],
+      positions: [{ ...VALID_POSITION, symbol: "BTCUSDT" }, null],
+      orders: [{ ...VALID_ORDER, price: "abc" }],
+      history: [VALID_TRADE],
       balance: 5_000,
       settings: { takerFeeRate: "abc", makerFeeRate: 0.001 },
     });
@@ -356,6 +371,79 @@ describe("sanitizePaperAccount (shared by localStorage merge and cloud sync)", (
     expect(account?.history).toHaveLength(1);
     expect(account?.settings.takerFeeRate).toBe(DEFAULT_PAPER_SETTINGS.takerFeeRate);
     expect(account?.settings.makerFeeRate).toBe(0.001);
+  });
+});
+
+describe("sanitizePaperAccount rejection classes (holistic review finding 3)", () => {
+  function sanitized(patch: Record<string, unknown>) {
+    return sanitizePaperAccount({
+      positions: [], orders: [], history: [], balance: 1_000, ...patch,
+    });
+  }
+
+  it("rejects the whole blob for a NaN or negative balance", () => {
+    expect(sanitized({ balance: Number.NaN })).toBe(null);
+    expect(sanitized({ balance: -1 })).toBe(null);
+    // Fully deployed but solvent is legitimate.
+    expect(sanitized({ balance: 0 })?.balance).toBe(0);
+  });
+
+  it("drops a null position and one with a non-positive qty", () => {
+    expect(sanitized({ positions: [null] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, qty: 0 }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, qty: -1 }] })?.positions).toHaveLength(0);
+  });
+
+  it("drops a position with a negative margin or a non-finite entry/leverage/fee", () => {
+    expect(sanitized({ positions: [{ ...VALID_POSITION, margin: -1 }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, entryPrice: "1000" }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, leverage: Number.NaN }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, feesPaid: null }] })?.positions).toHaveLength(0);
+  });
+
+  it("drops a position whose side is outside the direction enum", () => {
+    expect(sanitized({ positions: [{ ...VALID_POSITION, side: "BUY" }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, side: undefined }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, side: "SHORT" }] })?.positions).toHaveLength(1);
+  });
+
+  it("drops a position whose bracket is neither a finite price nor null", () => {
+    expect(sanitized({ positions: [{ ...VALID_POSITION, tp: "1200" }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, sl: undefined }] })?.positions).toHaveLength(0);
+    expect(sanitized({ positions: [{ ...VALID_POSITION, tp: 1_200, sl: 900 }] })?.positions).toHaveLength(1);
+  });
+
+  it("drops an order whose reserve survived as a string, which would concatenate into usedMargin", () => {
+    expect(sanitized({ orders: [{ ...VALID_ORDER, reserved: "100" }] })?.orders).toHaveLength(0);
+    expect(sanitized({ orders: [{ ...VALID_ORDER, reserved: Number.NaN }] })?.orders).toHaveLength(0);
+  });
+
+  it("drops an order with a non-positive qty, non-finite price, or an unknown side/status", () => {
+    expect(sanitized({ orders: [{ ...VALID_ORDER, qty: 0 }] })?.orders).toHaveLength(0);
+    expect(sanitized({ orders: [{ ...VALID_ORDER, price: Number.NaN }] })?.orders).toHaveLength(0);
+    expect(sanitized({ orders: [{ ...VALID_ORDER, side: "LONG" }] })?.orders).toHaveLength(0);
+    expect(sanitized({ orders: [{ ...VALID_ORDER, status: "PARTIALLY_FILLED" }] })?.orders).toHaveLength(0);
+    expect(sanitized({ orders: [{ ...VALID_ORDER, status: "CANCELED" }] })?.orders).toHaveLength(1);
+  });
+
+  it("drops an empty trade object and one with a non-finite rendered field", () => {
+    expect(sanitized({ history: [{}] })?.history).toHaveLength(0);
+    expect(sanitized({ history: [null] })?.history).toHaveLength(0);
+    for (const field of ["realizedPnl", "fees", "roi", "qty", "entryPrice", "exitPrice"]) {
+      expect(sanitized({ history: [{ ...VALID_TRADE, [field]: Number.NaN }] })?.history).toHaveLength(0);
+    }
+    expect(sanitized({ history: [VALID_TRADE] })?.history).toHaveLength(1);
+  });
+
+  it("keeps equity finite after rehydrating a blob full of rejected entries", () => {
+    const account = sanitized({
+      positions: [{ ...VALID_POSITION, margin: "100" }],
+      orders: [{ ...VALID_ORDER, reserved: "100" }],
+      history: [{}],
+    });
+    expect(account === null).toBe(false);
+    usePaperTradingStore.getState().setAccount(account!);
+    expect(Number.isFinite(usePaperTradingStore.getState().equity())).toBe(true);
   });
 });
 

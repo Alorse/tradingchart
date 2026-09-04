@@ -23,6 +23,7 @@ import type {
   PaperOrder,
   PaperPosition,
   PaperSettings,
+  PaperTrade,
 } from "@/lib/trading/paper-engine";
 
 /**
@@ -112,28 +113,75 @@ function isFiniteNumber(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n);
 }
 
+/** A bracket is either off (`null`) or a real price — never `undefined`, a
+ *  string, or NaN, all of which compare `!== null` and would then be silently
+ *  tested against a live price by `triggeredExit`. */
+function isFiniteOrNull(n: unknown): n is number | null {
+  return n === null || isFiniteNumber(n);
+}
+
+const PAPER_DIRECTIONS = new Set(["LONG", "SHORT"]);
+const PAPER_ORDER_SIDES = new Set(["BUY", "SELL"]);
+const PAPER_ORDER_STATUSES = new Set(["NEW", "FILLED", "CANCELED"]);
+
 /**
- * A persisted position/order needs its money-math fields intact — anything
- * else (a stray `null` from a corrupted write, a field that lost its type
- * across a schema change) would crash `equity()`/`usedMargin()`, which
+ * A persisted position/order/trade needs its money-math fields intact —
+ * anything else (a stray `null` from a corrupted write, a field that lost its
+ * type across a schema change) would crash `equity()`/`usedMargin()`, which
  * reduce over these arrays unconditionally, or silently rehydrate NaN
  * margin/fees into every calculation downstream (adversarial re-audit
  * finding 4).
+ *
+ * Every field the engine or a table actually *reads* is checked, not just the
+ * headline numbers: a `qty <= 0` position is untradeable and un-closeable
+ * (`closeSlice` divides by it), a `side` outside the direction enum inverts
+ * every P&L sign through `pnlAtExit`, and a `reserved` that survived as a
+ * string turns `usedMargin`'s `+` into string concatenation, poisoning equity
+ * for the whole session (holistic review finding 3).
  */
 function isValidPersistedPosition(p: unknown): p is PaperPosition {
   if (typeof p !== "object" || p === null) return false;
   const pos = p as Partial<PaperPosition>;
-  return isFiniteNumber(pos.qty) && isFiniteNumber(pos.entryPrice) && isFiniteNumber(pos.margin);
+  return (
+    isFiniteNumber(pos.qty) &&
+    pos.qty > 0 &&
+    isFiniteNumber(pos.margin) &&
+    pos.margin >= 0 &&
+    isFiniteNumber(pos.entryPrice) &&
+    isFiniteNumber(pos.leverage) &&
+    isFiniteNumber(pos.feesPaid) &&
+    PAPER_DIRECTIONS.has(pos.side as string) &&
+    isFiniteOrNull(pos.tp) &&
+    isFiniteOrNull(pos.sl)
+  );
 }
 
 function isValidPersistedOrder(o: unknown): o is PaperOrder {
   if (typeof o !== "object" || o === null) return false;
   const ord = o as Partial<PaperOrder>;
-  return isFiniteNumber(ord.price) && isFiniteNumber(ord.qty);
+  return (
+    isFiniteNumber(ord.price) &&
+    isFiniteNumber(ord.qty) &&
+    ord.qty > 0 &&
+    isFiniteNumber(ord.reserved) &&
+    PAPER_ORDER_SIDES.has(ord.side as string) &&
+    PAPER_ORDER_STATUSES.has(ord.status as string)
+  );
 }
 
-function isValidPersistedTrade(t: unknown): boolean {
-  return typeof t === "object" && t !== null;
+/** The fields the History table renders — a non-finite one shows up as
+ *  "NaN USDT" in a row that can never be corrected. */
+function isValidPersistedTrade(t: unknown): t is PaperTrade {
+  if (typeof t !== "object" || t === null) return false;
+  const trade = t as Partial<PaperTrade>;
+  return (
+    isFiniteNumber(trade.realizedPnl) &&
+    isFiniteNumber(trade.fees) &&
+    isFiniteNumber(trade.roi) &&
+    isFiniteNumber(trade.qty) &&
+    isFiniteNumber(trade.entryPrice) &&
+    isFiniteNumber(trade.exitPrice)
+  );
 }
 
 /** Keeps a persisted settings key only when it survives as a finite number — a
@@ -174,7 +222,11 @@ export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
     !Array.isArray(account.positions) ||
     !Array.isArray(account.orders) ||
     !Array.isArray(account.history) ||
-    !isFiniteNumber(account.balance)
+    !isFiniteNumber(account.balance) ||
+    // Free cash can be exactly zero (fully deployed) but never negative: the
+    // engine refuses any fill that would overdraw, so a negative balance means
+    // the blob is corrupt rather than merely unlucky.
+    account.balance < 0
   ) {
     return null;
   }
