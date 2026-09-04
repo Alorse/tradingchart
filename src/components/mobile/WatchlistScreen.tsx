@@ -863,7 +863,7 @@ function SortHeader({
       )}
     >
       <span>{label}</span>
-      {active && (dir === "asc" ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />)}
+      {active && (dir === "asc" ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />)}
     </button>
   );
 }

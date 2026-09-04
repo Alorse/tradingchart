@@ -457,7 +457,7 @@ export function Watchlist() {
                       setLastFlagColor(c);
                       setBatchFlagPickerOpen(false);
                     }}
-                    className="h-4 w-4 rounded-sm transition-opacity hover:opacity-80"
+                    className="h-5 w-5 rounded-sm transition-opacity hover:opacity-80"
                     style={{ backgroundColor: c }}
                     aria-label={`Set flag to ${c}`}
                   />
@@ -467,10 +467,10 @@ export function Watchlist() {
                     setWatchlistItemsFlag(active.id, Array.from(multiSelected), null);
                     setBatchFlagPickerOpen(false);
                   }}
-                  className="flex h-4 w-4 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
+                  className="flex h-5 w-5 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
                   aria-label="Remove flag"
                 >
-                  <X className="h-2.5 w-2.5" />
+                  <X className="size-4" />
                 </button>
               </div>
             )}
@@ -675,7 +675,7 @@ export function Watchlist() {
                             setLastFlagColor(c);
                             setFlagPickerId(null);
                           }}
-                          className="h-4 w-4 rounded-sm transition-opacity hover:opacity-80"
+                          className="h-5 w-5 rounded-sm transition-opacity hover:opacity-80"
                           style={{ backgroundColor: c }}
                           aria-label={`Set flag to ${c}`}
                         />
@@ -685,10 +685,10 @@ export function Watchlist() {
                           if (active) setWatchlistItemFlag(active.id, item.id, null);
                           setFlagPickerId(null);
                         }}
-                        className="flex h-4 w-4 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
+                        className="flex h-5 w-5 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
                         aria-label="Remove flag"
                       >
-                        <X className="h-2.5 w-2.5" />
+                        <X className="size-4" />
                       </button>
                     </div>
                   )}
@@ -884,9 +884,9 @@ function SortHeader({
       <span>{label}</span>
       {active &&
         (dir === "asc" ? (
-          <ArrowUp className="h-2.5 w-2.5" />
+          <ArrowUp className="size-4" />
         ) : (
-          <ArrowDown className="h-2.5 w-2.5" />
+          <ArrowDown className="size-4" />
         ))}
     </button>
   );
