@@ -34,6 +34,12 @@ import type {
  * Deliberately **not** wired to `trading-store`: paper and live accounts share
  * no state, so a simulated position can never leak into the credential-backed
  * panels (or the other way round).
+ *
+ * Single-tab only: `persist`'s localStorage backing is last-write-wins across
+ * tabs/windows, with no cross-tab broadcast, so two tabs trading the same
+ * paper account can silently stomp each other's state. Real multi-device
+ * consistency needs a server-authoritative store (Supabase sync, tracked
+ * under #9) rather than a localStorage patch — not attempted here.
  */
 
 export const PAPER_STORAGE_KEY = "tv-gratis-paper-trading";
