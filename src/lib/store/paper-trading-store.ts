@@ -145,8 +145,13 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       },
 
       setBrackets: (symbol, brackets) => {
-        const account = engineSetBrackets(get().account, symbol, brackets);
-        set({ account });
+        const { account, marks } = get();
+        // The last live tick, so a bracket typed in on the wrong side of the
+        // *current* market is dropped, not just the wrong side of a stale
+        // entry price (adversarial re-audit finding 2). Falls back to entry
+        // inside the engine when no tick has arrived yet.
+        const next = engineSetBrackets(account, symbol, brackets, marks[symbol]);
+        set({ account: next });
       },
 
       evaluateTick: (symbol, price) => {

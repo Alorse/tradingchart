@@ -81,6 +81,18 @@ describe("paper-trading-store actions", () => {
     expect(st().account.history[0].reason).toBe("TP");
   });
 
+  it("setBrackets drops a wrong-side stop using the symbol's last mark as reference (adversarial re-audit finding 2)", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    // The mark has since fallen to 19_500 (a live tick, still above the
+    // 18_100 liquidation price so nothing else fires). A stop at 19_700 is
+    // valid relative to the *entry* (20_000) but is already stale relative
+    // to where price actually is now — passing the mark, not the entry,
+    // as the reference is what catches that.
+    st().evaluateTick("BTCUSDT", 19_500);
+    st().setBrackets("BTCUSDT", { sl: 19_700 });
+    expect(st().account.positions[0].sl).toBe(null);
+  });
+
   it("evaluateTick leaves state untouched when nothing can fill", () => {
     const before = st().account;
     st().evaluateTick("BTCUSDT", 20_000);
