@@ -3883,7 +3883,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                 <div key={entry.key} className="pointer-events-auto flex items-center gap-0.5">
                   {/* Drag handle — uses pointer events (not HTML5 DnD) for reliability */}
                   <div
-                    className={`cursor-grab select-none px-0.5 text-xs hover:text-white/60 active:cursor-grabbing ${dragKey === entry.key ? "text-white/80" : "text-white/30"}`}
+                    className={`cursor-grab select-none px-0.5 text-xs hover:text-white/60 active:cursor-grabbing ${dragKey === entry.key ? "text-white/80" : "text-white/40"}`}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       pointerDragRef.current = { key: entry.key };
