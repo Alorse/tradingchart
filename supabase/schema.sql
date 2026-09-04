@@ -48,13 +48,21 @@ create or replace trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ─────────────────────────────────────────────
--- user_watchlists: per-user symbol list
+-- user_watchlists: per-user named watchlists
 -- ─────────────────────────────────────────────
+-- One row per user. `lists` holds every named list the user has —
+-- `[{ id, name, items: [...] }, ...]`, the shape `chart-store`'s
+-- `Watchlist[]` serializes to — and `active_id` records the selected one.
+-- `symbols`/`items` are frozen legacy columns: they held the single list the
+-- app used to sync, are read once by migration 06's backfill, and are never
+-- written again.
 create table if not exists public.user_watchlists (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users(id) on delete cascade,
   symbols    text[] not null default '{}',          -- legacy: symbols only
-  items      jsonb not null default '[]',           -- full: symbols + labels
+  items      jsonb not null default '[]',           -- legacy: one list, symbols + labels
+  lists      jsonb not null default '[]',           -- all named lists
+  active_id  text,                                  -- id of the selected list
   updated_at timestamptz default now()
 );
 
