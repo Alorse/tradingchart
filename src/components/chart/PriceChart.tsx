@@ -3778,7 +3778,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           [order[i - 1], order[i]] = [order[i], order[i - 1]];
                           setMainPaneOrder(order);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === 0 ? "cursor-default text-tv-text-dim/30" : "text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-text"}`}
+                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === 0 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
                       >
                         ▲
                       </button>
@@ -3790,7 +3790,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           [order[i], order[i + 1]] = [order[i + 1], order[i]];
                           setMainPaneOrder(order);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === mainPaneEntries.length - 1 ? "cursor-default text-tv-text-dim/30" : "text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-text"}`}
+                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === mainPaneEntries.length - 1 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
                       >
                         ▼
                       </button>
