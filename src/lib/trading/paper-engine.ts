@@ -80,10 +80,11 @@ export interface PaperOrder {
   reserved: number;
   /**
    * The decorated chart symbol (`.P` / `BYBIT:` intact) this order was placed
-   * from, i.e. what a live WS subscription needs — `symbol` above is already
-   * `cleanSym`'d and can't tell a Binance perp from a Bybit one sharing the
-   * same bare ticker. `null` when the request that created this order didn't
-   * carry one (a direct engine call outside the UI). See `paperFeedExposure`.
+   * from, i.e. what a live WS subscription needs — `symbol` above has had its
+   * venue prefix stripped (positions net across venues but not across
+   * spot/perp) and so can't tell a Binance perp from a Bybit one sharing the
+   * same ticker. `null` when the request that created this order didn't carry
+   * one (a direct engine call outside the UI). See `paperFeedExposure`.
    */
   feedSymbol: string | null;
   createdAt: number;
@@ -945,37 +946,5 @@ export function evaluateTick(
     }
   }
 
-  return { account: acc, events };
-}
-
-/**
- * Run `evaluateTick` once per symbol the account has exposure to (an open
- * position or a resting order), using each symbol's price from `marks` —
- * so a wiring layer can drive fills/brackets for every exposed symbol off
- * one mark snapshot, not just whichever symbol happens to be charted (no UI
- * reads this yet — see #10). A symbol nothing has ticked yet (missing from
- * `marks`) is skipped rather than evaluated against nothing; each symbol
- * sees whatever the previous one in this same call left behind.
- */
-export function evaluateAllTicks(
-  account: PaperAccount,
-  marks: Record<string, number>,
-  now: number,
-): EngineResult {
-  const symbols = new Set<string>();
-  for (const p of account.positions) symbols.add(p.symbol);
-  for (const o of account.orders) {
-    if (o.status === "NEW") symbols.add(o.symbol);
-  }
-
-  let acc = account;
-  let events: PaperEvent[] = [];
-  for (const symbol of symbols) {
-    const price = marks[symbol];
-    if (price === undefined) continue;
-    const res = evaluateTick(acc, symbol, price, now);
-    acc = res.account;
-    if (res.events.length > 0) events = [...events, ...res.events];
-  }
   return { account: acc, events };
 }

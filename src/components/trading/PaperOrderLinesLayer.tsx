@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { ISeriesApi, IPriceLine } from "lightweight-charts";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
-import { cleanSym } from "@/lib/binance/rest";
+import { stripExchangePrefix } from "@/lib/symbols/prefix";
 
 const LIMIT_COLOR = "#2962ff";
 const SELL_COLOR = "#ff5252";
@@ -45,11 +45,13 @@ export function PaperOrderLinesLayer({
 
   useEffect(() => {
     if (!candleSeries) return;
-    const cleaned = cleanSym(symbol);
+    // The key positions/orders are stored under: exchange prefix stripped,
+    // `.P` kept, so a spot chart never draws the perp position's lines.
+    const key = stripExchangePrefix(symbol);
     const levels: Level[] = [];
 
     for (const order of orders) {
-      if (order.symbol !== cleaned || order.status !== "NEW") continue;
+      if (order.symbol !== key || order.status !== "NEW") continue;
       levels.push({
         id: order.id,
         price: order.price,
@@ -59,7 +61,7 @@ export function PaperOrderLinesLayer({
     }
 
     for (const pos of positions) {
-      if (pos.symbol !== cleaned) continue;
+      if (pos.symbol !== key) continue;
       const long = pos.side === "LONG";
       levels.push({
         id: `${pos.id}-EP`,

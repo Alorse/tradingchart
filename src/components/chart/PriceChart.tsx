@@ -347,8 +347,12 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // to Paper — OrderLinesLayer draws/drags/right-click-modifies the LIVE
   // account's orders and positions, so it's unmounted outright rather than
   // just hidden, since its price lines are created imperatively in an effect
-  // (a JSX-level `return null` inside it wouldn't stop those). PaperOrderLinesLayer
-  // covers the paper markers independently of this gate (adversarial review finding 1).
+  // (a JSX-level `return null` inside it wouldn't stop those). The paper
+  // layer is gated symmetrically on the opposite mode: it used to mount
+  // unconditionally, so a live-mode chart carried dashed "(paper)" lines from
+  // a simulated position over the real orders (holistic review finding 6),
+  // and — being effect-driven the same way — it has to be unmounted, not
+  // hidden, for those lines to actually go away.
   const tradingMode = useTradingModeStore((s) => s.mode);
 
   // Helper — compute pane top offsets from chart layout
@@ -3471,7 +3475,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
           renderTick={renderTick}
         />
       )}
-      <PaperOrderLinesLayer candleSeries={candleSeriesRef.current} symbol={symbol} />
+      {tradingMode === "paper" && (
+        <PaperOrderLinesLayer candleSeries={candleSeriesRef.current} symbol={symbol} />
+      )}
 
       {indicators.keylevels && !hidden.keylevels && (
         <KeyLevelsOverlay

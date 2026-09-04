@@ -1,5 +1,6 @@
 import type { SizingMode, SlMode } from "@/lib/binance/trading-types";
-import { cleanSym, isPerp } from "@/lib/binance/rest";
+import { isPerp } from "@/lib/binance/rest";
+import { stripExchangePrefix } from "@/lib/symbols/prefix";
 import type {
   LimitOrderRequest,
   MarketOrderRequest,
@@ -71,11 +72,20 @@ function bracket(enabled: boolean, value: string): number | null {
 /**
  * Builds the engine request from the raw chart symbol — `symbol` here may
  * carry the `.P` perp suffix and/or a `BYBIT:` exchange prefix (see
- * CLAUDE.md's "Symbol identity"). `isPerp` needs to see the undecorated
- * symbol (it's what the suffix means), so it runs before `cleanSym` strips
- * it; the request itself stores the cleaned symbol, the one canonical key
- * `evaluateTick`, the store's positions/orders and the chart's price-line
- * layer all key off of (adversarial review finding 3).
+ * CLAUDE.md's "Symbol identity").
+ *
+ * The stored key strips **only** the exchange prefix, keeping `.P`: it is the
+ * one canonical key `evaluateTick`, the store's positions/orders and the
+ * chart's price-line layer all key off of, and positions net per key. A
+ * `cleanSym` here (which also drops `.P`) collapsed spot and perp into a
+ * single netted position, so a `BTCUSDT` spot long and a `BTCUSDT.P` perp
+ * short — different instruments with different prices and no netting
+ * relationship on any real venue — silently closed each other out (holistic
+ * review finding 4). `BYBIT:SOLUSDT.P` and `SOLUSDT.P` do still share a key:
+ * that's one instrument charted from two venues, which should net.
+ *
+ * `isPerp` needs the undecorated symbol (the suffix is what it reads), so it
+ * runs on the raw argument rather than the stripped key.
  *
  * Leverage only means anything for a perp — `LeverageSlider` is hidden for
  * spot symbols, so a spot order forces 1x rather than silently inheriting
@@ -87,7 +97,7 @@ export function paperFormToMarketRequest(
 ): MarketOrderRequest {
   const perp = isPerp(symbol);
   return {
-    symbol: cleanSym(symbol),
+    symbol: stripExchangePrefix(symbol),
     side: form.side,
     qty: parseFloat(form.qty) || 0,
     leverage: perp ? form.leverage : 1,

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { getBinanceWS } from "@/lib/binance/ws";
-import { cleanSym } from "@/lib/binance/rest";
+import { stripExchangePrefix } from "@/lib/symbols/prefix";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { paperFeedExposure } from "@/lib/trading/paper-feed";
@@ -25,6 +25,12 @@ import { paperFeedExposure } from "@/lib/trading/paper-feed";
  * mark-only tick (which still touches the store on every price update, see
  * `evaluateTick`'s comment) doesn't tear down and rebuild the sockets — only
  * a position opening, closing, or an order filling/cancelling does.
+ *
+ * Both sockets echo back the exact symbol they were subscribed with, so a
+ * tick's `symbol` is still the decorated feedSymbol — `stripExchangePrefix`
+ * (not `cleanSym`) turns it into the key positions and orders are stored
+ * under, keeping `.P` so a perp's ticks can't be applied to a spot position
+ * of the same ticker (holistic review finding 4).
  */
 export function usePaperExposureFeed() {
   const binanceKey = usePaperTradingStore((s) => paperFeedExposure(s.account).binance.join(","));
@@ -34,7 +40,7 @@ export function usePaperExposureFeed() {
     if (!binanceKey) return;
     const evaluateTick = usePaperTradingStore.getState().evaluateTick;
     return getBinanceWS().subscribeMiniTickers(binanceKey.split(","), (t) =>
-      evaluateTick(cleanSym(t.symbol), t.close),
+      evaluateTick(stripExchangePrefix(t.symbol), t.close),
     );
   }, [binanceKey]);
 
@@ -42,7 +48,7 @@ export function usePaperExposureFeed() {
     if (!bybitKey) return;
     const evaluateTick = usePaperTradingStore.getState().evaluateTick;
     return getBybitWS().subscribeMiniTickers(bybitKey.split(","), (t) =>
-      evaluateTick(cleanSym(t.symbol), t.close),
+      evaluateTick(stripExchangePrefix(t.symbol), t.close),
     );
   }, [bybitKey]);
 }
