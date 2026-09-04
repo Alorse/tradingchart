@@ -447,13 +447,16 @@ function closeSlice(
 }
 
 /**
- * Drop a bracket that sits on the wrong side of the fill price for a
- * freshly-opened position — an SL above entry on a LONG (or below entry on a
- * SHORT) doesn't protect against a loss, it just books a gain the moment
- * price moves at all and mislabels it as a stop-out. TP mirrors it the other
- * way. Only called on open/flip, never on a same-side merge or a reduce,
- * where the bracket may legitimately have been set relative to an older
- * entry price.
+ * Drop a bracket that sits on the wrong side of `price` — an SL above entry
+ * on a LONG (or below entry on a SHORT) doesn't protect against a loss, it
+ * just books a gain the moment price moves at all and mislabels it as a
+ * stop-out; TP mirrors it the other way. Called on every fill that can carry
+ * brackets: a fresh open/flip (checked against the fill price, which *is*
+ * entry there) and a same-side merge (checked against the fill price again,
+ * not the blended entry, since a merge's incoming `args.tp`/`args.sl` — or
+ * even its carried-over `sl`/`tp` — describes intent relative to *this*
+ * fill, not to an entry the merge itself is about to move). Never called on
+ * a pure reduce, which cannot introduce or change a bracket.
  */
 function normalizeBrackets(
   dir: PaperDirection,
@@ -558,6 +561,16 @@ function applyFill(
     const totalMargin = sameSide.margin + margin;
     const entryPrice =
       (sameSide.entryPrice * sameSide.qty + price * openQty) / totalQty;
+    // Re-validated against *this* fill's price, same as a fresh open below —
+    // an incoming or carried-over bracket that no longer protects anything
+    // relative to the current market is dropped rather than left to fire a
+    // phantom gain (adversarial re-audit finding 2).
+    const { tp, sl } = normalizeBrackets(
+      sameSide.side,
+      price,
+      args.tp ?? sameSide.tp,
+      args.sl ?? sameSide.sl,
+    );
     const merged: PaperPosition = {
       ...sameSide,
       qty: totalQty,
@@ -568,8 +581,8 @@ function applyFill(
       leverage: totalMargin > 0 ? (totalQty * entryPrice) / totalMargin : leverage,
       margin: totalMargin,
       feesPaid: sameSide.feesPaid + fee,
-      tp: args.tp ?? sameSide.tp,
-      sl: args.sl ?? sameSide.sl,
+      tp,
+      sl,
       liquidationPrice: liquidationPriceFromMargin(
         sameSide.side,
         entryPrice,

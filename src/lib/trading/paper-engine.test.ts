@@ -693,6 +693,25 @@ describe("crossing limit fills at the tick price (adversarial re-audit finding 1
   });
 });
 
+describe("wrong-side brackets on a merge (adversarial re-audit finding 2)", () => {
+  it("drops a merge's blended-in stop that sits on the wrong side of the fill price", () => {
+    let a = openLong(acct(), 20_000, 1, 10);
+    // Adding to the LONG with an SL *above* the fill price books a gain the
+    // instant price so much as ticks, mislabelled as a stop-out.
+    a = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, sl: 25_000 },
+      20_000,
+      NOW + 1,
+    ).account;
+    expect(pos(a).sl).toBe(null);
+
+    const res = evaluateTick(a, "BTCUSDT", 20_000, NOW + 2);
+    expect(res.account.positions).toHaveLength(1);
+    expect(res.account.history).toHaveLength(0);
+  });
+});
+
 describe("event payloads and flips against a resting order (adversarial review finding 11)", () => {
   it("a market fill's event carries a null orderId and a taker fee proportional to qty*price*rate", () => {
     const res = fillMarketOrder(
