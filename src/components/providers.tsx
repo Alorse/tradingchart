@@ -3,6 +3,7 @@
 import { AuthProvider } from "@/lib/supabase/auth-context";
 import { useCloudSync } from "@/lib/supabase/use-cloud-sync";
 import { useDrawingsSync } from "@/lib/supabase/use-drawings-sync";
+import { usePaperAccountSync } from "@/lib/supabase/use-paper-account-sync";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useTradingSync } from "@/hooks/useTradingSync";
 import { useBybitSymbols } from "@/hooks/useBybitSymbols";
@@ -13,6 +14,7 @@ import { AlertsToast } from "@/components/alerts/AlertsToast";
 function CloudSyncInner({ children }: { children: React.ReactNode }) {
   useCloudSync();
   useDrawingsSync();
+  usePaperAccountSync();
   useKeyboardShortcuts();
   useTradingSync();
   useBybitSymbols();
