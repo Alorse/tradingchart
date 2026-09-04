@@ -63,7 +63,7 @@ import { BandFillOverlay } from "./BandFillOverlay";
 import { computeKeyLevels } from "@/lib/indicators/keylevels";
 import type { SqueezePoint } from "@/lib/indicators/squeeze";
 import { xToTime, timeToX, timeframeToSeconds, timeframeLabel } from "@/lib/chart/coords";
-import { getTvColors, getTvFontFamily } from "@/lib/chart/theme";
+import { getTvColors, getTvFontFamily, TV_PINE, TV_STUDY } from "@/lib/chart/theme";
 import { useReplayStore } from "@/lib/replay/replay-store";
 import { ReplayToolbar } from "./ReplayToolbar";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
@@ -445,14 +445,14 @@ export function PriceChart({ symbol, timeframe }: Props) {
 
     const initChartType = useChartStore.getState().chartType;
     lineSeriesRef.current = chart.addSeries(LineSeries, {
-      color: "#2962ff",
+      color: TV_PINE.blue,
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
       visible: initChartType === "line",
     });
     areaSeriesRef.current = chart.addSeries(AreaSeries, {
-      lineColor: "#2962ff",
+      lineColor: TV_PINE.blue,
       topColor: "rgba(41,98,255,0.4)",
       bottomColor: "rgba(41,98,255,0.0)",
       lineWidth: 2,
@@ -1560,7 +1560,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       vmcWt1Ref.current = chartRef.current.addSeries(
         AreaSeries,
         {
-          lineColor: "#90caf9",
+          lineColor: TV_STUDY.wt1,
           topColor: "rgba(144, 202, 249, 0.6)",
           bottomColor: "rgba(144, 202, 249, 0.1)",
           lineWidth: 2,
@@ -1573,7 +1573,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       vmcWt2Ref.current = chartRef.current.addSeries(
         AreaSeries,
         {
-          lineColor: "#5b62e5",
+          lineColor: TV_STUDY.wt2,
           topColor: "rgba(91, 98, 229, 0.5)",
           bottomColor: "rgba(91, 98, 229, 0.08)",
           lineWidth: 2,
@@ -1612,7 +1612,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       vmcRsiRef.current = chartRef.current.addSeries(
         LineSeries,
         {
-          color: "#e040fb",
+          color: TV_STUDY.rsi,
           lineWidth: 2,
           priceLineVisible: false,
           lastValueVisible: false,
@@ -2070,7 +2070,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     svg.setAttribute("style", "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:15;overflow:visible");
     const pathEl = document.createElementNS(ns, "path");
     pathEl.setAttribute("fill", "none");
-    pathEl.setAttribute("stroke", isHighlighter ? "#ffeb3b" : "#ffffff");
+    pathEl.setAttribute("stroke", isHighlighter ? TV_PINE.highlighter : TV_PINE.white);
     pathEl.setAttribute("stroke-width", isHighlighter ? "14" : "2");
     pathEl.setAttribute("stroke-linecap", "round");
     pathEl.setAttribute("stroke-linejoin", "round");
@@ -2178,7 +2178,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
           symbol: symbolRef.current,
           points,
           logicals,
-          color: isHighlighter ? "#ffeb3b" : "#ffffff",
+          color: isHighlighter ? TV_PINE.highlighter : TV_PINE.white,
           lineWidth: isHighlighter ? 14 : 2,
         });
       }
@@ -2535,7 +2535,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "inBar",
             shape: "circle",
             size: 0.7,
-            color: p.crossUp ? "#00e676" : "#ff5252",
+            color: p.crossUp ? TV_STUDY.crossUp : TV_STUDY.crossDown,
           });
         }
         // Buy / Sell signals (bigger circle)
@@ -2545,7 +2545,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "belowBar",
             shape: "circle",
             size: 1.4,
-            color: "#3fff00",
+            color: TV_STUDY.buy,
             text: "B",
           });
         }
@@ -2555,7 +2555,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "aboveBar",
             shape: "circle",
             size: 1.4,
-            color: "#ff0000",
+            color: TV_STUDY.sell,
             text: "S",
           });
         }
@@ -2566,7 +2566,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "belowBar",
             shape: "circle",
             size: 1.6,
-            color: "#e2a400",
+            color: TV_STUDY.gold,
             text: "G",
           });
         }
@@ -2577,7 +2577,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "belowBar",
             shape: "arrowUp",
             size: 1,
-            color: "#00e676",
+            color: TV_STUDY.crossUp,
           });
         }
         if (p.wtBearDiv || p.rsiBearDiv) {
@@ -2586,7 +2586,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "aboveBar",
             shape: "arrowDown",
             size: 1,
-            color: "#e60000",
+            color: TV_STUDY.bearDiv,
           });
         }
       }

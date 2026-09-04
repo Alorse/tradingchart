@@ -15,6 +15,7 @@ import { useChartStore } from "@/lib/store/chart-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import type { Drawing } from "@/lib/drawings/types";
 import { cn } from "@/lib/utils";
+import { TV_PINE } from "@/lib/chart/theme";
 
 const KIND_TITLE: Record<string, string> = {
   hline: "Horizontal line",
@@ -99,42 +100,42 @@ function Form({
   onCancel: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("style");
-  const [color, setColor] = useState<string>(drawing.color ?? "#d1d4dc");
+  const [color, setColor] = useState<string>(drawing.color ?? TV_PINE.neutral);
   const [lineWidth, setLineWidth] = useState<number>(drawing.lineWidth ?? 1);
   const [lineStyle, setLineStyle] = useState<0 | 1 | 2>(drawing.lineStyle ?? 0);
   const isPosition = drawing.kind === "long" || drawing.kind === "short";
   const isRect = drawing.kind === "rectangle";
   const [stopColor, setStopColor] = useState<string>(
-    isPosition ? ((drawing as { stopColor?: string }).stopColor ?? "#ef5350") : "#ef5350",
+    isPosition ? ((drawing as { stopColor?: string }).stopColor ?? TV_PINE.red) : TV_PINE.red,
   );
   const [targetColor, setTargetColor] = useState<string>(
-    isPosition ? ((drawing as { targetColor?: string }).targetColor ?? "#26a69a") : "#26a69a",
+    isPosition ? ((drawing as { targetColor?: string }).targetColor ?? TV_PINE.green) : TV_PINE.green,
   );
   const [textColor, setTextColor] = useState<string>(
-    isPosition ? ((drawing as { textColor?: string }).textColor ?? "#d1d4dc") : "#d1d4dc",
+    isPosition ? ((drawing as { textColor?: string }).textColor ?? TV_PINE.neutral) : TV_PINE.neutral,
   );
   const [showLabels, setShowLabels] = useState<boolean>(
     isPosition ? ((drawing as { showLabels?: boolean }).showLabels ?? false) : false,
   );
   const [fillColor, setFillColor] = useState<string>(
-    isRect ? ((drawing as { fillColor?: string }).fillColor ?? "#2962ff") : "#2962ff",
+    isRect ? ((drawing as { fillColor?: string }).fillColor ?? TV_PINE.blue) : TV_PINE.blue,
   );
   const [fillOpacity, setFillOpacity] = useState<number>(
     isRect ? ((drawing as { fillOpacity?: number }).fillOpacity ?? 0.1) : 0.1,
   );
 
   useEffect(() => {
-    setColor(drawing.color ?? "#d1d4dc");
+    setColor(drawing.color ?? TV_PINE.neutral);
     setLineWidth(drawing.lineWidth ?? 1);
     setLineStyle(drawing.lineStyle ?? 0);
     if (drawing.kind === "long" || drawing.kind === "short") {
-      setStopColor(drawing.stopColor ?? "#ef5350");
-      setTargetColor(drawing.targetColor ?? "#26a69a");
-      setTextColor(drawing.textColor ?? "#d1d4dc");
+      setStopColor(drawing.stopColor ?? TV_PINE.red);
+      setTargetColor(drawing.targetColor ?? TV_PINE.green);
+      setTextColor(drawing.textColor ?? TV_PINE.neutral);
       setShowLabels(drawing.showLabels ?? false);
     }
     if (drawing.kind === "rectangle") {
-      setFillColor(drawing.fillColor ?? "#2962ff");
+      setFillColor(drawing.fillColor ?? TV_PINE.blue);
       setFillOpacity(drawing.fillOpacity ?? 0.1);
     }
   }, [drawing]);

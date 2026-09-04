@@ -834,11 +834,14 @@ function SheetAction({
 /** Hollow circle badge marking an open Long/Short position on a watchlist row. */
 function PositionSideBadge({ side }: { side: "LONG" | "SHORT" }) {
   const isLong = side === "LONG";
-  const color = isLong ? "#2962ff" : "#ef5350";
   return (
     <span
-      className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[9px] font-bold"
-      style={{ borderColor: color, color }}
+      className={cn(
+        "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[9px] font-bold",
+        // Blue is *direction* (long), red is *movement* (down) — the badge for a
+        // short reuses the down color on purpose. See CLAUDE.md's color rule.
+        isLong ? "border-tv-blue text-tv-blue-text" : "border-tv-red text-tv-red",
+      )}
     >
       {isLong ? "L" : "S"}
     </span>

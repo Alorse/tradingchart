@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Drawing } from "@/lib/drawings/types";
 import type { DrawingTemplate } from "@/lib/store/chart-store";
+import { TV_PINE } from "@/lib/chart/theme";
 
 // Stable empty-array reference: a fresh `[]` on every selector call would
 // give useSyncExternalStore a snapshot that "changes" on every render even
@@ -113,7 +114,7 @@ export function FloatingContextToolbar({ containerSize, onOpenSettings }: Props)
         <>
           <Seg>
             <SwatchPicker
-              value={drawing.color ?? "#2962ff"}
+              value={drawing.color ?? TV_PINE.blue}
               onChange={(c) => patch({ color: c })}
             />
           </Seg>
@@ -147,19 +148,19 @@ export function FloatingContextToolbar({ containerSize, onOpenSettings }: Props)
         <Seg gap>
           <MiniColorLabel label="E">
             <SwatchPicker
-              value={drawing.color ?? "#d1d4dc"}
+              value={drawing.color ?? TV_PINE.neutral}
               onChange={(c) => patch({ color: c })}
             />
           </MiniColorLabel>
           <MiniColorLabel label="S">
             <SwatchPicker
-              value={(drawing as { stopColor?: string }).stopColor ?? "#ef5350"}
+              value={(drawing as { stopColor?: string }).stopColor ?? TV_PINE.red}
               onChange={(c) => patch({ stopColor: c } as Partial<Drawing>)}
             />
           </MiniColorLabel>
           <MiniColorLabel label="T">
             <SwatchPicker
-              value={(drawing as { targetColor?: string }).targetColor ?? "#26a69a"}
+              value={(drawing as { targetColor?: string }).targetColor ?? TV_PINE.green}
               onChange={(c) => patch({ targetColor: c } as Partial<Drawing>)}
             />
           </MiniColorLabel>
