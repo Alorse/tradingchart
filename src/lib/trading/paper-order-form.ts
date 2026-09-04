@@ -93,6 +93,10 @@ export function paperFormToMarketRequest(
     leverage: perp ? form.leverage : 1,
     tp: bracket(form.tpEnabled, form.tp),
     sl: bracket(form.slEnabled, form.sl),
+    // The decorated form, kept alongside the cleaned `symbol` above so a
+    // live-exposure feed can resubscribe this exact chart ticker later — see
+    // `paperFeedExposure`.
+    feedSymbol: symbol,
   };
 }
 

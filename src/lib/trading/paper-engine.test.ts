@@ -15,6 +15,7 @@ import {
   positionRoi,
   resetAccount,
   setBrackets,
+  totalUnrealizedPnl,
   unrealizedPnl,
   updateSettings,
   usedMargin,
@@ -975,5 +976,87 @@ describe("evaluateAllTicks (adversarial re-audit finding 10)", () => {
     const res = evaluateAllTicks(a, { BTCUSDT: 20_000, ETHUSDT: 1_000 }, NOW);
     expect(res.account).toBe(a);
     expect(res.events).toHaveLength(0);
+  });
+});
+
+describe("feedSymbol", () => {
+  it("carries the decorated symbol from the request onto a fresh position", () => {
+    const res = fillMarketOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, feedSymbol: "BTCUSDT.P" },
+      20_000,
+      NOW,
+    );
+    expect(res.account.positions[0].feedSymbol).toBe("BTCUSDT.P");
+  });
+
+  it("defaults to null when the request doesn't carry one", () => {
+    const a = openLong(acct());
+    expect(pos(a).feedSymbol).toBe(null);
+  });
+
+  it("carries the decorated symbol onto a resting limit order", () => {
+    const res = placeLimitOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10, feedSymbol: "BYBIT:BTCUSDT.P" },
+      NOW,
+    );
+    expect(res.account.orders[0].feedSymbol).toBe("BYBIT:BTCUSDT.P");
+  });
+
+  it("keeps the position's original feed identity across a same-side merge", () => {
+    let a = fillMarketOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, feedSymbol: "BTCUSDT.P" },
+      20_000,
+      NOW,
+    ).account;
+    // A second fill with no feedSymbol of its own (or a different one) must
+    // not blank out — or overwrite — what the position already opened with.
+    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 21_000, NOW)
+      .account;
+    expect(pos(a).feedSymbol).toBe("BTCUSDT.P");
+  });
+
+  it("fills a gap left by an earlier feedless open on a same-side merge", () => {
+    let a = openLong(acct(), 20_000, 1, 10); // no feedSymbol
+    a = fillMarketOrder(
+      a,
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, feedSymbol: "BTCUSDT.P" },
+      21_000,
+      NOW,
+    ).account;
+    expect(pos(a).feedSymbol).toBe("BTCUSDT.P");
+  });
+
+  it("carries a resting order's feedSymbol onto the position it fills", () => {
+    let a = placeLimitOrder(
+      acct(),
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10, feedSymbol: "BTCUSDT.P" },
+      NOW,
+    ).account;
+    a = evaluateTick(a, "BTCUSDT", 18_900, NOW + 1).account;
+    expect(pos(a).feedSymbol).toBe("BTCUSDT.P");
+  });
+});
+
+describe("totalUnrealizedPnl", () => {
+  it("sums unrealized P&L across every open position at its own mark", () => {
+    let a = openLong(acct(), 20_000, 1, 10);
+    a = fillMarketOrder(a, { symbol: "ETHUSDT", side: "BUY", qty: 1, leverage: 10 }, 1_000, NOW)
+      .account;
+    const total = totalUnrealizedPnl(a.positions, { BTCUSDT: 21_000, ETHUSDT: 900 });
+    const expected =
+      unrealizedPnl(pos(a, "BTCUSDT"), 21_000) + unrealizedPnl(pos(a, "ETHUSDT"), 900);
+    expect(total).toBe(expected);
+  });
+
+  it("falls back to entry price for a symbol missing from marks", () => {
+    const a = openLong(acct(), 20_000, 1, 10);
+    expect(totalUnrealizedPnl(a.positions, {})).toBe(0);
+  });
+
+  it("is zero with no open positions", () => {
+    expect(totalUnrealizedPnl([], { BTCUSDT: 20_000 })).toBe(0);
   });
 });

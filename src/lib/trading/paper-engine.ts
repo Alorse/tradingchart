@@ -78,6 +78,14 @@ export interface PaperOrder {
   sl: number | null;
   /** Cash held out of `balance` while the order rests (margin + maker fee). */
   reserved: number;
+  /**
+   * The decorated chart symbol (`.P` / `BYBIT:` intact) this order was placed
+   * from, i.e. what a live WS subscription needs — `symbol` above is already
+   * `cleanSym`'d and can't tell a Binance perp from a Bybit one sharing the
+   * same bare ticker. `null` when the request that created this order didn't
+   * carry one (a direct engine call outside the UI). See `paperFeedExposure`.
+   */
+  feedSymbol: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -97,6 +105,8 @@ export interface PaperPosition {
   tp: number | null;
   sl: number | null;
   liquidationPrice: number;
+  /** See `PaperOrder.feedSymbol` — the decorated symbol whose live feed drives this position. */
+  feedSymbol: string | null;
   openedAt: number;
 }
 
@@ -168,6 +178,10 @@ export interface MarketOrderRequest {
   leverage?: number;
   tp?: number | null;
   sl?: number | null;
+  /** See `PaperOrder.feedSymbol`. Optional so tests/direct engine callers
+   *  need not supply one; the resulting position/order then carries `null`
+   *  and is simply skipped by the live exposure feed, same as today. */
+  feedSymbol?: string | null;
 }
 
 export interface LimitOrderRequest extends MarketOrderRequest {
@@ -265,6 +279,16 @@ function closingSideEntry(dir: PaperDirection): PaperSide {
 export function positionRoi(position: PaperPosition, price: number): number {
   if (position.margin <= 0) return 0;
   return unrealizedPnl(position, price) / position.margin;
+}
+
+/** Sum of unrealized P&L across every open position, each valued at its own
+ *  mark — falling back to entry when the symbol hasn't ticked yet, same as
+ *  `equity()`. */
+export function totalUnrealizedPnl(
+  positions: PaperPosition[],
+  marks: Record<string, number>,
+): number {
+  return positions.reduce((s, p) => s + unrealizedPnl(p, marks[p.symbol] ?? p.entryPrice), 0);
 }
 
 /** Everything currently locked: position margin plus resting-order reserves. */
@@ -486,6 +510,7 @@ function applyFill(
     feeRate: number;
     tp: number | null;
     sl: number | null;
+    feedSymbol: string | null;
     orderId: string | null;
     now: number;
   },
@@ -583,6 +608,10 @@ function applyFill(
       feesPaid: sameSide.feesPaid + fee,
       tp,
       sl,
+      // A merge keeps the position's original feed identity — it's the same
+      // symbol, and the incoming fill's own feedSymbol (if any) only fills a
+      // gap left by an earlier direct-engine open with none.
+      feedSymbol: sameSide.feedSymbol ?? args.feedSymbol,
       liquidationPrice: liquidationPriceFromMargin(
         sameSide.side,
         entryPrice,
@@ -611,6 +640,7 @@ function applyFill(
         feesPaid: fee,
         tp,
         sl,
+        feedSymbol: args.feedSymbol,
         liquidationPrice: liquidationPrice(
           dir,
           price,
@@ -647,6 +677,7 @@ export function fillMarketOrder(
     feeRate: account.settings.takerFeeRate,
     tp: req.tp ?? null,
     sl: req.sl ?? null,
+    feedSymbol: req.feedSymbol ?? null,
     orderId: null,
     now,
   });
@@ -684,6 +715,7 @@ export function placeLimitOrder(
     tp: req.tp ?? null,
     sl: req.sl ?? null,
     reserved,
+    feedSymbol: req.feedSymbol ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -870,6 +902,7 @@ export function evaluateTick(
       feeRate: acc.settings.makerFeeRate,
       tp: order.tp,
       sl: order.sl,
+      feedSymbol: order.feedSymbol,
       orderId: order.id,
       now,
     });
