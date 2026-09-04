@@ -196,3 +196,20 @@ describe("paper-trading-store persistence", () => {
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
   });
 });
+
+describe("persist write skipping (adversarial review finding 7)", () => {
+  it("does not re-write localStorage on a tick that only moves the mark", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    const rawAfterOpen = localStorage.getItem(PAPER_STORAGE_KEY);
+
+    // No bracket set, so this tick fills and triggers nothing: only `marks`
+    // changes, and the persisted `account` slice is unchanged.
+    st().evaluateTick("BTCUSDT", 20_400);
+    expect(st().marks.BTCUSDT).toBe(20_400);
+    expect(localStorage.getItem(PAPER_STORAGE_KEY)).toBe(rawAfterOpen);
+
+    // A real account mutation still persists.
+    st().closePosition("BTCUSDT");
+    expect(localStorage.getItem(PAPER_STORAGE_KEY) === rawAfterOpen).toBe(false);
+  });
+});

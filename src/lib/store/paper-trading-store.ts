@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import type { PersistStorage, StorageValue } from "zustand/middleware";
 import {
   DEFAULT_PAPER_SETTINGS,
   cancelOrder as engineCancelOrder,
@@ -60,6 +61,35 @@ interface PaperTradingState {
   updateSettings: (patch: Partial<PaperSettings>) => void;
   /** Free balance + locked margin + open P&L, valued at the current marks. */
   equity: () => number;
+}
+
+type Persisted = { account: PaperAccount };
+
+/**
+ * `persist`'s wrapped `set` re-serializes the whole store to localStorage on
+ * *every* call, regardless of whether the persisted slice actually changed —
+ * see `partialize` below, which is just `{ account }`. `evaluateTick` calls
+ * `set` on a mark-only tick too (a manual close or `equity()` needs the fresh
+ * mark, so it can't just skip `set`), which would otherwise mean a full
+ * JSON.stringify of positions/orders/history on every live price update.
+ * Caching the last `account` reference actually written and skipping the
+ * write when it's unchanged keeps that cost tied to real account mutations
+ * instead of ticks.
+ */
+function createPaperStorage(): PersistStorage<Persisted> {
+  let lastAccount: PaperAccount | null = null;
+  return {
+    getItem: (name) => {
+      const raw = globalThis.localStorage.getItem(name);
+      return raw ? (JSON.parse(raw) as StorageValue<Persisted>) : null;
+    },
+    setItem: (name, value) => {
+      if (value.state.account === lastAccount) return;
+      lastAccount = value.state.account;
+      globalThis.localStorage.setItem(name, JSON.stringify(value));
+    },
+    removeItem: (name) => globalThis.localStorage.removeItem(name),
+  };
 }
 
 function isQuote(price: number | undefined): price is number {
@@ -133,7 +163,11 @@ export const usePaperTradingStore = create<PaperTradingState>()(
         const nextMarks = marks[symbol] === price ? marks : { ...marks, [symbol]: price };
         const res = engineEvaluateTick(account, symbol, price, Date.now());
         // Identical price, nothing triggered: leave every reference alone so
-        // subscribed components don't re-render on a repeated tick.
+        // subscribed components don't re-render on a repeated tick. A tick
+        // that only moves the mark still needs to reach `set` (a manual close
+        // or `equity()` reads that value), but `createPaperStorage` above
+        // recognizes `account` hasn't changed and skips the actual write —
+        // `marks` is session-only and was never part of the persisted blob.
         if (res.account === account && nextMarks === marks) return;
         if (res.events.length > 0) {
           set({ account: res.account, marks: nextMarks, lastEvents: res.events });
@@ -167,10 +201,10 @@ export const usePaperTradingStore = create<PaperTradingState>()(
     {
       name: PAPER_STORAGE_KEY,
       version: 1,
-      // zustand's default reaches for `window.localStorage`; going through
-      // `globalThis` instead is identical in the browser and is what lets the
-      // offline `node --test` suite exercise this round trip for real.
-      storage: createJSONStorage(() => globalThis.localStorage),
+      // Going through `globalThis.localStorage` (rather than `window`) is
+      // identical in the browser and is what lets the offline `node --test`
+      // suite exercise this round trip for real.
+      storage: createPaperStorage(),
       // Only the account survives a reload; marks and events are session data.
       partialize: (s) => ({ account: s.account }),
       /**
