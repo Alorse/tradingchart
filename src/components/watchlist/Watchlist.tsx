@@ -446,7 +446,7 @@ export function Watchlist() {
             </button>
             {batchFlagPickerOpen && (
               <div
-                className="absolute right-0 top-7 z-50 flex gap-1 rounded border border-tv-border bg-tv-panel p-1.5 shadow-lg"
+                className="absolute right-0 top-7 z-50 flex gap-1 rounded bg-tv-popup p-1.5 shadow-lg ring-1 ring-tv-border-strong"
                 onClick={(e) => e.stopPropagation()}
               >
                 {FLAG_COLORS.map((c) => (
@@ -664,7 +664,7 @@ export function Watchlist() {
                   </button>
                   {flagPickerId === item.id && (
                     <div
-                      className="absolute left-0 top-5 z-50 flex gap-1 rounded border border-tv-border bg-tv-panel p-1.5 shadow-lg"
+                      className="absolute left-0 top-5 z-50 flex gap-1 rounded bg-tv-popup p-1.5 shadow-lg ring-1 ring-tv-border-strong"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {FLAG_COLORS.map((c) => (
@@ -750,7 +750,7 @@ export function Watchlist() {
           ref={contextMenuRef}
           data-watchlist-context
           style={{ top: contextMenu.y, left: contextMenu.x, maxHeight: "80vh" }}
-          className="fixed z-50 min-w-44 overflow-y-auto rounded-md border border-tv-border bg-tv-panel py-1 shadow-xl"
+          className="fixed z-50 min-w-44 overflow-y-auto rounded-md bg-tv-popup py-1 shadow-xl ring-1 ring-tv-border-strong"
         >
           {contextMenu.itemId !== null && (
             <>
