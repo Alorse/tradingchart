@@ -55,7 +55,9 @@ function ToolButton({
         )}
       >
         <Icon className="h-7 w-7" />
-        {favorite && <Star className="absolute right-0.5 top-0.5 h-2 w-2 fill-tv-yellow text-tv-yellow" />}
+        {favorite && (
+          <Star className="absolute right-0.5 top-0.5 h-2.5 w-2.5 fill-tv-yellow stroke-tv-panel stroke-[3] text-tv-yellow" />
+        )}
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">
         <div className="font-medium">{t.label}</div>

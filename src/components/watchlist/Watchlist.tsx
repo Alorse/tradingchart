@@ -546,7 +546,7 @@ export function Watchlist() {
                   }}
                   onDoubleClick={() => startRename(item.id, item.value)}
                   className={cn(
-                    "group flex items-center gap-1 border-y border-tv-border bg-tv-bg/50 px-1 py-1",
+                    "group flex items-center gap-1 border-y border-tv-border bg-tv-panel-hover px-1 py-1",
                     !isSorted && "cursor-grab active:cursor-grabbing",
                     isDragTarget && "border-t-2 border-t-tv-blue",
                   )}

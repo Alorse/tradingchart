@@ -60,7 +60,7 @@ export function RightSidebar() {
         onPointerMove={onResizeMove}
         onPointerUp={endResize}
         className={cn(
-          "absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize",
+          "absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize transition-colors hover:bg-tv-blue/20",
           resizing && "bg-tv-blue/30",
         )}
       />
