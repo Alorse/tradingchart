@@ -76,7 +76,6 @@ import { registerChartCapture, composeChartPng } from "@/lib/chart/snapshot";
 import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
 import { useAlertMonitor } from "@/hooks/useAlertMonitor";
-import { usePaperPriceFeed } from "@/hooks/usePaperPriceFeed";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 
 interface MeasurePoint {
@@ -340,8 +339,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
 
   // Drive alerts off the live price tick
   useAlertMonitor(symbol, lastPrice?.value ?? null);
-  // Drive the paper-trading engine's fills/brackets off the same live feed.
-  usePaperPriceFeed(symbol);
+  // Paper-trading fills/brackets are driven by `usePaperExposureFeed`,
+  // mounted once in providers.tsx for every symbol the account has exposure
+  // to — not just this chart's — so a position stays live while a different
+  // symbol is charted.
   // Live credentials can still be configured while the Trade tab is toggled
   // to Paper — OrderLinesLayer draws/drags/right-click-modifies the LIVE
   // account's orders and positions, so it's unmounted outright rather than

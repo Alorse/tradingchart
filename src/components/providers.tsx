@@ -6,6 +6,7 @@ import { useDrawingsSync } from "@/lib/supabase/use-drawings-sync";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useTradingSync } from "@/hooks/useTradingSync";
 import { useBybitSymbols } from "@/hooks/useBybitSymbols";
+import { usePaperExposureFeed } from "@/hooks/usePaperExposureFeed";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AlertsToast } from "@/components/alerts/AlertsToast";
 
@@ -15,6 +16,7 @@ function CloudSyncInner({ children }: { children: React.ReactNode }) {
   useKeyboardShortcuts();
   useTradingSync();
   useBybitSymbols();
+  usePaperExposureFeed();
   return (
     <>
       {children}
