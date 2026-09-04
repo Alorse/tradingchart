@@ -6,6 +6,7 @@ import { FavoritesBar } from "@/components/layout/FavoritesBar";
 import { RightSidebar } from "@/components/layout/RightSidebar";
 import { BottomPanel } from "@/components/layout/BottomPanel";
 import { PositionsPanel } from "@/components/layout/PositionsPanel";
+import { PaperPositionsPanel } from "@/components/layout/PaperPositionsPanel";
 import { PriceChart } from "@/components/chart/PriceChart";
 import { IndicatorSettingsDialog } from "@/components/chart/IndicatorSettingsDialog";
 import { ChartSettingsDialog } from "@/components/chart/ChartSettingsDialog";
@@ -47,6 +48,7 @@ export default function HomePage() {
           </div>
           <FavoritesBar />
           <PositionsPanel />
+          <PaperPositionsPanel />
         </main>
         <RightSidebar />
       </div>

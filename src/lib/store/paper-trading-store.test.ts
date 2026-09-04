@@ -130,7 +130,7 @@ describe("paper-trading-store actions", () => {
     expect(st().account.positions[0].symbol).toBe("SOLUSDT");
     expect(st().marks.SOLUSDT).toBe(100);
 
-    // A tick keyed by the same canonical symbol (as `usePaperPriceFeed`
+    // A tick keyed by the same canonical symbol (as `usePaperExposureFeed`
     // now emits after cleaning) reaches the position it opened.
     st().evaluateTick("SOLUSDT", 110);
     expect(st().account.positions).toHaveLength(1);

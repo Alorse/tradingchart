@@ -71,7 +71,7 @@ class BinanceWSConn {
   private nextId = 1;
   private klineSubs = new Map<string, KlineSubscription>();
   // stream -> listeners. Two independent components can watch the same
-  // symbol's mini-ticker at once (the watchlist row and `usePaperPriceFeed`
+  // symbol's mini-ticker at once (the watchlist row and `usePaperExposureFeed`
   // driving the paper engine, both riding this same process-wide singleton) —
   // a single-callback map here silently drops whichever subscriber isn't
   // "last in", and the first one to unsubscribe deletes the stream out from
