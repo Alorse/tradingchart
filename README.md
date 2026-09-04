@@ -16,6 +16,7 @@ A crypto charting platform built on **Binance**'s public data (WebSocket) and th
 - ✏️ **Drawing tools**: trend lines, Fibs, rectangles, channels, positions and more, persisted + cloud-synced
 - 🔔 **Price alerts** with in-app notifications
 - ⏪ **Bar replay** for practice and manual backtesting
+- 🧪 **Paper trading** — simulated market/limit orders with leverage, live P&L, TP/SL and trade history, synced to your account
 - 👁️ **Watchlist** with prices and 24h change updating in real time
 - 🎨 **Visually identical to TradingView** (palette, fonts, layout)
 - 💾 **Persistence** in localStorage (symbol, timeframe, indicators)
@@ -110,7 +111,6 @@ For 1000 candles and multiple panes the cost is negligible.
 
 - ❌ Pine Script (proprietary to TradingView, can't be cloned)
 - ❌ Server-side alerts (alerts currently run client-side)
-- ❌ Paper trading
 - ❌ Screener / scanner over the full exchange universe
 
 `lightweight-charts` is Apache 2.0 with attribution to TradingView — the attribution lives in the footer/UI as the license requires.
