@@ -171,7 +171,7 @@ export function ObjectTreePanel() {
         <span className="text-[11px] font-semibold uppercase tracking-wider text-tv-text-muted">
           Objects
         </span>
-        <span className="text-[11px] text-tv-text-dim">{items.length}</span>
+        <span className="text-[11px] text-tv-text-muted">{items.length}</span>
       </div>
 
       {multiSelected.size > 0 && (

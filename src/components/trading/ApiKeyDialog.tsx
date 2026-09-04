@@ -181,7 +181,7 @@ export function ApiKeyDialog({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          <p className="text-[10px] text-tv-text-dim">
+          <p className="text-[10px] text-tv-text-muted">
             {ex === "bybit"
               ? "Keys are stored locally in your browser. Use a Unified Trading Account key with Contract/Order + Position read-write permissions."
               : "Keys are stored locally in your browser. Enable “Futures Trading” permission on your API key."}

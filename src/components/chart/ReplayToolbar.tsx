@@ -81,7 +81,7 @@ export function ReplayToolbar() {
                   "rounded px-1 text-[10px] font-semibold tabular-nums transition-colors",
                   speed === s
                     ? "bg-tv-blue/20 text-tv-blue-text"
-                    : "text-tv-text-dim hover:text-tv-text",
+                    : "text-tv-text-muted hover:text-tv-text",
                 )}
               >
                 {s}x
@@ -89,7 +89,7 @@ export function ReplayToolbar() {
             ))}
           </div>
 
-          <span className="px-1.5 text-[10px] tabular-nums text-tv-text-dim">
+          <span className="px-1.5 text-[10px] tabular-nums text-tv-text-muted">
             {total > 0 ? `${cursorIndex + 1} / ${total}` : "—"}
           </span>
         </>

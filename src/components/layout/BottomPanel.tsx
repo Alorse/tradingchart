@@ -57,7 +57,7 @@ export function BottomPanel() {
         label="24h Vol (USDT)"
         value={t ? formatVolume(t.quoteVolume) : "—"}
       />
-      <div className="ml-auto flex items-center gap-2 text-[10px] text-tv-text-dim">
+      <div className="ml-auto flex items-center gap-2 text-[10px] text-tv-text-muted">
         <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-tv-green" />
         <span>Binance · Live</span>
       </div>

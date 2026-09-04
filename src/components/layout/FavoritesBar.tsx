@@ -147,7 +147,7 @@ export function FavoritesBar() {
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
               <div className="font-medium">{t.label}</div>
-              <div className="mt-0.5 text-[10px] text-tv-text-dim">Drag to reorder · right-click to remove</div>
+              <div className="mt-0.5 text-[10px] text-tv-text-muted">Drag to reorder · right-click to remove</div>
             </TooltipContent>
           </Tooltip>
         );

@@ -60,7 +60,7 @@ function ToolButton({
       <TooltipContent side="right" className="text-xs">
         <div className="font-medium">{t.label}</div>
         {t.hint && <div className="mt-0.5 text-[10px] text-tv-text-muted">{t.hint}</div>}
-        <div className="mt-0.5 text-[10px] text-tv-text-dim">
+        <div className="mt-0.5 text-[10px] text-tv-text-muted">
           {favorite ? "Right-click to unfavorite" : "Right-click to favorite"}
         </div>
       </TooltipContent>
