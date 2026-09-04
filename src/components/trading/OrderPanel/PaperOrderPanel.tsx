@@ -145,17 +145,25 @@ export function PaperOrderPanel() {
   // Blocks submission (and explains why) instead of leaving `submit()` to
   // silently no-op on a feedless symbol (finding 6) or leaving a wrong-side
   // TP/SL to be dropped by the engine with no feedback (finding 7).
+  //
+  // A MARKET order fills at the live quote, so it also has to wait for the
+  // socket to deliver one: the symbol *has* a feed, but until the first tick
+  // arrives `submit()` would return without placing anything and without
+  // saying why (holistic review finding 8). A LIMIT order carries its own
+  // price and needs no quote.
+  const marketQuote = form.side === "BUY" ? ask : bid;
   const blockedReason =
     feedSource === null
       ? "No live feed for this symbol in paper mode"
-      : invalidBracketReason(form, referencePrice ?? 0);
+      : form.type === "MARKET" && !marketQuote
+        ? "Waiting for a live quote…"
+        : invalidBracketReason(form, referencePrice ?? 0);
 
   function submit() {
     if (!isPaperOrderReady(form) || blockedReason !== null) return;
     if (form.type === "MARKET") {
-      const price = form.side === "BUY" ? ask : bid;
-      if (!price) return;
-      placeOrder(paperFormToMarketRequest(form, symbol), price);
+      if (!marketQuote) return;
+      placeOrder(paperFormToMarketRequest(form, symbol), marketQuote);
     } else {
       placeLimitOrder(paperFormToLimitRequest(form, symbol));
     }
