@@ -7,8 +7,9 @@ import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/format";
 import { bracketEditReason } from "@/lib/trading/paper-brackets";
+import { formatDuration, reasonLabel } from "@/lib/trading/paper-format";
 import { totalUnrealizedPnl, unrealizedPnl, positionRoi } from "@/lib/trading/paper-engine";
-import type { PaperOrder, PaperPosition } from "@/lib/trading/paper-engine";
+import type { PaperOrder, PaperPosition, PaperTrade } from "@/lib/trading/paper-engine";
 
 /**
  * Paper-mode counterpart to `PositionsPanel` — same docked/collapsible shell,
@@ -17,13 +18,14 @@ import type { PaperOrder, PaperPosition } from "@/lib/trading/paper-engine";
  * `trading-mode-store`'s `mode`, so only one is ever visible.
  */
 
-type Tab = "positions" | "orders";
+type Tab = "positions" | "orders" | "history";
 
 export function PaperPositionsPanel() {
   const mode = useTradingModeStore((s) => s.mode);
   const account = usePaperTradingStore((s) => s.account);
   const marks = usePaperTradingStore((s) => s.marks);
   const equity = usePaperTradingStore((s) => s.equity());
+  const resetAccount = usePaperTradingStore((s) => s.resetAccount);
 
   const [collapsed, setCollapsed] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
@@ -99,6 +101,21 @@ export function PaperPositionsPanel() {
             <span className="ml-auto text-[9px] uppercase tracking-wider text-tv-text-muted">
               Paper · Simulated
             </span>
+            <button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Reset the paper account? This clears every position, order and closed trade, and restores the balance to its seed value. This cannot be undone.",
+                  )
+                ) {
+                  resetAccount();
+                }
+              }}
+              title="Reset paper account to seed balance"
+              className="rounded border border-tv-red/30 px-2 py-1 text-[10px] font-semibold text-tv-red/70 transition-colors hover:border-tv-red hover:bg-tv-red/10 hover:text-tv-red"
+            >
+              Reset account
+            </button>
           </div>
 
           <div className="flex shrink-0 border-b border-tv-border">
@@ -108,11 +125,15 @@ export function PaperPositionsPanel() {
             <TabBtn active={tab === "orders"} onClick={() => setTab("orders")}>
               Orders {restingOrders.length > 0 && <Badge n={restingOrders.length} />}
             </TabBtn>
+            <TabBtn active={tab === "history"} onClick={() => setTab("history")}>
+              History {account.history.length > 0 && <Badge n={account.history.length} />}
+            </TabBtn>
           </div>
 
           <div className="flex-1 overflow-auto">
             {tab === "positions" && <PositionsTable positions={positions} marks={marks} />}
             {tab === "orders" && <OrdersTable orders={restingOrders} />}
+            {tab === "history" && <HistoryTable trades={account.history} />}
           </div>
         </>
       )}
@@ -418,6 +439,81 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
             </td>
           </tr>
         ))}
+      </tbody>
+    </table>
+  );
+}
+
+/* ───────────────────────── History table ───────────────────────── */
+
+const REASON_CLASS: Record<PaperTrade["reason"], string> = {
+  TP: "text-tv-green",
+  SL: "text-tv-yellow",
+  LIQUIDATION: "text-tv-red",
+  MANUAL: "text-tv-text-muted",
+};
+
+function HistoryTable({ trades }: { trades: PaperTrade[] }) {
+  if (trades.length === 0) {
+    return (
+      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
+        No closed trades yet
+      </div>
+    );
+  }
+
+  // Most recent first; `history` is appended in close order, but sorting by
+  // `closedAt` is the actual intent rather than relying on array order.
+  const sorted = [...trades].sort((a, b) => b.closedAt - a.closedAt);
+
+  return (
+    <table className="w-full text-[11px]">
+      <thead>
+        <tr className="border-b border-tv-border text-left text-[10px] uppercase tracking-wider text-tv-text-muted">
+          <th className="px-3 py-1.5">Symbol</th>
+          <th className="px-3 py-1.5">Side</th>
+          <th className="px-3 py-1.5">Qty</th>
+          <th className="px-3 py-1.5">Entry</th>
+          <th className="px-3 py-1.5">Exit</th>
+          <th className="px-3 py-1.5">Fees</th>
+          <th className="px-3 py-1.5 text-right">Realized P&L</th>
+          <th className="px-3 py-1.5 text-right">ROI%</th>
+          <th className="px-3 py-1.5">Reason</th>
+          <th className="px-3 py-1.5">Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((t) => {
+          const isLong = t.side === "LONG";
+          const pnlColor = t.realizedPnl >= 0 ? "text-tv-green" : "text-tv-red";
+          const roi = t.roi * 100;
+          return (
+            <tr key={t.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+              <td className="px-3 py-1.5 font-semibold">{t.symbol}</td>
+              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+                {isLong ? "Long" : "Short"}
+              </td>
+              <td className="px-3 py-1.5 font-mono tabular-nums">{t.qty}</td>
+              <td className="px-3 py-1.5 font-mono tabular-nums">{formatPrice(t.entryPrice)}</td>
+              <td className="px-3 py-1.5 font-mono tabular-nums">{formatPrice(t.exitPrice)}</td>
+              <td className="px-3 py-1.5 font-mono tabular-nums">{t.fees.toFixed(2)}</td>
+              <td className={cn("px-3 py-1.5 text-right font-mono tabular-nums", pnlColor)}>
+                {t.realizedPnl >= 0 ? "+" : ""}
+                {t.realizedPnl.toFixed(2)} USDT
+              </td>
+              <td className={cn("px-3 py-1.5 text-right font-mono tabular-nums", pnlColor)}>
+                {roi >= 0 ? "+" : ""}
+                {roi.toFixed(2)}%
+              </td>
+              <td className={cn("px-3 py-1.5 font-semibold", REASON_CLASS[t.reason])}>
+                {reasonLabel(t.reason)}
+              </td>
+              <td className="px-3 py-1.5 font-mono tabular-nums text-tv-text-muted">
+                {formatDuration(t.durationMs)}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
