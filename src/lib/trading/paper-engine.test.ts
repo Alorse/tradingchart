@@ -712,6 +712,39 @@ describe("wrong-side brackets on a merge (adversarial re-audit finding 2)", () =
   });
 });
 
+describe("same-tick bracket evaluation for a merge (adversarial re-audit finding 3)", () => {
+  it("does not evaluate a merge's newly-set bracket against the tick that just set it", () => {
+    let a = openLong(acct(), 20_000, 1, 10);
+    a = placeLimitOrder(
+      a,
+      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10, sl: 19_200 },
+      NOW,
+    ).account;
+
+    // Fills the merge and, if brackets were evaluated on this same tick,
+    // would also blow through the just-set 19_200 stop — except 19_200 sits
+    // on the wrong side of the 19_000 fill price for a LONG (it's already
+    // behind where the price just was), so re-audit finding 2 drops it
+    // before this pass ever runs.
+    const res = evaluateTick(a, "BTCUSDT", 19_000, NOW + 1);
+    expect(res.account.positions).toHaveLength(1);
+    expect(pos(res.account).sl).toBe(null);
+    expect(res.account.history).toHaveLength(0);
+  });
+
+  // There is deliberately no "a merge's untouched, still-live bracket fires
+  // on the same tick" counterpart here: since re-audit finding 2 also
+  // re-validates a *carried-over* sl/tp (not just a newly-supplied one)
+  // against the fill price, any bracket a merge keeps is, by construction,
+  // valid relative to that same price — and `triggeredExit`'s trigger
+  // condition is the strict complement of `normalizeBrackets`'s validity
+  // condition, so a bracket that survives can never also satisfy the
+  // trigger at that identical price. The snapshot-compare here is
+  // belt-and-suspenders against that invariant ever drifting (e.g. a future
+  // change to `setBrackets` or `normalizeBrackets` that stops re-validating
+  // a carried-over value), not something a same-tick test can observe today.
+});
+
 describe("event payloads and flips against a resting order (adversarial review finding 11)", () => {
   it("a market fill's event carries a null orderId and a taker fee proportional to qty*price*rate", () => {
     const res = fillMarketOrder(

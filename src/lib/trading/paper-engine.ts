@@ -836,11 +836,13 @@ export function evaluateTick(
   let acc = account;
   let events: PaperEvent[] = [];
 
-  // A position on this symbol that already existed *before* this tick's limit
-  // fills. Positions net per symbol, so there is at most one; its id survives
-  // a same-side merge or a partial reduce, but not an open or a flip — that
-  // distinction is what the bracket pass below uses to skip a fresh position.
-  const preTickPositionId = acc.positions.find((p) => p.symbol === symbol)?.id ?? null;
+  // The position on this symbol as it stood *before* this tick's limit
+  // fills, id *and* brackets. Positions net per symbol, so there is at most
+  // one; its id survives a same-side merge or a partial reduce, but not an
+  // open or a flip. The bracket pass below uses the id to skip a fresh
+  // position, and the tp/sl snapshot to skip a merge that changed the
+  // brackets this same tick — see the comment down there.
+  const preTickPosition = acc.positions.find((p) => p.symbol === symbol) ?? null;
 
   // Resting limit orders first: an order that fills on this tick gets its
   // brackets evaluated by the *next* one, never by the tick that opened it.
@@ -889,9 +891,19 @@ export function evaluateTick(
   // never for a position this same tick just opened or flipped into: it has
   // no id in common with whatever (if anything) existed before the fills
   // above, so evaluating it here would price a stop/TP/liquidation off the
-  // tick that created it rather than the next one.
+  // tick that created it rather than the next one. Nor for one whose tp/sl a
+  // same-side merge just changed on this tick (the id survives a merge,
+  // unlike an open/flip) — that bracket was only just set, relative to this
+  // same tick's price, so it must wait for the next tick too, exactly like a
+  // fresh position's (adversarial re-audit finding 3).
   const position = acc.positions.find((p) => p.symbol === symbol);
-  if (position && position.id === preTickPositionId) {
+  const bracketsUnchangedThisTick =
+    position !== undefined &&
+    preTickPosition !== null &&
+    position.id === preTickPosition.id &&
+    position.tp === preTickPosition.tp &&
+    position.sl === preTickPosition.sl;
+  if (position && bracketsUnchangedThisTick) {
     const exit = triggeredExit(position, price);
     if (exit) {
       const res = closePosition(acc, symbol, exit.price, now, undefined, exit.reason);
