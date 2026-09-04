@@ -413,7 +413,7 @@ export function Watchlist() {
           <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-dim">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-muted">
         <span>Symbol</span>
         <SortHeader
           label="Price"
@@ -878,7 +878,7 @@ function SortHeader({
       title={`Sort by ${label}`}
       className={cn(
         "flex items-center justify-end gap-0.5 text-right uppercase tracking-wider transition-colors hover:text-tv-text",
-        active ? "text-tv-blue" : "text-tv-text-dim",
+        active ? "text-tv-blue-text" : "text-tv-text-muted",
       )}
     >
       <span>{label}</span>
