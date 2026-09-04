@@ -39,6 +39,15 @@ export const useTradingModeStore = create<TradingModeState>()(
       // what lets the test suite exercise the round trip for real — same
       // reasoning as `paper-trading-store.ts`'s custom storage.
       storage: createJSONStorage(() => globalThis.localStorage),
+      // A corrupted/foreign blob (or any value that isn't literally "live")
+      // must rehydrate to `paper`, not whatever `current` happened to hold —
+      // this is the one store where "wrong default" means a fresh install
+      // could come up armed for real orders instead of failing safe
+      // (adversarial review finding 9).
+      merge: (persisted, current) => {
+        const state = persisted as Partial<TradingModeState> | undefined;
+        return { ...current, mode: state?.mode === "live" ? "live" : "paper" };
+      },
     },
   ),
 );

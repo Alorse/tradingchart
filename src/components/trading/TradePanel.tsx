@@ -35,7 +35,12 @@ export function TradePanel() {
     <div className="flex h-full flex-col overflow-hidden">
       <TradeModeToggle mode={mode} onChange={handleModeChange} />
       <div className="flex-1 overflow-hidden">
-        {mode === "paper" ? <PaperOrderPanel key={symbol} /> : <OrderPanel />}
+        {/* Inverted on purpose (checks "live", not "paper"): any unrecognized
+            `mode` value must fail closed to the harmless panel, not open to
+            the one that can place real orders (adversarial review finding 9;
+            trading-mode-store's own `merge` now also sanitizes what can
+            rehydrate into `mode` in the first place, belt and suspenders). */}
+        {mode === "live" ? <OrderPanel /> : <PaperOrderPanel key={symbol} />}
       </div>
     </div>
   );

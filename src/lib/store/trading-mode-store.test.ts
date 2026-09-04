@@ -26,4 +26,32 @@ describe("trading-mode-store", () => {
     const parsed = JSON.parse(raw as string);
     expect(parsed.state.mode).toBe("live");
   });
+
+  it("rehydrating a garbage persisted mode falls back to paper (adversarial review finding 9)", async () => {
+    useTradingModeStore.getState().setMode("live");
+
+    localStorage.setItem(
+      TRADING_MODE_STORAGE_KEY,
+      JSON.stringify({ state: { mode: "banana" }, version: 0 }),
+    );
+    await useTradingModeStore.persist.rehydrate();
+    expect(useTradingModeStore.getState().mode).toBe("paper");
+
+    localStorage.setItem(TRADING_MODE_STORAGE_KEY, JSON.stringify({ state: {}, version: 0 }));
+    await useTradingModeStore.persist.rehydrate();
+    expect(useTradingModeStore.getState().mode).toBe("paper");
+
+    localStorage.setItem(TRADING_MODE_STORAGE_KEY, JSON.stringify({ state: { mode: null }, version: 0 }));
+    await useTradingModeStore.persist.rehydrate();
+    expect(useTradingModeStore.getState().mode).toBe("paper");
+  });
+
+  it("still rehydrates a genuine live mode", async () => {
+    localStorage.setItem(
+      TRADING_MODE_STORAGE_KEY,
+      JSON.stringify({ state: { mode: "live" }, version: 0 }),
+    );
+    await useTradingModeStore.persist.rehydrate();
+    expect(useTradingModeStore.getState().mode).toBe("live");
+  });
 });
