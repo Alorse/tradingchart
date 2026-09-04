@@ -7,6 +7,7 @@ import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { DrawHandle } from "./DrawHandle";
 import { useDragPoint } from "./use-drag-point";
 import { useDrawings } from "@/lib/supabase/use-drawings";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: CalloutDrawing;
@@ -34,7 +35,7 @@ export function CalloutDraw({
   candleSeries,
   container,
 }: Props) {
-  const color = drawing.color ?? "#2962ff";
+  const color = drawing.color ?? TV_PINE.blue;
   const fontSize = drawing.fontSize ?? 13;
   const { updateLive, commit, remove } = useDrawings();
   const snapshotRef = useRef<CalloutDrawing | null>(null);

@@ -60,7 +60,7 @@ export function RightSidebar() {
         onPointerMove={onResizeMove}
         onPointerUp={endResize}
         className={cn(
-          "absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize",
+          "absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize transition-colors hover:bg-tv-blue/20",
           resizing && "bg-tv-blue/30",
         )}
       />
@@ -132,7 +132,7 @@ function RailTab({
       className={cn(
         "relative flex flex-col items-center gap-1 border-l-2 py-2.5 text-[9px] font-medium transition-colors",
         active
-          ? "border-tv-blue bg-tv-panel-hover text-tv-blue"
+          ? "border-tv-blue bg-tv-panel-hover text-tv-blue-text"
           : "border-transparent text-tv-text-muted hover:bg-tv-bg hover:text-tv-text",
       )}
     >

@@ -5,6 +5,7 @@ import type { BrushDrawing, HighlighterDrawing } from "@/lib/drawings/types";
 import { timeToX, fractionalLogicalToX, timeframeToSeconds } from "@/lib/chart/coords";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import { useChartStore } from "@/lib/store/chart-store";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: BrushDrawing | HighlighterDrawing;
@@ -42,7 +43,7 @@ export function BrushDraw({ drawing, chart, candleSeries, selected, onSelect }: 
 
   const pathD = pointsToPath(pixels);
   const isHighlighter = drawing.kind === "highlighter";
-  const color = drawing.color ?? (isHighlighter ? "#ffeb3b" : "#ffffff");
+  const color = drawing.color ?? (isHighlighter ? TV_PINE.highlighter : TV_PINE.white);
   const lw = drawing.lineWidth ?? (isHighlighter ? 14 : 2);
   const opacity = isHighlighter ? 0.35 : 1;
 

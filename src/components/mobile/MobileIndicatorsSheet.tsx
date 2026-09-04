@@ -64,7 +64,7 @@ export function MobileIndicatorsSheet() {
           onClick={() => addUserEMA()}
           className="flex w-full items-center gap-3 border-b border-tv-border/60 px-3 py-3 text-left active:bg-tv-panel-hover"
         >
-          <Plus className="h-4 w-4 text-tv-blue" />
+          <Plus className="h-4 w-4 text-tv-blue-text" />
           <span className="flex-1 text-sm">EMA — Exponential Moving Average</span>
         </button>
         {userEMAs.length > 0 && (

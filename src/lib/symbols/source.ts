@@ -59,3 +59,26 @@ export function resolveSource(rawSymbol: string): ResolvedSource {
 export function sourceKindOf(rawSymbol: string): SourceKind | "synthetic" {
   return resolveSource(rawSymbol).kind;
 }
+
+/**
+ * Display name per data source. Lives here rather than in `ExchangeLogo` so the
+ * venue badge and any text that names the venue (the bottom stats bar) can't
+ * drift apart — and so a non-component can read it.
+ */
+export const VENUE_LABEL: Record<SourceKind | "synthetic", string> = {
+  binance: "Binance",
+  bybit: "Bybit",
+  yahoo: "Yahoo Finance",
+  fred: "FRED",
+  coingecko: "CoinGecko",
+  synthetic: "Synthetic",
+};
+
+/**
+ * Whether a source pushes updates over a WebSocket. The others are REST-polled
+ * and, in Yahoo's case, quoted on a delay — so nothing should label them "Live".
+ * Synthetic counts: its legs stream from Binance.
+ */
+export function isLiveSource(kind: SourceKind | "synthetic"): boolean {
+  return kind === "binance" || kind === "bybit" || kind === "synthetic";
+}

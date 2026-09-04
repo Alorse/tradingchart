@@ -160,7 +160,7 @@ export function CreateAlertDialog() {
                 {editingAlert ? "Edit alert on" : "Create alert on"}
               </span>
               <div className="flex items-center gap-1.5 rounded bg-tv-blue/15 px-2 py-0.5">
-                <span className="text-xs font-semibold text-tv-blue">{symbol}</span>
+                <span className="text-xs font-semibold text-tv-blue-text">{symbol}</span>
               </div>
             </div>
             <button

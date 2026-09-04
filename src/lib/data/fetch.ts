@@ -1,10 +1,10 @@
-import type { Candle, Timeframe } from "@/lib/binance/types";
-import { fetchKlines } from "@/lib/binance/rest";
+import type { Candle, Ticker24h, Timeframe } from "@/lib/binance/types";
+import { fetchKlines, fetchTicker24h } from "@/lib/binance/rest";
 import { fetchSyntheticKlines } from "@/lib/binance/synthetic";
 import { fetchYahooCandles } from "@/lib/providers/yahoo";
 import { fetchFredCandles } from "@/lib/providers/fred";
 import { fetchCoinGeckoCandles } from "@/lib/providers/coingecko";
-import { fetchBybitKlines } from "@/lib/bybit/public";
+import { fetchBybitKlines, fetchBybitStats24h } from "@/lib/bybit/public";
 import { resolveSource } from "@/lib/symbols/source";
 
 /**
@@ -60,4 +60,29 @@ export async function fetchOlderCandles(
     return candles.filter((c) => c.time < beforeTimeSec);
   }
   return [];
+}
+
+/**
+ * 24h stats for the charted symbol, dispatched the same way candles are.
+ *
+ * Returns `null` for the sources that have no 24h rolling window to report:
+ * Yahoo/FRED/CoinGecko serve daily-or-coarser series, and a synthetic spread is
+ * an expression with no venue-published volume. Callers should render "no
+ * stats", not zeros — and above all must not fall back to the Binance endpoint,
+ * which would answer for a *different* instrument that happens to share a
+ * ticker.
+ */
+export async function fetchStats24h(symbol: string): Promise<Ticker24h | null> {
+  const src = resolveSource(symbol);
+  switch (src.kind) {
+    case "binance":
+      return fetchTicker24h(src.symbol);
+    case "bybit":
+      return fetchBybitStats24h(src.providerSymbol);
+    case "synthetic":
+    case "yahoo":
+    case "fred":
+    case "coingecko":
+      return null;
+  }
 }

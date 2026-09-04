@@ -47,7 +47,7 @@ export function ReplayToolbar() {
   return (
     <div className="pointer-events-auto flex items-center gap-0.5 rounded border border-tv-border bg-tv-panel/95 px-1 py-1 text-tv-text-muted shadow-lg backdrop-blur">
       {picking ? (
-        <span className="px-2 py-0.5 text-[11px] font-medium text-tv-blue">
+        <span className="px-2 py-0.5 text-[11px] font-medium text-tv-blue-text">
           Click a bar on the chart to start
         </span>
       ) : (
@@ -80,8 +80,8 @@ export function ReplayToolbar() {
                 className={cn(
                   "rounded px-1 text-[10px] font-semibold tabular-nums transition-colors",
                   speed === s
-                    ? "bg-tv-blue/20 text-tv-blue"
-                    : "text-tv-text-dim hover:text-tv-text",
+                    ? "bg-tv-blue/20 text-tv-blue-text"
+                    : "text-tv-text-muted hover:text-tv-text",
                 )}
               >
                 {s}x
@@ -89,7 +89,7 @@ export function ReplayToolbar() {
             ))}
           </div>
 
-          <span className="px-1.5 text-[10px] tabular-nums text-tv-text-dim">
+          <span className="px-1.5 text-[10px] tabular-nums text-tv-text-muted">
             {total > 0 ? `${cursorIndex + 1} / ${total}` : "—"}
           </span>
         </>
@@ -124,7 +124,7 @@ function IconBtn({
       aria-label={label}
       className={cn(
         "flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover hover:text-tv-text",
-        highlight && "text-tv-blue",
+        highlight && "text-tv-blue-text",
         disabled && "pointer-events-none opacity-30",
       )}
     >

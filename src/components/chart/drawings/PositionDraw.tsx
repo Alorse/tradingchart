@@ -15,6 +15,7 @@ import { formatPrice } from "@/lib/format";
 import { xToTime, timeframeToSeconds } from "@/lib/chart/coords";
 import { useChartStore } from "@/lib/store/chart-store";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
+import { TV_PINE } from "@/lib/chart/theme";
 
 type PositionDrawing = LongPositionDrawing | ShortPositionDrawing;
 
@@ -80,11 +81,11 @@ export function PositionDraw({
 }: Props) {
   const isLong = drawing.kind === "long";
 
-  const profitColor = drawing.targetColor ?? "#26a69a";
-  const lossColor = drawing.stopColor ?? "#ef5350";
+  const profitColor = drawing.targetColor ?? TV_PINE.green;
+  const lossColor = drawing.stopColor ?? TV_PINE.red;
   const profitFill = `${profitColor}20`;
   const lossFill = `${lossColor}20`;
-  const entryColor = drawing.color ?? "#d1d4dc";
+  const entryColor = drawing.color ?? TV_PINE.neutral;
 
   const [hovered, setHovered] = useState(false);
 
@@ -287,7 +288,7 @@ export function PositionDraw({
           />
           <text
             x={left + 4} y={y - 3}
-            fill={profitColor} fontSize={9} opacity={0.65}
+            fill={profitColor} fontSize={11} opacity={0.65}
             fontFamily="var(--font-mono), monospace"
           >
             {n}R
@@ -307,11 +308,11 @@ export function PositionDraw({
         <>
           <OuterPill
             cx={left + zoneWidth / 2} y={topY}
-            text={topPillText} color={topPillColor} textColor={drawing.textColor ?? "#000000"} above
+            text={topPillText} color={topPillColor} textColor={drawing.textColor ?? TV_PINE.pillText} above
           />
           <OuterPill
             cx={left + zoneWidth / 2} y={bottomY}
-            text={bottomPillText} color={bottomPillColor} textColor={drawing.textColor ?? "#000000"} above={false}
+            text={bottomPillText} color={bottomPillColor} textColor={drawing.textColor ?? TV_PINE.pillText} above={false}
           />
         </>
       )}
@@ -332,7 +333,7 @@ export function PositionDraw({
             <text
               x={textX} y={profitCenterY + 12}
               textAnchor="middle" fill={profitColor}
-              fontSize={10} opacity={0.5}
+              fontSize={11} opacity={0.5}
               fontFamily="var(--font-mono), monospace"
             >
               RR {rr.toFixed(2)}

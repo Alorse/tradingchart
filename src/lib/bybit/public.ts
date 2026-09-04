@@ -1,4 +1,4 @@
-import type { Candle, Timeframe } from "@/lib/binance/types";
+import type { Candle, Ticker24h, Timeframe } from "@/lib/binance/types";
 import { stripExchangePrefix } from "@/lib/symbols/prefix";
 
 /**
@@ -130,6 +130,52 @@ export async function fetchBybitTickers24h(symbols: string[]): Promise<BybitTick
       lastPrice: parseFloat(t.lastPrice),
       priceChangePercent: parseFloat(t.price24hPcnt) * 100,
     }));
+}
+
+/** Full 24h stats for ONE linear perp, in the shared `Ticker24h` shape. */
+export async function fetchBybitStats24h(symbol: string): Promise<Ticker24h> {
+  // Query the single symbol rather than reusing `fetchBybitTickers24h`, which
+  // pulls the entire linear ticker list — fine amortised across a watchlist,
+  // wasteful for the one charted symbol on a 5s poll.
+  const bare = bybitSymbol(symbol);
+  const res = await fetch(`${BASE}/v5/market/tickers?category=linear&symbol=${bare}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`bybit ticker ${res.status}`);
+  const data = (await res.json()) as StatsResp;
+  if (data.retCode !== 0) throw new Error(data.retMsg || "bybit ticker error");
+  const t = data.result.list?.[0];
+  if (!t) throw new Error(`bybit ticker: no data for ${bare}`);
+  const last = parseFloat(t.lastPrice);
+  const prev = parseFloat(t.prevPrice24h);
+  return {
+    symbol,
+    lastPrice: last,
+    priceChange: last - prev,
+    // Bybit sends a fraction (0.0123), not a percentage.
+    priceChangePercent: parseFloat(t.price24hPcnt) * 100,
+    highPrice: parseFloat(t.highPrice24h),
+    lowPrice: parseFloat(t.lowPrice24h),
+    volume: parseFloat(t.volume24h),
+    quoteVolume: parseFloat(t.turnover24h),
+  };
+}
+
+interface StatsResp {
+  retCode: number;
+  retMsg: string;
+  result: {
+    list?: {
+      symbol: string;
+      lastPrice: string;
+      prevPrice24h: string;
+      price24hPcnt: string;
+      highPrice24h: string;
+      lowPrice24h: string;
+      volume24h: string;
+      turnover24h: string;
+    }[];
+  };
 }
 
 let cachedPerps: BybitPerpSymbol[] | null = null;

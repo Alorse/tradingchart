@@ -319,7 +319,7 @@ function PositionEditPanel({ symbol, position }: { symbol: string; position: Pos
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-2.5 space-y-4">
-        <div className={cn("text-xs font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+        <div className={cn("text-xs font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
           {isLong ? "Long" : "Short"} {qty} @ {position.entryPrice.toFixed(symInfo.pricePrecision)}
         </div>
 

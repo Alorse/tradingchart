@@ -76,7 +76,7 @@ export function PositionsPanel() {
           Trading Account
         </span>
         {positionsCount > 0 && (
-          <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue">
+          <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue-text">
             {positionsCount} pos
           </span>
         )}
@@ -113,7 +113,7 @@ export function PositionsPanel() {
               value={unrealizedPnL.toFixed(2)}
               valueClass={unrealizedPnL >= 0 ? "text-tv-green" : "text-tv-red"}
             />
-            <span className="ml-auto text-[9px] uppercase tracking-wider text-tv-text-muted">
+            <span className="ml-auto text-[9px] uppercase text-tv-text-muted">
               {exchange} · {testnet ? "Testnet" : "Mainnet"}
             </span>
           </div>
@@ -156,7 +156,7 @@ export function PositionsPanel() {
 function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] uppercase tracking-wider text-tv-text-muted">{label}</span>
+      <span className="text-[9px] text-tv-text-muted">{label}</span>
       <span className={cn("font-mono text-xs tabular-nums", valueClass ?? "text-tv-text")}>
         {value}
       </span>
@@ -165,7 +165,7 @@ function Stat({ label, value, valueClass }: { label: string; value: string; valu
 }
 
 function Badge({ n }: { n: number }) {
-  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue">{n}</span>;
+  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue-text">{n}</span>;
 }
 
 function TabBtn({
@@ -274,9 +274,9 @@ function PositionsTable({
           // always applies (see isPerp()/cleanSym() in binance/rest.ts).
           const posSymbol = `${p.symbol}.P`;
           return (
-            <tr key={rowKey} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+            <tr key={rowKey} className="border-b border-tv-border hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{p.symbol}.P</td>
-              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
               </td>
               <td className="px-3 py-1.5 font-mono tabular-nums">
@@ -505,11 +505,11 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
           </thead>
           <tbody>
             {filtered.map((o) => (
-              <tr key={o.orderId} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+              <tr key={o.orderId} className="border-b border-tv-border hover:bg-tv-panel-hover">
                 <td className="px-3 py-1.5 font-semibold">{o.symbol}</td>
                 <td className={cn(
                   "px-3 py-1.5 font-semibold",
-                  o.side === "BUY" ? "text-tv-blue" : "text-tv-red",
+                  o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red",
                 )}>
                   {o.side === "BUY" ? "Buy" : "Sell"}
                 </td>
@@ -528,7 +528,7 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
                     "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
                     o.status === "FILLED" && "bg-tv-green/20 text-tv-green",
                     (o.status === "CANCELED" || o.status === "EXPIRED" || o.status === "REJECTED") && "bg-tv-red/15 text-tv-red",
-                    (o.status === "NEW" || o.status === "PARTIALLY_FILLED") && "bg-tv-blue/15 text-tv-blue",
+                    (o.status === "NEW" || o.status === "PARTIALLY_FILLED") && "bg-tv-blue/15 text-tv-blue-text",
                   )}>
                     {o.status === "NEW" ? "Working" : o.status}
                   </span>
@@ -701,7 +701,7 @@ function AccountSummary({
               <tr><td colSpan={3} className="py-2 text-tv-text-muted">No balances</td></tr>
             )}
             {balance.map((b) => (
-              <tr key={b.asset} className="border-b border-tv-border/50">
+              <tr key={b.asset} className="border-b border-tv-border">
                 <td className="py-1 font-semibold">{b.asset}</td>
                 <td className="py-1 text-right font-mono tabular-nums">{b.free.toFixed(4)}</td>
                 <td className="py-1 text-right font-mono tabular-nums">{b.locked.toFixed(4)}</td>

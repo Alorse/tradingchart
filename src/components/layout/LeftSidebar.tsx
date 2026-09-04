@@ -51,16 +51,18 @@ function ToolButton({
         aria-label={t.label}
         className={cn(
           "relative flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
-          active ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text-muted hover:text-tv-text",
+          active ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted hover:text-tv-text",
         )}
       >
         <Icon className="h-7 w-7" />
-        {favorite && <Star className="absolute right-0.5 top-0.5 h-2 w-2 fill-tv-yellow text-tv-yellow" />}
+        {favorite && (
+          <Star className="absolute right-0.5 top-0.5 h-2.5 w-2.5 fill-tv-yellow stroke-tv-panel stroke-[3] text-tv-yellow" />
+        )}
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">
         <div className="font-medium">{t.label}</div>
         {t.hint && <div className="mt-0.5 text-[10px] text-tv-text-muted">{t.hint}</div>}
-        <div className="mt-0.5 text-[10px] text-tv-text-dim">
+        <div className="mt-0.5 text-[10px] text-tv-text-muted">
           {favorite ? "Right-click to unfavorite" : "Right-click to favorite"}
         </div>
       </TooltipContent>
@@ -150,7 +152,7 @@ export function LeftSidebar() {
                 aria-label={activeTool.label}
                 className={cn(
                   "relative flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
-                  groupHasActive ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text-muted hover:text-tv-text",
+                  groupHasActive ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted hover:text-tv-text",
                 )}
               >
                 <ActiveIcon className="h-7 w-7" />
@@ -187,7 +189,7 @@ export function LeftSidebar() {
                             setTool(t.key);
                             setCategoryActive((m) => ({ ...m, [group.label!]: t.key }));
                           }}
-                          className={cn("flex items-center gap-2.5 text-xs", isActive && "bg-tv-blue/15 text-tv-blue")}
+                          className={cn("flex items-center gap-2.5 text-xs", isActive && "bg-tv-blue/15 text-tv-blue-text")}
                         >
                           {/* `size-7` (not h-7 w-7) so it beats the menu's default svg size-4 rule */}
                           <Icon className="size-7" />
@@ -202,7 +204,7 @@ export function LeftSidebar() {
                               e.stopPropagation();
                               toggleFavoriteTool(t.key);
                             }}
-                            className="ml-auto flex h-5 w-5 items-center justify-center rounded text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-yellow"
+                            className="ml-auto flex h-6 w-6 items-center justify-center rounded text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-yellow"
                           >
                             <Star className={cn("h-3.5 w-3.5", isFav && "fill-tv-yellow text-tv-yellow")} />
                           </span>
@@ -218,7 +220,7 @@ export function LeftSidebar() {
       })}
 
       <div className="mt-auto flex w-full flex-col items-center gap-0.5 pb-0.5">
-        <div className="my-1 h-px w-6 bg-tv-border" />
+        <div className="my-1 h-px w-6 bg-tv-border-strong" />
 
         <Tooltip>
           <TooltipTrigger
@@ -227,7 +229,7 @@ export function LeftSidebar() {
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded transition-colors",
               magnetMode
-                ? "bg-tv-blue/15 text-tv-blue"
+                ? "bg-tv-blue/15 text-tv-blue-text"
                 : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text",
             )}
           >

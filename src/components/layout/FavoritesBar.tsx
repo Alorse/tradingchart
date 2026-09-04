@@ -101,7 +101,7 @@ export function FavoritesBar() {
       style={{ left: pos?.x ?? -9999, top: pos?.y ?? 8, userSelect: "none" }}
     >
       <div
-        className="flex cursor-grab items-center px-0.5 text-tv-text-dim hover:text-tv-text-muted active:cursor-grabbing"
+        className="flex cursor-grab items-center px-0.5 text-tv-text-muted hover:text-tv-text active:cursor-grabbing"
         onPointerDown={startMove}
         onPointerMove={onMove}
         onPointerUp={endMove}
@@ -139,7 +139,7 @@ export function FavoritesBar() {
               aria-label={t.label}
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
-                active ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text-muted hover:text-tv-text",
+                active ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted hover:text-tv-text",
                 dragOverKey === t.key && "ring-1 ring-tv-blue",
               )}
             >
@@ -147,7 +147,7 @@ export function FavoritesBar() {
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
               <div className="font-medium">{t.label}</div>
-              <div className="mt-0.5 text-[10px] text-tv-text-dim">Drag to reorder · right-click to remove</div>
+              <div className="mt-0.5 text-[10px] text-tv-text-muted">Drag to reorder · right-click to remove</div>
             </TooltipContent>
           </Tooltip>
         );

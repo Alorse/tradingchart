@@ -5,6 +5,7 @@ import type { DrawingTool } from "@/lib/store/chart-store";
 import type { Candle } from "@/lib/binance/types";
 import { timeToX } from "@/lib/chart/coords";
 import { extendRay } from "@/lib/drawings/geometry";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Point {
   time: number;
@@ -24,8 +25,8 @@ interface Props {
   height: number;
 }
 
-const PREVIEW_STROKE = "#ffffff";
-const PREVIEW_HANDLE = "#2962ff";
+const PREVIEW_STROKE = TV_PINE.white;
+const PREVIEW_HANDLE = TV_PINE.blue;
 const PREVIEW_DASH = "5 4";
 
 /** Renders a thin dashed preview of the drawing being placed. */
@@ -81,7 +82,7 @@ export function PlacementPreview({
           stroke={PREVIEW_STROKE}
           strokeWidth={1.5}
         />
-        <circle cx={aX} cy={aY} r={5} fill={PREVIEW_HANDLE} stroke="#ffffff" strokeWidth={1.5} />
+        <circle cx={aX} cy={aY} r={5} fill={PREVIEW_HANDLE} stroke={PREVIEW_STROKE} strokeWidth={1.5} />
         <circle cx={bX} cy={bY} r={4} fill="none" stroke={PREVIEW_HANDLE} strokeWidth={1.5} />
       </svg>
     );
@@ -213,7 +214,7 @@ export function PlacementPreview({
           strokeDasharray={PREVIEW_DASH}
           strokeWidth={1}
         />
-        <circle cx={aX} cy={aY} r={4} fill={PREVIEW_HANDLE} stroke="#ffffff" strokeWidth={1.5} />
+        <circle cx={aX} cy={aY} r={4} fill={PREVIEW_HANDLE} stroke={PREVIEW_STROKE} strokeWidth={1.5} />
       </svg>
     );
   }
@@ -333,8 +334,8 @@ export function MagnetIndicator({
   if (x === null || y === null) return null;
   return (
     <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full" style={{ overflow: "visible" }}>
-      <circle cx={x} cy={y} r={5} fill="none" stroke="#ffb74d" strokeWidth={2} />
-      <circle cx={x} cy={y} r={2} fill="#ffb74d" />
+      <circle cx={x} cy={y} r={5} fill="none" stroke={TV_PINE.snap} strokeWidth={2} />
+      <circle cx={x} cy={y} r={2} fill={TV_PINE.snap} />
     </svg>
   );
 }

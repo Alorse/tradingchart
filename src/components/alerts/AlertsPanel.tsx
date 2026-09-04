@@ -67,11 +67,11 @@ export function AlertsPanel() {
         <span className="text-[11px] font-semibold uppercase tracking-wider text-tv-text-muted">
           Alerts
         </span>
-        <span className="text-[11px] text-tv-text-dim">{total}</span>
+        <span className="text-[11px] text-tv-text-muted">{total}</span>
       </div>
 
       {total === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-dim">
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-muted">
           No alerts yet. Use the bell icon (Alt+A) or right-click the chart to create one.
         </div>
       ) : (
@@ -84,21 +84,19 @@ export function AlertsPanel() {
                 : `${SOURCE_LABELS[source]} ${CONDITION_LABELS[a.condition]} ${
                     source === "rsi" ? a.value : formatPrice(a.value)
                   }`;
+            const tone = a.enabled ? "text-tv-text-muted" : "text-tv-text-disabled";
             return (
               <div
                 key={a.id}
-                className={cn(
-                  "group flex items-start gap-1.5 px-2 py-1.5 text-[12px] transition-colors hover:bg-tv-panel-hover",
-                  !a.enabled && "opacity-50",
-                )}
+                className="group flex items-start gap-1.5 px-2 py-1.5 text-[12px] transition-colors hover:bg-tv-panel-hover"
               >
                 <button
                   onClick={() => toggleAlert(a.id)}
                   aria-label={a.enabled ? "Pause alert" : "Resume alert"}
                   title={a.enabled ? "Pause alert" : "Resume alert"}
                   className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded",
-                    a.enabled ? "text-tv-yellow" : "text-tv-text-dim hover:text-tv-text",
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                    a.enabled ? "text-tv-yellow" : "text-tv-text-muted hover:text-tv-text",
                   )}
                 >
                   {a.enabled ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
@@ -109,21 +107,23 @@ export function AlertsPanel() {
                   title="Go to symbol"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="truncate font-medium">{a.symbol}</span>
+                    <span className={cn("truncate font-medium", !a.enabled && "text-tv-text-disabled")}>
+                      {a.symbol}
+                    </span>
                     {a.trigger === "once" && (
-                      <span className="shrink-0 text-[9px] uppercase tracking-wider text-tv-text-dim">once</span>
+                      <span className={cn("shrink-0 text-[9px] uppercase tracking-wider", tone)}>once</span>
                     )}
                   </div>
-                  <div className="truncate text-[11px] text-tv-text-muted">{desc}</div>
+                  <div className={cn("truncate text-[11px]", tone)}>{desc}</div>
                   {a.message && (
-                    <div className="truncate text-[10px] text-tv-text-dim">{a.message}</div>
+                    <div className={cn("truncate text-[10px]", tone)}>{a.message}</div>
                   )}
                 </button>
                 <button
                   onClick={() => openEditAlertDialog(a.id)}
                   aria-label="Edit alert"
                   title="Edit alert"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -131,7 +131,7 @@ export function AlertsPanel() {
                   onClick={() => removeAlert(a.id)}
                   aria-label="Delete alert"
                   title="Delete alert"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-red group-hover:opacity-100"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -140,7 +140,7 @@ export function AlertsPanel() {
           })}
 
           {drawingAlerts.length > 0 && (
-            <div className="mt-1 border-t border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-dim">
+            <div className="mt-1 border-t border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-muted">
               From drawings
             </div>
           )}
@@ -153,21 +153,19 @@ export function AlertsPanel() {
                 : d.alert?.direction === "cross-down"
                   ? "Crossing down"
                   : "Crossing";
+            const tone = enabled ? "text-tv-text-muted" : "text-tv-text-disabled";
             return (
               <div
                 key={d.id}
-                className={cn(
-                  "group flex items-start gap-1.5 px-2 py-1.5 text-[12px] transition-colors hover:bg-tv-panel-hover",
-                  !enabled && "opacity-50",
-                )}
+                className="group flex items-start gap-1.5 px-2 py-1.5 text-[12px] transition-colors hover:bg-tv-panel-hover"
               >
                 <button
                   onClick={() => toggleDrawingAlert(d)}
                   aria-label={enabled ? "Pause alert" : "Resume alert"}
                   title={enabled ? "Pause alert" : "Resume alert"}
                   className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded",
-                    enabled ? "text-tv-yellow" : "text-tv-text-dim hover:text-tv-text",
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                    enabled ? "text-tv-yellow" : "text-tv-text-muted hover:text-tv-text",
                   )}
                 >
                   {enabled ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
@@ -177,8 +175,10 @@ export function AlertsPanel() {
                   className="min-w-0 flex-1 text-left"
                   title="Select drawing"
                 >
-                  <div className="truncate font-medium">{d.symbol}</div>
-                  <div className="truncate text-[11px] text-tv-text-muted">
+                  <div className={cn("truncate font-medium", !enabled && "text-tv-text-disabled")}>
+                    {d.symbol}
+                  </div>
+                  <div className={cn("truncate text-[11px]", tone)}>
                     {kindLabel} · {dirLabel}
                   </div>
                 </button>
@@ -186,7 +186,7 @@ export function AlertsPanel() {
                   onClick={() => removeDrawingAlert(d)}
                   aria-label="Delete alert"
                   title="Delete alert"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-red group-hover:opacity-100"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

@@ -53,45 +53,43 @@ export function PaperPositionsPanel() {
       )}
       style={fullscreen ? {} : { maxHeight: collapsed ? 32 : "45vh", minHeight: 32 }}
     >
-      <div className="flex h-8 shrink-0 items-center border-b border-tv-border text-[11px] font-semibold">
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex h-8 flex-1 items-center gap-2 px-3 transition-colors hover:bg-tv-panel-hover"
-        >
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-tv-yellow" />
-            Paper Trading Account
+      {/* Title bar — same structure as PositionsPanel's, so the live and paper
+          panels hit-align and hover identically. */}
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex h-8 shrink-0 items-center gap-2 border-b border-tv-border px-3 text-[11px] font-semibold transition-colors hover:bg-tv-panel-hover"
+      >
+        <span className="inline-flex items-center gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-tv-yellow" />
+          Paper Trading Account
+        </span>
+        {positions.length > 0 && (
+          <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue-text">
+            {positions.length} pos
           </span>
-          {positions.length > 0 && (
-            <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue">
-              {positions.length} pos
-            </span>
-          )}
-          {restingOrders.length > 0 && (
-            <span className="rounded bg-tv-yellow/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-yellow">
-              {restingOrders.length} orders
-            </span>
-          )}
-        </button>
-        <span className="flex items-center gap-1 pr-3">
+        )}
+        {restingOrders.length > 0 && (
+          <span className="rounded bg-tv-yellow/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-yellow">
+            {restingOrders.length} orders
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-1">
           {!collapsed && (
-            <button
-              onClick={() => setFullscreen((f) => !f)}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setFullscreen((f) => !f);
+              }}
               title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
               className="rounded p-1 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
+              role="button"
             >
               {fullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-            </button>
+            </span>
           )}
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? "Expand" : "Collapse"}
-            className="rounded p-1 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
-          >
-            {collapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          </button>
+          {collapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </span>
-      </div>
+      </button>
 
       {!collapsed && (
         <>
@@ -144,7 +142,7 @@ function AccountStats({
         valueClass={unrealized >= 0 ? "text-tv-green" : "text-tv-red"}
       />
       <Stat label="Equity (USDT)" value={equity.toFixed(2)} />
-      <span className="ml-auto text-[9px] uppercase tracking-wider text-tv-text-muted">
+      <span className="ml-auto text-[9px] uppercase text-tv-text-muted">
         Paper · Simulated
       </span>
       <button
@@ -158,7 +156,7 @@ function AccountStats({
           }
         }}
         title="Reset paper account to seed balance"
-        className="rounded border border-tv-red/30 px-2 py-1 text-[10px] font-semibold text-tv-red/70 transition-colors hover:border-tv-red hover:bg-tv-red/10 hover:text-tv-red"
+        className="rounded border border-tv-red/30 px-2 py-1 text-[10px] font-semibold text-tv-red transition-colors hover:border-tv-red hover:bg-tv-red/10 hover:text-tv-red"
       >
         Reset account
       </button>
@@ -169,7 +167,7 @@ function AccountStats({
 function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] uppercase tracking-wider text-tv-text-muted">{label}</span>
+      <span className="text-[9px] text-tv-text-muted">{label}</span>
       <span className={cn("font-mono text-xs tabular-nums", valueClass ?? "text-tv-text")}>
         {value}
       </span>
@@ -178,7 +176,7 @@ function Stat({ label, value, valueClass }: { label: string; value: string; valu
 }
 
 function Badge({ n }: { n: number }) {
-  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue">{n}</span>;
+  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue-text">{n}</span>;
 }
 
 function TabBtn({
@@ -244,9 +242,9 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
           const pnlColor = pnl >= 0 ? "text-tv-green" : "text-tv-red";
           const displaySymbol = p.feedSymbol ?? p.symbol;
           return (
-            <tr key={p.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+            <tr key={p.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{displaySymbol}</td>
-              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
               </td>
               <td className="px-3 py-1.5 font-mono tabular-nums">{p.qty}</td>
@@ -448,9 +446,9 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
       </thead>
       <tbody>
         {orders.map((o) => (
-          <tr key={o.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+          <tr key={o.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
             <td className="px-3 py-1.5 font-semibold">{o.feedSymbol ?? o.symbol}</td>
-            <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue" : "text-tv-red")}>
+            <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red")}>
               {o.side === "BUY" ? "Buy" : "Sell"}
             </td>
             <td className="px-3 py-1.5 capitalize">{o.type.toLowerCase()}</td>
@@ -522,9 +520,9 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
           const pnlColor = t.realizedPnl >= 0 ? "text-tv-green" : "text-tv-red";
           const roi = t.roi * 100;
           return (
-            <tr key={t.id} className="border-b border-tv-border/50 hover:bg-tv-panel-hover">
+            <tr key={t.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
               <td className="px-3 py-1.5 font-semibold">{t.symbol}</td>
-              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue" : "text-tv-red")}>
+              <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
               </td>
               <td className="px-3 py-1.5 font-mono tabular-nums">{t.qty}</td>

@@ -383,7 +383,14 @@ export const DEFAULT_SQUEEZE_STYLE: SqueezeStyle = {
   momentumDecPos: "#10780d",
   momentumIncNeg: "#620000",
   momentumDecNeg: "#d90606",
-  squeezeOn: "#000000",
+  // Pine paints the squeeze-on dot black, which was already invisible on the
+  // old near-black background and is invisible on #0f0f0f too. Amber instead:
+  // it reads at a 0.5-size marker, and it collides with neither the gray
+  // "released" dot, the blue "no squeeze" one, nor the red/green momentum bars
+  // behind it. This does shift the indicator's semantics slightly — "coiled"
+  // now reads as a caution color rather than as absence — but a dot nobody can
+  // see carries no semantics at all.
+  squeezeOn: "#ff9800",
   squeezeOff: "#8c8c8c",
   noSqueeze: "#2962ff",
   showMomentum: true,
@@ -1331,7 +1338,7 @@ export const useChartStore = create<ChartState>()(
     }),
     {
       name: "tv-gratis-chart-state",
-      version: 7,
+      version: 8,
       migrate: (persisted, fromVersion) => {
         const p = persisted as Record<string, unknown>;
         if (fromVersion < 3 && Array.isArray(p.watchlist)) {
@@ -1399,6 +1406,16 @@ export const useChartStore = create<ChartState>()(
           const keyLevels = p.keyLevels as Record<string, { color?: string }> | undefined;
           if (keyLevels?.monthly) keyLevels.monthly.color = DEFAULT_KEY_LEVELS.monthly.color;
           if (keyLevels?.yearly) keyLevels.yearly.color = DEFAULT_KEY_LEVELS.yearly.color;
+        }
+        // v8: the squeeze-on dot moved off black (invisible on the new
+        // background) to amber. Only rewrite it if it is still the old default
+        // — a user who picked their own color keeps it, the same conditional
+        // shape the v4 keyLevelColor reset uses.
+        if (fromVersion < 8) {
+          const squeezeStyle = p.squeezeStyle as Record<string, unknown> | undefined;
+          if (squeezeStyle?.squeezeOn === "#000000") {
+            squeezeStyle.squeezeOn = DEFAULT_SQUEEZE_STYLE.squeezeOn;
+          }
         }
         return p;
       },

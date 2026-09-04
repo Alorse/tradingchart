@@ -29,7 +29,7 @@ export function AlertsToast() {
           key={t.id}
           className="pointer-events-auto flex w-80 items-start gap-3 rounded-lg border border-tv-border bg-tv-panel p-3 shadow-lg"
         >
-          <div className={t.variant === "alert" ? "text-tv-yellow" : "text-tv-blue"}>
+          <div className={t.variant === "alert" ? "text-tv-yellow" : "text-tv-blue-text"}>
             <Bell className="h-4 w-4" />
           </div>
           <div className="flex-1">

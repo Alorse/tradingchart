@@ -87,8 +87,8 @@ export function BuySellOverlay() {
         className={cn(
           "rounded border px-1.5 py-0.5 text-[9px] font-medium transition-colors",
           panelOpen
-            ? "border-tv-blue bg-tv-blue/20 text-tv-blue"
-            : "border-tv-border bg-tv-panel/80 text-tv-text-muted hover:border-tv-blue hover:text-tv-blue",
+            ? "border-tv-blue bg-tv-blue/20 text-tv-blue-text"
+            : "border-tv-border bg-tv-panel/80 text-tv-text-muted hover:border-tv-blue hover:text-tv-blue-text",
         )}
       >
         {panelOpen ? "▶ Panel" : "◀ Trade"}

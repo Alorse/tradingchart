@@ -23,7 +23,7 @@ export function Header() {
   const enterReplayPicking = useReplayStore((s) => s.enterPicking);
 
   return (
-    <header className="flex h-12 items-center justify-between border-b border-tv-border bg-tv-panel px-3">
+    <header className="flex h-10 items-center justify-between border-b border-tv-border bg-tv-panel px-3">
       <div className="flex items-center gap-1">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -34,20 +34,20 @@ export function Header() {
           className="mr-1 rounded-md"
         />
         <SymbolSelector />
-        <Separator orientation="vertical" className="h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
         <TimeframeSelector />
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <ChartTypeSelector />
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <IndicatorMenu />
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <Tooltip>
           <TooltipTrigger
             onClick={() => openAlertDialog(currentLivePrice ?? undefined)}
             aria-label="Create alert"
             className="flex h-7 items-center gap-1.5 rounded px-2 text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Bell className="h-3.5 w-3.5" />
+            <Bell className="size-5" />
             <span className="text-xs">Alert</span>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
@@ -62,7 +62,7 @@ export function Header() {
               aria-label="Bar replay"
               className="flex h-7 items-center gap-1.5 rounded px-2 text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
             >
-              <Rewind className="h-3.5 w-3.5" />
+              <Rewind className="size-5" />
               <span className="text-xs">Replay</span>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
@@ -71,14 +71,14 @@ export function Header() {
             </TooltipContent>
           </Tooltip>
         )}
-        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border" />
+        <Separator orientation="vertical" className="mx-1 h-6 bg-tv-border-strong" />
         <Tooltip>
           <TooltipTrigger
             onClick={() => void undo()}
             aria-label="Undo"
             className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Undo2 className="h-3.5 w-3.5" />
+            <Undo2 className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             <div className="font-medium">Undo</div>
@@ -91,7 +91,7 @@ export function Header() {
             aria-label="Redo"
             className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Redo2 className="h-3.5 w-3.5" />
+            <Redo2 className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             <div className="font-medium">Redo</div>
@@ -108,7 +108,7 @@ export function Header() {
             aria-label="Chart settings"
             className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Settings2 className="h-3.5 w-3.5" />
+            <Settings2 className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             Chart settings
@@ -116,7 +116,7 @@ export function Header() {
         </Tooltip>
         {user && (
           <>
-            <Separator orientation="vertical" className="h-6 bg-tv-border" />
+            <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
             <div className="flex items-center gap-2">
               <span className="max-w-[140px] truncate text-xs text-tv-text-muted">
                 {user.email}
@@ -126,7 +126,7 @@ export function Header() {
                   onClick={signOut}
                   className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-red"
                 >
-                  <LogOut className="h-3.5 w-3.5" />
+                  <LogOut className="size-5" />
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
                   Sign out

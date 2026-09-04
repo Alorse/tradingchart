@@ -154,7 +154,7 @@ function EMAForm({
               onClick={() => setLineWidth(w)}
               className={`h-6 w-6 rounded text-[10px] ${
                 lineWidth === w
-                  ? "bg-tv-blue/20 text-tv-blue"
+                  ? "bg-tv-blue/20 text-tv-blue-text"
                   : "text-tv-text-muted hover:bg-tv-panel-hover"
               }`}
             >
@@ -752,7 +752,7 @@ function AdxStyleSection() {
             key={w}
             onClick={() => onChange(w)}
             className={`h-6 w-6 rounded text-[10px] ${
-              value === w ? "bg-tv-blue/20 text-tv-blue" : "text-tv-text-muted hover:bg-tv-panel-hover"
+              value === w ? "bg-tv-blue/20 text-tv-blue-text" : "text-tv-text-muted hover:bg-tv-panel-hover"
             }`}
           >
             {w}
@@ -1096,7 +1096,7 @@ function LineWidthPicker({
           key={w}
           onClick={() => onChange(w)}
           className={`h-6 w-6 rounded text-[10px] ${
-            value === w ? "bg-tv-blue/20 text-tv-blue" : "text-tv-text-muted hover:bg-tv-panel-hover"
+            value === w ? "bg-tv-blue/20 text-tv-blue-text" : "text-tv-text-muted hover:bg-tv-panel-hover"
           }`}
         >
           {w}

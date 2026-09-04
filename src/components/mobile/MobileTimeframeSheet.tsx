@@ -72,7 +72,7 @@ export function MobileTimeframeSheet() {
                   onClick={() => select(t)}
                   className="flex-1 px-3 py-3 text-left active:bg-tv-panel-hover"
                 >
-                  <span className={cn("text-sm font-medium", active && "text-tv-blue")}>
+                  <span className={cn("text-sm font-medium", active && "text-tv-blue-text")}>
                     {TF_FULL[t]}
                   </span>
                 </button>

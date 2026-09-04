@@ -8,6 +8,7 @@ import { DrawHandle } from "./DrawHandle";
 import { useDragPoint } from "./use-drag-point";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: RectangleDrawing;
@@ -69,7 +70,7 @@ export function RectangleDraw({
     { onStart: snap, onMove: (p) => updateLive(drawing.id, p as Partial<RectangleDrawing>), onEnd: commitEnd },
   );
 
-  const borderColor = drawing.color ?? "#2962ff";
+  const borderColor = drawing.color ?? TV_PINE.blue;
   const stroke = borderColor;
   const strokeWidth = drawing.lineWidth ?? 1;
   const strokeDasharray = drawing.lineStyle === 1 ? "6 4" : drawing.lineStyle === 2 ? "2 4" : "none";

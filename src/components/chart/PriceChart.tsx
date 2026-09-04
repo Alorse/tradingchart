@@ -63,7 +63,7 @@ import { BandFillOverlay } from "./BandFillOverlay";
 import { computeKeyLevels } from "@/lib/indicators/keylevels";
 import type { SqueezePoint } from "@/lib/indicators/squeeze";
 import { xToTime, timeToX, timeframeToSeconds, timeframeLabel } from "@/lib/chart/coords";
-import { getTvColors, getTvFontFamily } from "@/lib/chart/theme";
+import { getTvColors, getTvFontFamily, TV_PINE, TV_STUDY } from "@/lib/chart/theme";
 import { useReplayStore } from "@/lib/replay/replay-store";
 import { ReplayToolbar } from "./ReplayToolbar";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
@@ -445,14 +445,14 @@ export function PriceChart({ symbol, timeframe }: Props) {
 
     const initChartType = useChartStore.getState().chartType;
     lineSeriesRef.current = chart.addSeries(LineSeries, {
-      color: "#2962ff",
+      color: TV_PINE.blue,
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
       visible: initChartType === "line",
     });
     areaSeriesRef.current = chart.addSeries(AreaSeries, {
-      lineColor: "#2962ff",
+      lineColor: TV_PINE.blue,
       topColor: "rgba(41,98,255,0.4)",
       bottomColor: "rgba(41,98,255,0.0)",
       lineWidth: 2,
@@ -1560,7 +1560,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       vmcWt1Ref.current = chartRef.current.addSeries(
         AreaSeries,
         {
-          lineColor: "#90caf9",
+          lineColor: TV_STUDY.wt1,
           topColor: "rgba(144, 202, 249, 0.6)",
           bottomColor: "rgba(144, 202, 249, 0.1)",
           lineWidth: 2,
@@ -1573,7 +1573,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       vmcWt2Ref.current = chartRef.current.addSeries(
         AreaSeries,
         {
-          lineColor: "#5b62e5",
+          lineColor: TV_STUDY.wt2,
           topColor: "rgba(91, 98, 229, 0.5)",
           bottomColor: "rgba(91, 98, 229, 0.08)",
           lineWidth: 2,
@@ -1612,7 +1612,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       vmcRsiRef.current = chartRef.current.addSeries(
         LineSeries,
         {
-          color: "#e040fb",
+          color: TV_STUDY.rsi,
           lineWidth: 2,
           priceLineVisible: false,
           lastValueVisible: false,
@@ -2070,7 +2070,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     svg.setAttribute("style", "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:15;overflow:visible");
     const pathEl = document.createElementNS(ns, "path");
     pathEl.setAttribute("fill", "none");
-    pathEl.setAttribute("stroke", isHighlighter ? "#ffeb3b" : "#ffffff");
+    pathEl.setAttribute("stroke", isHighlighter ? TV_PINE.highlighter : TV_PINE.white);
     pathEl.setAttribute("stroke-width", isHighlighter ? "14" : "2");
     pathEl.setAttribute("stroke-linecap", "round");
     pathEl.setAttribute("stroke-linejoin", "round");
@@ -2178,7 +2178,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
           symbol: symbolRef.current,
           points,
           logicals,
-          color: isHighlighter ? "#ffeb3b" : "#ffffff",
+          color: isHighlighter ? TV_PINE.highlighter : TV_PINE.white,
           lineWidth: isHighlighter ? 14 : 2,
         });
       }
@@ -2535,7 +2535,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "inBar",
             shape: "circle",
             size: 0.7,
-            color: p.crossUp ? "#00e676" : "#ff5252",
+            color: p.crossUp ? TV_STUDY.crossUp : TV_STUDY.crossDown,
           });
         }
         // Buy / Sell signals (bigger circle)
@@ -2545,7 +2545,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "belowBar",
             shape: "circle",
             size: 1.4,
-            color: "#3fff00",
+            color: TV_STUDY.buy,
             text: "B",
           });
         }
@@ -2555,7 +2555,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "aboveBar",
             shape: "circle",
             size: 1.4,
-            color: "#ff0000",
+            color: TV_STUDY.sell,
             text: "S",
           });
         }
@@ -2566,7 +2566,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "belowBar",
             shape: "circle",
             size: 1.6,
-            color: "#e2a400",
+            color: TV_STUDY.gold,
             text: "G",
           });
         }
@@ -2577,7 +2577,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "belowBar",
             shape: "arrowUp",
             size: 1,
-            color: "#00e676",
+            color: TV_STUDY.crossUp,
           });
         }
         if (p.wtBearDiv || p.rsiBearDiv) {
@@ -2586,7 +2586,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             position: "aboveBar",
             shape: "arrowDown",
             size: 1,
-            color: "#e60000",
+            color: TV_STUDY.bearDiv,
           });
         }
       }
@@ -3679,7 +3679,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               title="Auto scale"
               className={`flex h-5 w-5 items-center justify-center rounded border border-tv-border text-[10px] font-semibold transition-colors ${
                 autoScaleActive
-                  ? "bg-tv-blue/20 text-tv-blue"
+                  ? "bg-tv-blue/20 text-tv-blue-text"
                   : "bg-tv-panel text-tv-text-muted hover:text-tv-text"
               }`}
             >
@@ -3690,7 +3690,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               title={isLog ? "Switch to linear" : "Switch to logarithmic"}
               className={`flex h-5 w-5 items-center justify-center rounded border border-tv-border text-[10px] font-semibold transition-colors ${
                 isLog
-                  ? "bg-tv-blue/20 text-tv-blue"
+                  ? "bg-tv-blue/20 text-tv-blue-text"
                   : "bg-tv-panel text-tv-text-muted hover:text-tv-text"
               }`}
             >
@@ -3778,7 +3778,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           [order[i - 1], order[i]] = [order[i], order[i - 1]];
                           setMainPaneOrder(order);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === 0 ? "cursor-default text-tv-text-dim/30" : "text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-text"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${i === 0 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
                       >
                         ▲
                       </button>
@@ -3790,7 +3790,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           [order[i], order[i + 1]] = [order[i + 1], order[i]];
                           setMainPaneOrder(order);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${i === mainPaneEntries.length - 1 ? "cursor-default text-tv-text-dim/30" : "text-tv-text-dim hover:bg-tv-panel-hover hover:text-tv-text"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${i === mainPaneEntries.length - 1 ? "cursor-default text-tv-text-disabled" : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"}`}
                       >
                         ▼
                       </button>
@@ -3883,7 +3883,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                 <div key={entry.key} className="pointer-events-auto flex items-center gap-0.5">
                   {/* Drag handle — uses pointer events (not HTML5 DnD) for reliability */}
                   <div
-                    className={`cursor-grab select-none px-0.5 text-xs hover:text-white/60 active:cursor-grabbing ${dragKey === entry.key ? "text-white/80" : "text-white/30"}`}
+                    className={`cursor-grab select-none px-0.5 text-xs hover:text-white/60 active:cursor-grabbing ${dragKey === entry.key ? "text-white/80" : "text-white/40"}`}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       pointerDragRef.current = { key: entry.key };
@@ -3911,7 +3911,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           const newOrder = [...effectiveZOrder.filter((k) => k !== entry.key), entry.key];
                           setPaneZOrder(p.key, newOrder);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${isOnTop ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${isOnTop ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
                       >
                         ▲
                       </button>
@@ -3922,7 +3922,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                           const newOrder = [entry.key, ...effectiveZOrder.filter((k) => k !== entry.key)];
                           setPaneZOrder(p.key, newOrder);
                         }}
-                        className={`flex h-2.5 w-3.5 items-center justify-center rounded text-[8px] leading-none ${isOnBottom ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
+                        className={`flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none ${isOnBottom ? "cursor-default text-white/15" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
                       >
                         ▼
                       </button>

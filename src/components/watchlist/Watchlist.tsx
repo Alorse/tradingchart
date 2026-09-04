@@ -362,7 +362,7 @@ export function Watchlist() {
                 }}
                 className={cn(
                   "text-xs",
-                  w.id === activeWatchlistId && "bg-tv-blue/15 text-tv-blue",
+                  w.id === activeWatchlistId && "bg-tv-blue/15 text-tv-blue-text",
                 )}
               >
                 {w.name}
@@ -413,7 +413,7 @@ export function Watchlist() {
           <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-dim">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-tv-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-tv-text-muted">
         <span>Symbol</span>
         <SortHeader
           label="Price"
@@ -446,7 +446,7 @@ export function Watchlist() {
             </button>
             {batchFlagPickerOpen && (
               <div
-                className="absolute right-0 top-7 z-50 flex gap-1 rounded border border-tv-border bg-tv-panel p-1.5 shadow-lg"
+                className="absolute right-0 top-7 z-50 flex gap-1 rounded bg-tv-popup p-1.5 shadow-lg ring-1 ring-tv-border-strong"
                 onClick={(e) => e.stopPropagation()}
               >
                 {FLAG_COLORS.map((c) => (
@@ -457,7 +457,7 @@ export function Watchlist() {
                       setLastFlagColor(c);
                       setBatchFlagPickerOpen(false);
                     }}
-                    className="h-4 w-4 rounded-sm transition-opacity hover:opacity-80"
+                    className="h-5 w-5 rounded-sm transition-opacity hover:opacity-80"
                     style={{ backgroundColor: c }}
                     aria-label={`Set flag to ${c}`}
                   />
@@ -467,10 +467,10 @@ export function Watchlist() {
                     setWatchlistItemsFlag(active.id, Array.from(multiSelected), null);
                     setBatchFlagPickerOpen(false);
                   }}
-                  className="flex h-4 w-4 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
+                  className="flex h-5 w-5 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
                   aria-label="Remove flag"
                 >
-                  <X className="h-2.5 w-2.5" />
+                  <X className="size-4" />
                 </button>
               </div>
             )}
@@ -546,7 +546,7 @@ export function Watchlist() {
                   }}
                   onDoubleClick={() => startRename(item.id, item.value)}
                   className={cn(
-                    "group flex items-center gap-1 border-y border-tv-border bg-tv-bg/50 px-1 py-1",
+                    "group flex items-center gap-1 border-y border-tv-border bg-tv-panel-hover px-1 py-1",
                     !isSorted && "cursor-grab active:cursor-grabbing",
                     isDragTarget && "border-t-2 border-t-tv-blue",
                   )}
@@ -664,7 +664,7 @@ export function Watchlist() {
                   </button>
                   {flagPickerId === item.id && (
                     <div
-                      className="absolute left-0 top-5 z-50 flex gap-1 rounded border border-tv-border bg-tv-panel p-1.5 shadow-lg"
+                      className="absolute left-0 top-5 z-50 flex gap-1 rounded bg-tv-popup p-1.5 shadow-lg ring-1 ring-tv-border-strong"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {FLAG_COLORS.map((c) => (
@@ -675,7 +675,7 @@ export function Watchlist() {
                             setLastFlagColor(c);
                             setFlagPickerId(null);
                           }}
-                          className="h-4 w-4 rounded-sm transition-opacity hover:opacity-80"
+                          className="h-5 w-5 rounded-sm transition-opacity hover:opacity-80"
                           style={{ backgroundColor: c }}
                           aria-label={`Set flag to ${c}`}
                         />
@@ -685,10 +685,10 @@ export function Watchlist() {
                           if (active) setWatchlistItemFlag(active.id, item.id, null);
                           setFlagPickerId(null);
                         }}
-                        className="flex h-4 w-4 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
+                        className="flex h-5 w-5 items-center justify-center rounded-sm border border-tv-border text-tv-text-muted hover:text-tv-red"
                         aria-label="Remove flag"
                       >
-                        <X className="h-2.5 w-2.5" />
+                        <X className="size-4" />
                       </button>
                     </div>
                   )}
@@ -750,7 +750,7 @@ export function Watchlist() {
           ref={contextMenuRef}
           data-watchlist-context
           style={{ top: contextMenu.y, left: contextMenu.x, maxHeight: "80vh" }}
-          className="fixed z-50 min-w-44 overflow-y-auto rounded-md border border-tv-border bg-tv-panel py-1 shadow-xl"
+          className="fixed z-50 min-w-44 overflow-y-auto rounded-md bg-tv-popup py-1 shadow-xl ring-1 ring-tv-border-strong"
         >
           {contextMenu.itemId !== null && (
             <>
@@ -821,11 +821,14 @@ export function Watchlist() {
 /** Hollow circle badge marking an open Long/Short position on a watchlist row. */
 function PositionSideBadge({ side }: { side: "LONG" | "SHORT" }) {
   const isLong = side === "LONG";
-  const color = isLong ? "#2962ff" : "#ef5350";
   return (
     <span
-      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold"
-      style={{ borderColor: color, color }}
+      className={cn(
+        "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[9px] font-bold",
+        // Blue is *direction* (long), red is *movement* (down) — the badge for a
+        // short reuses the down color on purpose. See CLAUDE.md's color rule.
+        isLong ? "border-tv-blue text-tv-blue-text" : "border-tv-red text-tv-red",
+      )}
       title={isLong ? "Open long position" : "Open short position"}
     >
       {isLong ? "L" : "S"}
@@ -878,15 +881,15 @@ function SortHeader({
       title={`Sort by ${label}`}
       className={cn(
         "flex items-center justify-end gap-0.5 text-right uppercase tracking-wider transition-colors hover:text-tv-text",
-        active ? "text-tv-blue" : "text-tv-text-dim",
+        active ? "text-tv-blue-text" : "text-tv-text-muted",
       )}
     >
       <span>{label}</span>
       {active &&
         (dir === "asc" ? (
-          <ArrowUp className="h-2.5 w-2.5" />
+          <ArrowUp className="size-4" />
         ) : (
-          <ArrowDown className="h-2.5 w-2.5" />
+          <ArrowDown className="size-4" />
         ))}
     </button>
   );

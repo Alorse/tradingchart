@@ -10,6 +10,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { harmonicRatios } from "@/lib/drawings/geometry";
 import { translateDrawing } from "@/lib/drawings/translate";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: XabcdDrawing;
@@ -34,7 +35,7 @@ export function XabcdDraw({
   candleSeries,
   container,
 }: Props) {
-  const color = drawing.color ?? "#2962ff";
+  const color = drawing.color ?? TV_PINE.blue;
   const strokeWidth = drawing.lineWidth ?? 1.5;
   const { updateLive, commit } = useDrawings();
   const snapshotRef = useRef<XabcdDrawing | null>(null);
@@ -106,7 +107,7 @@ export function XabcdDraw({
             {LABELS[i]}
           </text>
           {ratioLabels.find((l) => l.i === i)?.text && (
-            <text x={p.x + 5} y={p.y + 12} fill="var(--color-tv-text-muted)" fontSize={10} fontFamily="var(--font-mono), monospace" style={{ pointerEvents: "none" }}>
+            <text x={p.x + 5} y={p.y + 12} fill="var(--color-tv-text-muted)" fontSize={11} fontFamily="var(--font-mono), monospace" style={{ pointerEvents: "none" }}>
               {ratioLabels.find((l) => l.i === i)!.text}
             </text>
           )}

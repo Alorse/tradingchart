@@ -11,6 +11,7 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import { fibExtensionLevels } from "@/lib/drawings/fib";
 import { formatPrice } from "@/lib/format";
 import { translateDrawing } from "@/lib/drawings/translate";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: FibExtensionDrawing;
@@ -30,12 +31,12 @@ interface Props {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-  "0": "#787b86",
-  "0.382": "#ffb74d",
-  "0.618": "#2962ff",
-  "1": "#787b86",
-  "1.618": "#26a69a",
-  "2.618": "#ab47bc",
+  "0": TV_PINE.fibGray,
+  "0.382": TV_PINE.fibOrange,
+  "0.618": TV_PINE.blue,
+  "1": TV_PINE.fibGray,
+  "1.618": TV_PINE.green,
+  "2.618": TV_PINE.fibPurple,
 };
 
 export function FibExtensionDraw({
@@ -103,7 +104,7 @@ export function FibExtensionDraw({
       <polyline
         points={`${ax},${ay} ${bx},${by} ${cx},${cy}`}
         fill="none"
-        stroke={drawing.color ?? "#787b86"}
+        stroke={drawing.color ?? TV_PINE.fibGray}
         strokeWidth={selected ? 1.5 : 1}
         strokeDasharray="4 3"
         className="drawing-hit"
@@ -122,7 +123,7 @@ export function FibExtensionDraw({
         const y = candleSeries?.priceToCoordinate(lvl.price) ?? null;
         if (y === null) return null;
         const label = lvl.ratio === 0 ? "0" : lvl.ratio === 1 ? "1" : String(lvl.ratio);
-        const color = LEVEL_COLORS[label] ?? "#787b86";
+        const color = LEVEL_COLORS[label] ?? TV_PINE.fibGray;
         return (
           <g key={lvl.ratio}>
             <line
@@ -139,7 +140,7 @@ export function FibExtensionDraw({
               x={left + 4}
               y={y - 3}
               fill={color}
-              fontSize={10}
+              fontSize={11}
               fontFamily="var(--font-mono), monospace"
               style={{ pointerEvents: "none" }}
             >
@@ -150,9 +151,9 @@ export function FibExtensionDraw({
       })}
       {selected && (
         <>
-          <DrawHandle x={ax} y={ay} color="#2962ff" selected onMouseDown={dragA} />
-          <DrawHandle x={bx} y={by} color="#2962ff" selected onMouseDown={dragB} />
-          <DrawHandle x={cx} y={cy} color="#2962ff" selected onMouseDown={dragC} />
+          <DrawHandle x={ax} y={ay} color={TV_PINE.blue} selected onMouseDown={dragA} />
+          <DrawHandle x={bx} y={by} color={TV_PINE.blue} selected onMouseDown={dragB} />
+          <DrawHandle x={cx} y={cy} color={TV_PINE.blue} selected onMouseDown={dragC} />
         </>
       )}
     </g>

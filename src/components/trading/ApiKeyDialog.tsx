@@ -88,7 +88,7 @@ export function ApiKeyDialog({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-tv-border px-4 py-3">
           <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-tv-blue" />
+            <KeyRound className="h-4 w-4 text-tv-blue-text" />
             <span className="text-sm font-semibold text-tv-text">{exLabel} API Credentials</span>
           </div>
           <button onClick={onClose} className="text-tv-text-muted hover:text-tv-text">
@@ -181,7 +181,7 @@ export function ApiKeyDialog({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          <p className="text-[10px] text-tv-text-dim">
+          <p className="text-[10px] text-tv-text-muted">
             {ex === "bybit"
               ? "Keys are stored locally in your browser. Use a Unified Trading Account key with Contract/Order + Position read-write permissions."
               : "Keys are stored locally in your browser. Enable “Futures Trading” permission on your API key."}

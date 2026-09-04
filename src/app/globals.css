@@ -149,17 +149,25 @@
   --ring: #2962ff;
 }
 
-/* Enforce a readable floor on the small arbitrary-size text utilities
-   (text-[Npx]) used throughout dense panels/toolbars/tables: nothing renders
-   below 11px, and the rest step up from there. Declared unlayered (outside
-   @layer) so it reliably overrides Tailwind's own generated utility rules
-   regardless of source order. */
+/* Collapse the small arbitrary-size text utilities (text-[Npx]) onto a real
+   ladder. The app writes a dozen different pixel values across dense panels,
+   toolbars and tables; left alone they render as near-identical steps with no
+   hierarchy, and pairs meant to contrast (a row label against its description)
+   land on the same size. Two steps only:
+
+     7/8/9px  -> 11px  micro: badges, superscript counts
+     10/11/12 -> 12px  dense: table cells, sub-labels, chip text
+
+   Body stays --text-xs (14px) and section titles --text-sm (15px), so there is
+   a real 2px gap between "dense" and "body" rather than six shades of small.
+   Declared unlayered (outside @layer) so it reliably overrides Tailwind's own
+   generated utility rules regardless of source order. */
 .text-\[7px\],
 .text-\[8px\],
 .text-\[9px\] { font-size: 11px; }
-.text-\[10px\] { font-size: 12px; }
+.text-\[10px\],
 .text-\[11px\],
-.text-\[12px\] { font-size: 13px; }
+.text-\[12px\] { font-size: 12px; }
 
 @layer base {
   * {

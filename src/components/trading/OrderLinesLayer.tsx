@@ -11,12 +11,13 @@ import { formatPrice } from "@/lib/format";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { pnlAtExit } from "@/lib/trading/sizing";
 import type { Order, Position } from "@/lib/binance/trading-types";
+import { TV_PINE } from "@/lib/chart/theme";
 
 /** Bybit-style colors. Limit is always blue regardless of side. */
-const LIMIT_COLOR = "#2962ff";
-const TP_COLOR = "#26a69a";
-const SL_COLOR = "#fbc02d";
-const LIQ_COLOR = "#ff5252";
+const LIMIT_COLOR = TV_PINE.blue;
+const TP_COLOR = TV_PINE.green;
+const SL_COLOR = TV_PINE.amber;
+const LIQ_COLOR = TV_PINE.liquidation;
 /** Gap kept between the labels/toolbar and the price scale on the right. */
 const AXIS_GAP = 48;
 
@@ -169,9 +170,9 @@ function LineRow({
   // SL pills are outlined: black fill, yellow border + yellow text. Others use a
   // solid colored fill with light text.
   const outlined = line.kind === "SL";
-  const pillFill = outlined ? "#0a0a0a" : color;
+  const pillFill = outlined ? TV_PINE.pillFill : color;
   const pillStroke = outlined ? color : "none";
-  const textColor = outlined ? color : "#fff";
+  const textColor = outlined ? color : TV_PINE.white;
   // The label + action button are drawn as ONE continuous box (rounded rect),
   // separated by a thin divider line, instead of two separate boxes with a gap.
   const boxRight = width - AXIS_GAP;
@@ -288,13 +289,13 @@ function LineRow({
               width={tipW}
               height={20}
               rx={3}
-              fill="#1e222d"
+              fill="var(--color-tv-popup)"
               stroke={color}
             />
             <text
               x={tipX + tipW / 2}
               y={y - 20}
-              fill="#e6e6e6"
+              fill="var(--color-tv-text)"
               fontSize={11}
               fontFamily="var(--font-mono), monospace"
               textAnchor="middle"
@@ -340,7 +341,7 @@ function bracketChip(
       >
         <rect
           x={x} y={yTop} width={w} height={h} rx={3}
-          fill="#0a0a0a" stroke={color} strokeDasharray="3,2"
+          fill={TV_PINE.pillFill} stroke={color} strokeDasharray="3,2"
         />
         <text
           x={x + w / 2} y={y + 4}
@@ -398,7 +399,7 @@ function EntryToolbarRow({
     w: mergedW,
     el: (x) => (
       <g key="pnl-close">
-        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill="#0a0a0a" stroke={entryColor} />
+        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} />
         <text x={x + pnlW / 2} y={y + 4} fill={pnlColor} fontSize={11} fontFamily="var(--font-mono), monospace" textAnchor="middle">{pnlStr}</text>
         <line x1={x + pnlW} x2={x + pnlW} y1={yTop} y2={yTop + H} stroke={entryColor} strokeWidth={1} />
         <text x={x + pnlW + closeW / 2} y={y + 4} fill={entryColor} fontSize={13} fontWeight="bold" textAnchor="middle">×</text>
@@ -424,7 +425,7 @@ function EntryToolbarRow({
     el: (x) => (
       <g key="size">
         <rect x={x} y={yTop} width={sizeW} height={H} rx={3} fill={entryColor} />
-        <text x={x + sizeW / 2} y={y + 4} fill="#fff" fontSize={11} fontWeight="bold" fontFamily="var(--font-mono), monospace" textAnchor="middle">{sizeStr}</text>
+        <text x={x + sizeW / 2} y={y + 4} fill={TV_PINE.white} fontSize={11} fontWeight="bold" fontFamily="var(--font-mono), monospace" textAnchor="middle">{sizeStr}</text>
       </g>
     ),
   });
@@ -451,7 +452,7 @@ function EntryToolbarRow({
         <g key="confirm" style={{ pointerEvents: "all", cursor: "pointer" }} onMouseDown={stopEvt}
            onClick={(e) => { stopEvt(e); pending.onConfirm(); }}>
           <rect x={x} y={yTop} width={62} height={H} rx={3} fill={entryColor} />
-          <text x={x + 31} y={y + 4} fill="#fff" fontSize={11} fontWeight="bold" textAnchor="middle">Confirm</text>
+          <text x={x + 31} y={y + 4} fill={TV_PINE.white} fontSize={11} fontWeight="bold" textAnchor="middle">Confirm</text>
         </g>
       ),
     });
@@ -460,8 +461,8 @@ function EntryToolbarRow({
       el: (x) => (
         <g key="discard" style={{ pointerEvents: "all", cursor: "pointer" }} onMouseDown={stopEvt}
            onClick={(e) => { stopEvt(e); pending.onDiscard(); }}>
-          <rect x={x} y={yTop} width={62} height={H} rx={3} fill="#2a2e39" stroke="#434651" />
-          <text x={x + 31} y={y + 4} fill="#d1d4dc" fontSize={11} textAnchor="middle">Discard</text>
+          <rect x={x} y={yTop} width={62} height={H} rx={3} fill="var(--color-tv-panel-hover)" stroke="var(--color-tv-border-strong)" />
+          <text x={x + 31} y={y + 4} fill="var(--color-tv-text)" fontSize={11} textAnchor="middle">Discard</text>
         </g>
       ),
     });
@@ -521,7 +522,7 @@ function PreviewOrderRow({
     w: mergedW,
     el: (x) => (
       <g key="qty-type-close">
-        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill="#0a0a0a" stroke={LIMIT_COLOR} />
+        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={LIMIT_COLOR} />
         <text x={x + qtyW / 2} y={y + 4} fill={LIMIT_COLOR} fontSize={11} fontWeight="bold" fontFamily="var(--font-mono), monospace" textAnchor="middle">{qtyStr}</text>
         <line x1={x + qtyW} x2={x + qtyW} y1={yTop} y2={yTop + H} stroke={LIMIT_COLOR} strokeWidth={1} />
         <text x={x + qtyW + typeW / 2} y={y + 4} fill={LIMIT_COLOR} fontSize={11} textAnchor="middle">{typeLabel}</text>
@@ -555,7 +556,7 @@ function PreviewOrderRow({
     el: (x) => (
       <g key="side">
         <rect x={x} y={yTop} width={sideW} height={H} rx={3} fill={sideColor} />
-        <text x={x + sideW / 2} y={y + 4} fill="#fff" fontSize={11} fontWeight="bold" textAnchor="middle">{sideLabel}</text>
+        <text x={x + sideW / 2} y={y + 4} fill={TV_PINE.white} fontSize={11} fontWeight="bold" textAnchor="middle">{sideLabel}</text>
       </g>
     ),
   });

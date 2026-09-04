@@ -17,6 +17,7 @@ import {
   Lock,
   MessageSquare,
   Minus,
+  MoreVertical,
   MoveRight,
   Pencil,
   Percent,
@@ -31,6 +32,12 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
@@ -171,7 +178,7 @@ export function ObjectTreePanel() {
         <span className="text-[11px] font-semibold uppercase tracking-wider text-tv-text-muted">
           Objects
         </span>
-        <span className="text-[11px] text-tv-text-dim">{items.length}</span>
+        <span className="text-[11px] text-tv-text-muted">{items.length}</span>
       </div>
 
       {multiSelected.size > 0 && (
@@ -225,7 +232,7 @@ export function ObjectTreePanel() {
       )}
 
       {items.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-dim">
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-tv-text-muted">
           No drawings on {symbol}. Pick a tool from the left toolbar to start.
         </div>
       ) : (
@@ -249,10 +256,9 @@ export function ObjectTreePanel() {
                 onDragEnd={() => { draggedId.current = null; setDragOverId(null); }}
                 onClick={(e) => handleRowClick(e, d)}
                 className={cn(
-                  "group flex cursor-grab items-center gap-1.5 px-2 py-1 text-[12px] transition-colors active:cursor-grabbing",
+                  "group flex cursor-grab items-center gap-1.5 px-2 py-1.5 text-[12px] transition-colors active:cursor-grabbing",
                   isSelected && !isMultiSelected ? "bg-tv-blue/15" : "hover:bg-tv-panel-hover",
                   isMultiSelected && "bg-tv-blue/25",
-                  d.hidden && "opacity-50",
                   dragOverId === d.id && "border-t-2 border-t-tv-blue",
                 )}
               >
@@ -262,57 +268,51 @@ export function ObjectTreePanel() {
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </span>
-                <span className="min-w-0 flex-1 truncate">{label}</span>
+                <span className={cn("min-w-0 flex-1 truncate", d.hidden && "text-tv-text-disabled")}>
+                  {label}
+                </span>
 
-                {/* Reorder */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void reorder(d.id, "front");
-                  }}
-                  disabled={isFirst}
-                  aria-label="Bring to front"
-                  title="Bring to front"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-                >
-                  <ChevronsUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void reorder(d.id, "forward");
-                  }}
-                  disabled={isFirst}
-                  aria-label="Bring forward"
-                  title="Bring forward"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void reorder(d.id, "backward");
-                  }}
-                  disabled={isLast}
-                  aria-label="Send backward"
-                  title="Send backward"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-                >
-                  <ArrowDown className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void reorder(d.id, "back");
-                  }}
-                  disabled={isLast}
-                  aria-label="Send to back"
-                  title="Send to back"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-                >
-                  <ChevronsDown className="h-3.5 w-3.5" />
-                </button>
+                {/* Reorder — behind one menu rather than four buttons per row */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Reorder"
+                    title="Reorder"
+                    className="flex h-6 w-6 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100 data-popup-open:opacity-100"
+                  >
+                    <MoreVertical className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-40 bg-tv-panel">
+                    <DropdownMenuItem
+                      disabled={isFirst}
+                      onClick={() => void reorder(d.id, "front")}
+                    >
+                      <ChevronsUp className="size-4" />
+                      Bring to front
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={isFirst}
+                      onClick={() => void reorder(d.id, "forward")}
+                    >
+                      <ArrowUp className="size-4" />
+                      Bring forward
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={isLast}
+                      onClick={() => void reorder(d.id, "backward")}
+                    >
+                      <ArrowDown className="size-4" />
+                      Send backward
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={isLast}
+                      onClick={() => void reorder(d.id, "back")}
+                    >
+                      <ChevronsDown className="size-4" />
+                      Send to back
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Hide / lock / delete */}
                 <button
@@ -323,7 +323,7 @@ export function ObjectTreePanel() {
                   aria-label={d.hidden ? "Show" : "Hide"}
                   title={d.hidden ? "Show" : "Hide"}
                   className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded hover:bg-tv-border hover:text-tv-text",
+                    "flex h-6 w-6 items-center justify-center rounded hover:bg-tv-panel-hover hover:text-tv-text",
                     d.hidden ? "text-tv-text-muted opacity-100" : "text-tv-text-dim opacity-0 group-hover:opacity-100",
                   )}
                 >
@@ -337,7 +337,7 @@ export function ObjectTreePanel() {
                   aria-label={d.locked ? "Unlock" : "Lock"}
                   title={d.locked ? "Unlock" : "Lock"}
                   className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded hover:bg-tv-border hover:text-tv-text",
+                    "flex h-6 w-6 items-center justify-center rounded hover:bg-tv-panel-hover hover:text-tv-text",
                     d.locked ? "text-tv-yellow opacity-100" : "text-tv-text-dim opacity-0 group-hover:opacity-100",
                   )}
                 >
@@ -350,7 +350,7 @@ export function ObjectTreePanel() {
                   }}
                   aria-label="Delete"
                   title="Delete"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-red group-hover:opacity-100"
+                  className="flex h-6 w-6 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

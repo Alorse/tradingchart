@@ -10,6 +10,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
 import { translateDrawing } from "@/lib/drawings/translate";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: FibRetracementDrawing;
@@ -26,13 +27,13 @@ interface Props {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-  "0": "#787b86",
-  "0.236": "#ef5350",
-  "0.382": "#ffb74d",
-  "0.5": "#26a69a",
-  "0.618": "#2962ff",
-  "0.786": "#ab47bc",
-  "1": "#787b86",
+  "0": TV_PINE.fibGray,
+  "0.236": TV_PINE.red,
+  "0.382": TV_PINE.fibOrange,
+  "0.5": TV_PINE.green,
+  "0.618": TV_PINE.blue,
+  "0.786": TV_PINE.fibPurple,
+  "1": TV_PINE.fibGray,
 };
 
 export function FibRetracementDraw({
@@ -113,7 +114,7 @@ export function FibRetracementDraw({
         const y = candleSeries?.priceToCoordinate(price) ?? null;
         if (y === null) return null;
         const label = level === 0 ? "0" : level === 1 ? "1" : String(level);
-        const color = LEVEL_COLORS[label] ?? "#787b86";
+        const color = LEVEL_COLORS[label] ?? TV_PINE.fibGray;
         return (
           <g key={level}>
             <line
@@ -131,7 +132,7 @@ export function FibRetracementDraw({
               x={left + 4}
               y={y - 3}
               fill={color}
-              fontSize={10}
+              fontSize={11}
               fontFamily="var(--font-mono), monospace"
               style={{ pointerEvents: "none" }}
             >
@@ -142,8 +143,8 @@ export function FibRetracementDraw({
       })}
       {selected && (
         <>
-          <DrawHandle x={ax} y={ay} color="#2962ff" selected onMouseDown={dragA} />
-          <DrawHandle x={bx} y={by} color="#2962ff" selected onMouseDown={dragB} />
+          <DrawHandle x={ax} y={ay} color={TV_PINE.blue} selected onMouseDown={dragA} />
+          <DrawHandle x={bx} y={by} color={TV_PINE.blue} selected onMouseDown={dragB} />
         </>
       )}
     </g>

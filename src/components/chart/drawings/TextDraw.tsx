@@ -6,6 +6,7 @@ import type { TextDrawing, Point } from "@/lib/drawings/types";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: TextDrawing;
@@ -29,7 +30,7 @@ export function TextDraw({
   candleSeries,
   container,
 }: Props) {
-  const color = drawing.color ?? "#e6e6e6";
+  const color = drawing.color ?? TV_PINE.text;
   const fontSize = drawing.fontSize ?? 14;
   const { updateLive, commit, remove } = useDrawings();
   const snapshotRef = useRef<TextDrawing | null>(null);
@@ -158,7 +159,7 @@ export function TextDraw({
           width={Math.max(20, ...lines.map((l) => l.length)) * fontSize * 0.62 + 2}
           height={lines.length * fontSize * 1.2 + 6}
           fill="none"
-          stroke="#2962ff"
+          stroke={TV_PINE.blue}
           strokeWidth={1}
           strokeDasharray="3 3"
           style={{ pointerEvents: "none" }}

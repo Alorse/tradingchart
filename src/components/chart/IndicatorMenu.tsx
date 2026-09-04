@@ -60,7 +60,7 @@ export function IndicatorMenu() {
         <Activity className="h-3.5 w-3.5" />
         <span>Indicators</span>
         {activeCount > 0 && (
-          <span className="ml-1 rounded bg-tv-blue/20 px-1.5 py-0.5 text-[10px] font-semibold text-tv-blue">
+          <span className="ml-1 rounded bg-tv-blue/20 px-1.5 py-0.5 text-[10px] font-semibold text-tv-blue-text">
             {activeCount}
           </span>
         )}
@@ -76,7 +76,7 @@ export function IndicatorMenu() {
             className="flex items-center justify-between text-xs"
           >
             <span>EMA — Exponential Moving Average</span>
-            <Plus className="h-3.5 w-3.5 text-tv-blue" />
+            <Plus className="h-3.5 w-3.5 text-tv-blue-text" />
           </DropdownMenuItem>
           {userEMAs.length > 0 && (
             <div className="px-2 py-1 text-[10px] text-tv-text-muted">
@@ -98,7 +98,7 @@ export function IndicatorMenu() {
                 className="flex items-center justify-between text-xs"
               >
                 <span>{i.label(config)}</span>
-                {indicators[i.key] && <Check className="h-3.5 w-3.5 text-tv-blue" />}
+                {indicators[i.key] && <Check className="h-3.5 w-3.5 text-tv-blue-text" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>

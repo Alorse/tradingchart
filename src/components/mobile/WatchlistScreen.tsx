@@ -500,7 +500,7 @@ export function WatchlistScreen() {
               }}
               className={cn(
                 "flex w-full items-center justify-between border-b border-tv-border/60 px-4 py-3 text-left text-sm",
-                w.id === activeWatchlistId ? "bg-tv-blue/15 text-tv-blue" : "text-tv-text active:bg-tv-panel-hover",
+                w.id === activeWatchlistId ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text active:bg-tv-panel-hover",
               )}
             >
               {w.name}
@@ -834,11 +834,14 @@ function SheetAction({
 /** Hollow circle badge marking an open Long/Short position on a watchlist row. */
 function PositionSideBadge({ side }: { side: "LONG" | "SHORT" }) {
   const isLong = side === "LONG";
-  const color = isLong ? "#2962ff" : "#ef5350";
   return (
     <span
-      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold"
-      style={{ borderColor: color, color }}
+      className={cn(
+        "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[9px] font-bold",
+        // Blue is *direction* (long), red is *movement* (down) — the badge for a
+        // short reuses the down color on purpose. See CLAUDE.md's color rule.
+        isLong ? "border-tv-blue text-tv-blue-text" : "border-tv-red text-tv-red",
+      )}
     >
       {isLong ? "L" : "S"}
     </span>
@@ -859,11 +862,11 @@ function SortHeader({
       onClick={onClick}
       className={cn(
         "flex items-center justify-end gap-0.5 text-right uppercase tracking-wider",
-        active ? "text-tv-blue" : "text-tv-text-dim",
+        active ? "text-tv-blue-text" : "text-tv-text-dim",
       )}
     >
       <span>{label}</span>
-      {active && (dir === "asc" ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />)}
+      {active && (dir === "asc" ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />)}
     </button>
   );
 }

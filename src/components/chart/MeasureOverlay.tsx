@@ -1,6 +1,7 @@
 "use client";
 
 import { formatPrice, formatVolume } from "@/lib/format";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   aX: number;
@@ -16,9 +17,9 @@ interface Props {
   isPreview: boolean;
 }
 
-const UP_STROKE = "#26a69a";
+const UP_STROKE = TV_PINE.green;
 const UP_FILL = "rgba(38, 166, 154, 0.18)";
-const DOWN_STROKE = "#ef5350";
+const DOWN_STROKE = TV_PINE.red;
 const DOWN_FILL = "rgba(239, 83, 80, 0.18)";
 
 export function MeasureOverlay({
@@ -117,7 +118,7 @@ export function MeasureOverlay({
           ...labelStyle,
           backgroundColor: stroke,
           borderColor: stroke,
-          color: "#ffffff",
+          color: TV_PINE.white,
         }}
       >
         <div>

@@ -188,7 +188,7 @@ export function VolumeProfileOverlay({
             <text
               x={r.label.x}
               y={r.y + r.h / 2 + 3}
-              fontSize={9}
+              fontSize={11}
               fill="var(--color-tv-text-muted, #8a8a8a)"
               textAnchor={r.label.anchor}
               fontFamily="var(--font-mono), monospace"
