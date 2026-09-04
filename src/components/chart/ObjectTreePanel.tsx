@@ -273,7 +273,7 @@ export function ObjectTreePanel() {
                   disabled={isFirst}
                   aria-label="Bring to front"
                   title="Bring to front"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
                 >
                   <ChevronsUp className="h-3.5 w-3.5" />
                 </button>
@@ -285,7 +285,7 @@ export function ObjectTreePanel() {
                   disabled={isFirst}
                   aria-label="Bring forward"
                   title="Bring forward"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
                 >
                   <ArrowUp className="h-3.5 w-3.5" />
                 </button>
@@ -297,7 +297,7 @@ export function ObjectTreePanel() {
                   disabled={isLast}
                   aria-label="Send backward"
                   title="Send backward"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
                 >
                   <ArrowDown className="h-3.5 w-3.5" />
                 </button>
@@ -309,7 +309,7 @@ export function ObjectTreePanel() {
                   disabled={isLast}
                   aria-label="Send to back"
                   title="Send to back"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-text group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
                 >
                   <ChevronsDown className="h-3.5 w-3.5" />
                 </button>
@@ -323,7 +323,7 @@ export function ObjectTreePanel() {
                   aria-label={d.hidden ? "Show" : "Hide"}
                   title={d.hidden ? "Show" : "Hide"}
                   className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded hover:bg-tv-border hover:text-tv-text",
+                    "flex h-5 w-5 items-center justify-center rounded hover:bg-tv-panel-hover hover:text-tv-text",
                     d.hidden ? "text-tv-text-muted opacity-100" : "text-tv-text-dim opacity-0 group-hover:opacity-100",
                   )}
                 >
@@ -337,7 +337,7 @@ export function ObjectTreePanel() {
                   aria-label={d.locked ? "Unlock" : "Lock"}
                   title={d.locked ? "Unlock" : "Lock"}
                   className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded hover:bg-tv-border hover:text-tv-text",
+                    "flex h-5 w-5 items-center justify-center rounded hover:bg-tv-panel-hover hover:text-tv-text",
                     d.locked ? "text-tv-yellow opacity-100" : "text-tv-text-dim opacity-0 group-hover:opacity-100",
                   )}
                 >
@@ -350,7 +350,7 @@ export function ObjectTreePanel() {
                   }}
                   aria-label="Delete"
                   title="Delete"
-                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-border hover:text-tv-red group-hover:opacity-100"
+                  className="flex h-5 w-5 items-center justify-center rounded text-tv-text-dim opacity-0 hover:bg-tv-panel-hover hover:text-tv-red group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
