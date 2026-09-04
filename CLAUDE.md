@@ -210,6 +210,24 @@ Not every desktop panel is safe to reuse as-is, though: `AlertsPanel.tsx`'s edit
 
 Known remaining gap: there's no mobile equivalent of the desktop "Objects" tab (`ObjectTreePanel.tsx`) for browsing/managing drawings as a list rather than tapping them on the canvas.
 
+### Color
+
+Two palettes, and mixing them up is the recurring mistake:
+
+- **`--tv-*` tokens** (`globals.css`, consumed as Tailwind `tv-*` utilities, read at runtime by `getTvColors()` in [src/lib/chart/theme.ts](src/lib/chart/theme.ts)) are the **UI chrome**. They retheme — there is a light theme — so nothing that renders app furniture should hardcode a hex. lightweight-charts paints to a canvas and can't take a `var()`, which is the whole reason `getTvColors()` exists; SVG overlays *are* in the document, so they can and do use `fill="var(--color-tv-…)"`.
+- **`TV_PINE` / `TV_STUDY`** (same file) are the **TradingView/Pine trading colors** — order lines, drawing defaults, study series. They deliberately disagree with the tokens (`TV_PINE.green` is `#26a69a`, `--tv-green` is `#089981`), and the `TV_PINE` group marked PERSISTED is **frozen**: those values get written into `user_drawings` rows the moment a drawing is created, so editing one wouldn't restyle old drawings, it would only make new ones disagree with them.
+
+**Semantic rule — direction is not movement.** These are two different axes and they use different colors on purpose:
+
+| Meaning | Color |
+|---|---|
+| **Direction**: long / buy side | **blue** (`tv-blue`, `TV_PINE.blue`) |
+| **Direction**: short / sell side | **red** |
+| **Movement**: up, gain, profit | **green** |
+| **Movement**: down, loss | **red** |
+
+So a long position's entry line is blue while its P&L is green when winning and red when losing — that is correct, not a bug, and it's why the watchlist's Long badge is blue rather than green. Red does double duty (short *and* down), which is fine because the two never label the same element. Before picking a color for something new, decide which axis it is on.
+
 ### Typography
 
 The app leans heavily on very small arbitrary text sizes (`text-[9px]`…`text-[12px]`). [src/app/globals.css](src/app/globals.css) overrides these **globally**, collapsing them onto a four-step ladder, and also raises Tailwind's `--text-xs`/`--text-sm` tokens:
