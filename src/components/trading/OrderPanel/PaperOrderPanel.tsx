@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useBookTicker } from "@/lib/binance/use-book-ticker";
+import { getBybitWS } from "@/lib/bybit/ws";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { qtyToSizings, sizingToQty, modeRequiresSl, type SizingCtx } from "@/lib/trading/sizing";
 import { isPerp } from "@/lib/binance/rest";
+import { paperFeedSource } from "@/lib/trading/paper-feed";
 import { getBaseAsset } from "@/components/watchlist/CoinIcon";
 import {
   defaultPaperOrderForm,
+  invalidBracketReason,
   isPaperOrderReady,
   paperFormToLimitRequest,
   paperFormToMarketRequest,
@@ -30,6 +33,34 @@ const PAPER_ORDER_TYPE_TABS: Array<{ key: "MARKET" | "LIMIT"; label: string }> =
   { key: "MARKET", label: "Market" },
   { key: "LIMIT", label: "Limit" },
 ];
+
+/**
+ * Venue-aware quote for the paper ticket: `useBookTicker` only ever carries
+ * Binance data (and now skips subscribing at all for anything else, see its
+ * own header comment), so a Bybit-charted or feedless symbol used to leave
+ * bid/ask permanently null with no explanation — `submit()` would then just
+ * silently no-op on a MARKET order (adversarial review finding 6). Bybit has
+ * no separate book-ticker stream (same reasoning as `BuySellOverlay`'s quote),
+ * so its last price stands in for both sides.
+ */
+function usePaperQuote(symbol: string): { bid: number | null; ask: number | null } {
+  const [bybitTick, setBybitTick] = useState<{ symbol: string; price: number } | null>(null);
+  const source = paperFeedSource(symbol);
+
+  useEffect(() => {
+    if (source !== "bybit") return;
+    return getBybitWS().subscribeMiniTickers([symbol], (t) => setBybitTick({ symbol, price: t.close }));
+  }, [symbol, source]);
+
+  const binanceBook = useBookTicker(symbol);
+
+  if (source === "bybit") {
+    if (bybitTick?.symbol !== symbol) return { bid: null, ask: null };
+    return { bid: bybitTick.price, ask: bybitTick.price };
+  }
+  if (source === "binance") return binanceBook;
+  return { bid: null, ask: null };
+}
 
 /**
  * Paper-mode order panel — same layout as the live `OrderPanel` (built from
@@ -57,9 +88,10 @@ export function PaperOrderPanel() {
   const lastEvents = usePaperTradingStore((s) => s.lastEvents);
 
   const symInfo = useSymbolInfo(symbol);
-  const { bid, ask } = useBookTicker(symbol);
+  const { bid, ask } = usePaperQuote(symbol);
   const perp = isPerp(symbol);
   const baseAsset = getBaseAsset(symbol);
+  const feedSource = paperFeedSource(symbol);
 
   const [form, setForm] = useState<PaperOrderForm>(() =>
     defaultPaperOrderForm(account.settings.defaultLeverage),
@@ -77,12 +109,15 @@ export function PaperOrderPanel() {
     () => ({
       entry: referencePrice ?? 0,
       sl,
-      leverage: form.leverage,
+      // Mirrors `paperFormToMarketRequest`'s leverage cap: the slider is
+      // hidden for a non-perp symbol, so the sizing preview shouldn't act
+      // like a leverage the actual submission will never apply.
+      leverage: perp ? form.leverage : 1,
       balanceUsd: account.balance,
       tickSize: symInfo.tickSize,
       stepSize: symInfo.stepSize,
     }),
-    [referencePrice, sl, form.leverage, account.balance, symInfo.tickSize, symInfo.stepSize],
+    [referencePrice, sl, perp, form.leverage, account.balance, symInfo.tickSize, symInfo.stepSize],
   );
 
   const qtyNum = parseFloat(form.qty) || 0;
@@ -103,8 +138,16 @@ export function PaperOrderPanel() {
 
   const lastReject = lastEvents.find((e) => e.type === "reject");
 
+  // Blocks submission (and explains why) instead of leaving `submit()` to
+  // silently no-op on a feedless symbol (finding 6) or leaving a wrong-side
+  // TP/SL to be dropped by the engine with no feedback (finding 7).
+  const blockedReason =
+    feedSource === null
+      ? "No live feed for this symbol in paper mode"
+      : invalidBracketReason(form, referencePrice ?? 0);
+
   function submit() {
-    if (!isPaperOrderReady(form)) return;
+    if (!isPaperOrderReady(form) || blockedReason !== null) return;
     if (form.type === "MARKET") {
       const price = form.side === "BUY" ? ask : bid;
       if (!price) return;
@@ -205,7 +248,7 @@ export function PaperOrderPanel() {
         qty={form.qty}
         priceLabel={priceLabel}
         isLoading={false}
-        blockedReason={null}
+        blockedReason={blockedReason}
         onSubmit={submit}
       />
     </div>
