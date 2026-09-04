@@ -398,7 +398,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         background: { color: initColors.bg },
         textColor: TV_COLORS.text,
         fontFamily: "var(--font-sans), Inter, system-ui, sans-serif",
-        fontSize: 12,
+        fontSize: 14,
         panes: { separatorColor: TV_COLORS.border, separatorHoverColor: TV_COLORS.border },
       },
       grid: {
@@ -412,7 +412,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       },
       rightPriceScale: {
         borderColor: TV_COLORS.border,
-        textColor: TV_COLORS.textMuted,
+        textColor: TV_COLORS.text,
         // Less headroom above the highest bar (default top is ~0.2, which on a
         // log scale squeezes the candles). Bottom leaves room for the volume overlay.
         scaleMargins: { top: 0.06, bottom: 0.08 },
