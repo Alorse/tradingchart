@@ -163,9 +163,9 @@ export const DEFAULT_KEY_LEVELS: KeyLevelsConfig = {
   daily:     { open: true,  prevOpen: false, prevHL: false, prevMid: false, color: "#08bcd4" },
   monday:    { range: true,  mid: true,                                     color: "#ffffff" },
   weekly:    { open: true,  prevOpen: true,  prevHL: true,  prevMid: true,  color: "#ffeb3b" },
-  monthly:   { open: true,  prevOpen: true,  prevHL: true,  prevMid: true,  color: "#26a69a" },
+  monthly:   { open: true,  prevOpen: true,  prevHL: true,  prevMid: true,  color: "#089981" },
   quarterly: { open: true,  prevOpen: false, prevHL: false, prevMid: false, color: "#ffa726" },
-  yearly:    { open: true,  prevOpen: false, currHL: false, currMid: false, color: "#ef5350" },
+  yearly:    { open: true,  prevOpen: false, currHL: false, currMid: false, color: "#f23645" },
   fourHour:  { open: false,                  prevHL: false, prevMid: false, color: "#ab47bc" },
 };
 
@@ -184,9 +184,9 @@ export interface AdxStyle {
 }
 
 export const DEFAULT_ADX_STYLE: AdxStyle = {
-  adxColor: "#787b86",
-  plusDiColor: "#26a69a",
-  minusDiColor: "#ef5350",
+  adxColor: "#8c8c8c",
+  plusDiColor: "#089981",
+  minusDiColor: "#f23645",
   keyLevelColor: "#ffffff",
   showAdx: true,
   showPlusDi: true,
@@ -200,19 +200,19 @@ export const DEFAULT_ADX_STYLE: AdxStyle = {
 export const INDICATOR_COLORS: Record<IndicatorKey, string> = {
   rsi: "#ab47bc",
   macd: "#2962ff",
-  volume: "#787b86",
-  adx: "#ffb74d",
+  volume: "#8c8c8c",
+  adx: "#ff9800",
   squeeze: "#2962ff",
   vumanchu: "#4994ec",
-  obv: "#ffb74d",
+  obv: "#ff9800",
   keylevels: "#08bcd4",
   bb: "#2962ff",
   vwap: "#00bcd4",
   vrvp: "#2962ff",
   stochrsi: "#2962ff",
   williamsr: "#ab47bc",
-  atr: "#ffb74d",
-  cci: "#26a69a",
+  atr: "#ff9800",
+  cci: "#089981",
   mfi: "#42a5f5",
 };
 
@@ -256,7 +256,7 @@ export const DEFAULT_VWAP_STYLE: VwapStyle = {
   color: "#00bcd4",
   lineWidth: 2,
   showBands: false,
-  bandColor: "#787b86",
+  bandColor: "#8c8c8c",
   showFill: false,
   fillOpacity: 0.06,
 };
@@ -299,10 +299,10 @@ export const DEFAULT_VOLUME_PROFILE: VolumeProfileConfig = {
   placement: "right",
   extendPocRight: true,
   showDevelopingPoc: false,
-  upColor: "#26a69a",
-  downColor: "#ef5350",
-  valueAreaUpColor: "#26a69a",
-  valueAreaDownColor: "#ef5350",
+  upColor: "#089981",
+  downColor: "#f23645",
+  valueAreaUpColor: "#089981",
+  valueAreaDownColor: "#f23645",
   totalColor: "#2962ff",
   pocColor: "#ff0000",
   pocLineWidth: 1,
@@ -322,11 +322,11 @@ export interface UserEMA {
 }
 
 const EMA_PALETTE = [
-  "#ffb74d",
+  "#ff9800",
   "#2962ff",
   "#ab47bc",
-  "#26a69a",
-  "#ef5350",
+  "#089981",
+  "#f23645",
   "#42a5f5",
   "#ec407a",
   "#ffee58",
@@ -347,14 +347,14 @@ export interface ChartColors {
 }
 
 export const DEFAULT_CHART_COLORS: ChartColors = {
-  bg: "#000000",
-  gridLines: "#0e0e0e",
-  bodyUp: "#26a69a",
-  bodyDown: "#ef5350",
-  borderUp: "#26a69a",
-  borderDown: "#ef5350",
-  wickUp: "#26a69a",
-  wickDown: "#ef5350",
+  bg: "#0f0f0f",
+  gridLines: "#2a2a2a",
+  bodyUp: "#089981",
+  bodyDown: "#f23645",
+  borderUp: "#089981",
+  borderDown: "#f23645",
+  wickUp: "#089981",
+  wickDown: "#f23645",
 };
 
 /** Per-indicator style overrides (colors, visibility) */
@@ -384,7 +384,7 @@ export const DEFAULT_SQUEEZE_STYLE: SqueezeStyle = {
   momentumIncNeg: "#620000",
   momentumDecNeg: "#d90606",
   squeezeOn: "#000000",
-  squeezeOff: "#787b86",
+  squeezeOff: "#8c8c8c",
   noSqueeze: "#2962ff",
   showMomentum: true,
   showSqueezeDots: true,
@@ -1331,7 +1331,7 @@ export const useChartStore = create<ChartState>()(
     }),
     {
       name: "tv-gratis-chart-state",
-      version: 6,
+      version: 7,
       migrate: (persisted, fromVersion) => {
         const p = persisted as Record<string, unknown>;
         if (fromVersion < 3 && Array.isArray(p.watchlist)) {
@@ -1369,6 +1369,36 @@ export const useChartStore = create<ChartState>()(
           p.indicators = { ...ALL_INDICATORS_FALSE, ...(p.indicators as object ?? {}) };
           p.hidden = { ...ALL_INDICATORS_FALSE, ...(p.hidden as object ?? {}) };
           p.config = { ...DEFAULT_CONFIG, ...(p.config as object ?? {}) };
+        }
+        // v7: the palette moved from pure black to TradingView's cold-gray ramp.
+        // A persisted chart-color set is the *old* palette, so an existing user
+        // would keep #0e0e0e grid lines and #26a69a candles on the new #0f0f0f
+        // background — invisible grid, mismatched candles. Reset the colors to
+        // the new defaults. Only the color-carrying fields of the style objects
+        // are overwritten: visibility toggles, line widths and the rest are user
+        // choices that have nothing to do with the palette.
+        if (fromVersion < 7) {
+          p.chartColors = { ...DEFAULT_CHART_COLORS };
+          const adxStyle = p.adxStyle as Record<string, unknown> | undefined;
+          if (adxStyle) {
+            adxStyle.adxColor = DEFAULT_ADX_STYLE.adxColor;
+            adxStyle.plusDiColor = DEFAULT_ADX_STYLE.plusDiColor;
+            adxStyle.minusDiColor = DEFAULT_ADX_STYLE.minusDiColor;
+          }
+          const squeezeStyle = p.squeezeStyle as Record<string, unknown> | undefined;
+          if (squeezeStyle) squeezeStyle.squeezeOff = DEFAULT_SQUEEZE_STYLE.squeezeOff;
+          const vwapStyle = p.vwapStyle as Record<string, unknown> | undefined;
+          if (vwapStyle) vwapStyle.bandColor = DEFAULT_VWAP_STYLE.bandColor;
+          const vp = p.volumeProfile as Record<string, unknown> | undefined;
+          if (vp) {
+            vp.upColor = DEFAULT_VOLUME_PROFILE.upColor;
+            vp.downColor = DEFAULT_VOLUME_PROFILE.downColor;
+            vp.valueAreaUpColor = DEFAULT_VOLUME_PROFILE.valueAreaUpColor;
+            vp.valueAreaDownColor = DEFAULT_VOLUME_PROFILE.valueAreaDownColor;
+          }
+          const keyLevels = p.keyLevels as Record<string, { color?: string }> | undefined;
+          if (keyLevels?.monthly) keyLevels.monthly.color = DEFAULT_KEY_LEVELS.monthly.color;
+          if (keyLevels?.yearly) keyLevels.yearly.color = DEFAULT_KEY_LEVELS.yearly.color;
         }
         return p;
       },
