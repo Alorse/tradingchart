@@ -111,3 +111,72 @@ export function getTvFontFamily(): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim();
   return v ? `${v}, ${FALLBACK_FONT_FAMILY}` : FALLBACK_FONT_FAMILY;
 }
+
+/**
+ * The Pine/trading color set: every hex the chart annotations and studies draw
+ * with, in one place.
+ *
+ * This is deliberately *not* derived from `getTvColors()`, and the two sets
+ * deliberately disagree (`TV_PINE.green` is `#26a69a`, `--tv-green` is
+ * `#089981`). The `--tv-*` tokens are UI chrome — they retheme with the app,
+ * light or dark. These are the TradingView/Pine conventions the trading layer
+ * has always drawn with, and the first group below is **persisted**: a
+ * drawing's color is written into its `user_drawings` row the moment it is
+ * created, so changing one of these values here would not restyle existing
+ * drawings, it would only make new ones disagree with old ones. Treat the
+ * `PERSISTED` values as frozen; the rest are free to retune.
+ *
+ * Direction vs. movement is a real distinction here — see the semantic-color
+ * rule in CLAUDE.md. `blue` is *long/buy*, `green` is *up/profit*.
+ */
+export const TV_PINE = {
+  // ── PERSISTED: written into stored drawing/order data. Do not change. ──
+  /** Limit orders, long/buy direction, rectangle fill. */
+  blue: "#2962ff",
+  /** Take-profit, and a drawing's target/up rail. */
+  green: "#26a69a",
+  /** A drawing's stop/down rail. */
+  red: "#ef5350",
+  /** Stop-loss order lines. */
+  amber: "#fbc02d",
+  /** Neutral stroke and label color for a new drawing. */
+  neutral: "#d1d4dc",
+
+  // ── Overlay chrome: drawn every frame, never stored. ──
+  /** Liquidation price line. */
+  liquidation: "#ff5252",
+  /** Magnet-snap marker on the placement preview. */
+  snap: "#ffb74d",
+  /** Brush drawn in highlighter mode. */
+  highlighter: "#ffeb3b",
+  /** Text/strokes that must read on any pill fill. */
+  white: "#ffffff",
+  /** Fill behind an outlined pill on the chart — darker than any panel. */
+  pillFill: "#0a0a0a",
+} as const;
+
+/**
+ * Study series colors (VuManChu Cipher B). Ported from the Pine source, which
+ * is why they don't sit on the `--tv-*` ramp — the study is recognisable by
+ * these exact colors. Not persisted, so they can be retuned freely.
+ */
+export const TV_STUDY = {
+  /** WaveTrend 1 area (light blue). */
+  wt1: "#90caf9",
+  /** WaveTrend 2 area (deeper indigo). */
+  wt2: "#5b62e5",
+  /** RSI line (vivid purple). */
+  rsi: "#e040fb",
+  /** Bullish cross dot and bull-divergence arrow. */
+  crossUp: "#00e676",
+  /** Bearish cross dot. */
+  crossDown: "#ff5252",
+  /** "B" buy signal. */
+  buy: "#3fff00",
+  /** "S" sell signal. */
+  sell: "#ff0000",
+  /** "G" gold-buy signal. */
+  gold: "#e2a400",
+  /** Bear-divergence arrow. */
+  bearDiv: "#e60000",
+} as const;

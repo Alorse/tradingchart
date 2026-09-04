@@ -4,12 +4,14 @@ import { useEffect, useRef } from "react";
 import type { ISeriesApi, IPriceLine } from "lightweight-charts";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { TV_PINE } from "@/lib/chart/theme";
 
-const LIMIT_COLOR = "#2962ff";
-const SELL_COLOR = "#ff5252";
-const TP_COLOR = "#26a69a";
-const SL_COLOR = "#fbc02d";
-const LIQ_COLOR = "#ff5252";
+/** Same five as `OrderLinesLayer` — both read them from the one Pine set. */
+const LIMIT_COLOR = TV_PINE.blue;
+const SELL_COLOR = TV_PINE.liquidation;
+const TP_COLOR = TV_PINE.green;
+const SL_COLOR = TV_PINE.amber;
+const LIQ_COLOR = TV_PINE.liquidation;
 
 interface Level {
   id: string;
