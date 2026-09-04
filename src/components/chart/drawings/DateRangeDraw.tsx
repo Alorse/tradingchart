@@ -9,6 +9,7 @@ import { useDragPoint } from "./use-drag-point";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { translateDrawing } from "@/lib/drawings/translate";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: DateRangeDrawing;
@@ -68,7 +69,7 @@ export function DateRangeDraw({
     { onStart: snap, onMove: (patch) => updateLive(drawing.id, patch), onEnd: commitEnd },
   );
 
-  const color = "#2962ff";
+  const color = TV_PINE.blue;
   const fill = `${color}14`;
   const stroke = color;
   const left = Math.min(xA, xB);

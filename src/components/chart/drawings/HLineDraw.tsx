@@ -7,6 +7,7 @@ import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: HLineDrawing;
@@ -31,7 +32,7 @@ export function HLineDraw({
   candleSeries,
   container,
 }: Props) {
-  const color = drawing.color ?? "#2962ff";
+  const color = drawing.color ?? TV_PINE.blue;
   const stroke = color;
   const strokeWidth = drawing.lineWidth ?? 1;
   const strokeDasharray = drawing.lineStyle === 1 ? "6 4" : drawing.lineStyle === 2 ? "2 4" : "none";
@@ -111,14 +112,14 @@ export function HLineDraw({
         <text
           x={8}
           y={y + 4}
-          fill="#ffffff"
+          fill={TV_PINE.white}
           fontSize={11}
           fontFamily="var(--font-mono), monospace"
         >
           {formatPrice(drawing.price)}
         </text>
         {drawing.alert?.enabled && (
-          <text x={84} y={y + 4} fill="#ffffff" fontSize={11}>
+          <text x={84} y={y + 4} fill={TV_PINE.white} fontSize={11}>
             🔔
           </text>
         )}

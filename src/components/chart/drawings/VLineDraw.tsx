@@ -6,6 +6,7 @@ import type { VLineDrawing } from "@/lib/drawings/types";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: VLineDrawing;
@@ -30,7 +31,7 @@ export function VLineDraw({
   candleSeries,
   container,
 }: Props) {
-  const color = drawing.color ?? "#2962ff";
+  const color = drawing.color ?? TV_PINE.blue;
   const stroke = color;
   const strokeWidth = drawing.lineWidth ?? 1;
   const strokeDasharray = drawing.lineStyle === 1 ? "6 4" : drawing.lineStyle === 2 ? "2 4" : "none";

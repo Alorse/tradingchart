@@ -141,6 +141,13 @@ export const TV_PINE = {
   amber: "#fbc02d",
   /** Neutral stroke and label color for a new drawing. */
   neutral: "#d1d4dc",
+  /** Default color for a text drawing — a touch brighter than `neutral`. */
+  text: "#e6e6e6",
+  /** Fib ladder's 0 and 1 rails, and the fallback for an unmapped level. */
+  fibGray: "#787b86",
+  /** The rest of the fib ladder, in Pine's order. */
+  fibOrange: "#ffb74d",
+  fibPurple: "#ab47bc",
 
   // ── Overlay chrome: drawn every frame, never stored. ──
   /** Liquidation price line. */
@@ -153,6 +160,11 @@ export const TV_PINE = {
   white: "#ffffff",
   /** Fill behind an outlined pill on the chart — darker than any panel. */
   pillFill: "#0a0a0a",
+  /** Text on a solid-filled position pill, which is always a light color. */
+  pillText: "#000000",
+  /** Drag-handle body and its ring. */
+  handleFill: "#0d0d0d",
+  handleStroke: "#4a1d8a",
 } as const;
 
 /**

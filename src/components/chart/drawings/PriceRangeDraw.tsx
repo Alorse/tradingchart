@@ -10,6 +10,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
 import { translateDrawing } from "@/lib/drawings/translate";
+import { TV_PINE } from "@/lib/chart/theme";
 
 interface Props {
   drawing: PriceRangeDrawing;
@@ -74,7 +75,7 @@ export function PriceRangeDraw({
   );
 
   const isUp = drawing.priceB >= drawing.priceA;
-  const baseColor = isUp ? "#26a69a" : "#ef5350";
+  const baseColor = isUp ? TV_PINE.green : TV_PINE.red;
   const fill = `${baseColor}1a`;
   const stroke = baseColor;
 
