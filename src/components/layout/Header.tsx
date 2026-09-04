@@ -47,7 +47,7 @@ export function Header() {
             aria-label="Create alert"
             className="flex h-7 items-center gap-1.5 rounded px-2 text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Bell className="h-3.5 w-3.5" />
+            <Bell className="size-5" />
             <span className="text-xs">Alert</span>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
@@ -62,7 +62,7 @@ export function Header() {
               aria-label="Bar replay"
               className="flex h-7 items-center gap-1.5 rounded px-2 text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
             >
-              <Rewind className="h-3.5 w-3.5" />
+              <Rewind className="size-5" />
               <span className="text-xs">Replay</span>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
@@ -78,7 +78,7 @@ export function Header() {
             aria-label="Undo"
             className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Undo2 className="h-3.5 w-3.5" />
+            <Undo2 className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             <div className="font-medium">Undo</div>
@@ -91,7 +91,7 @@ export function Header() {
             aria-label="Redo"
             className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Redo2 className="h-3.5 w-3.5" />
+            <Redo2 className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             <div className="font-medium">Redo</div>
@@ -108,7 +108,7 @@ export function Header() {
             aria-label="Chart settings"
             className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
           >
-            <Settings2 className="h-3.5 w-3.5" />
+            <Settings2 className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             Chart settings
@@ -126,7 +126,7 @@ export function Header() {
                   onClick={signOut}
                   className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-red"
                 >
-                  <LogOut className="h-3.5 w-3.5" />
+                  <LogOut className="size-5" />
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
                   Sign out
