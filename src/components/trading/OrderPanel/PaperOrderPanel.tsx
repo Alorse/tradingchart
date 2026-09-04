@@ -133,6 +133,10 @@ export function PaperOrderPanel() {
     if (!isFinite(risk) || risk <= 0) return;
     const newQty = sizingToQty(form.sizingMode, risk, ctx);
     const formatted = newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "";
+    // OrderPanel's identical effect writes `qty` back through a Zustand
+    // store action, which this lint rule doesn't recognize as setState; this
+    // panel's form is local useState, so the same reactive write trips it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (formatted !== form.qty) patchForm({ qty: formatted });
   }, [form.sizingMode, form.sizingInput, form.qty, sl, ctx, symInfo.quantityPrecision]);
 
