@@ -42,44 +42,49 @@ export function PaperPositionsPanel() {
     <div
       className={cn(
         "flex flex-col border-t border-tv-border bg-tv-panel text-tv-text",
-        fullscreen ? "absolute inset-0 z-40" : "",
+        fullscreen ? "fixed inset-0 z-40" : "",
       )}
       style={fullscreen ? {} : { maxHeight: collapsed ? 32 : "45vh", minHeight: 32 }}
     >
-      <button
-        onClick={() => setCollapsed((c) => !c)}
-        className="flex h-8 shrink-0 items-center gap-2 border-b border-tv-border px-3 text-[11px] font-semibold transition-colors hover:bg-tv-panel-hover"
-      >
-        <span className="inline-flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-tv-yellow" />
-          Paper Trading Account
-        </span>
-        {positions.length > 0 && (
-          <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue">
-            {positions.length} pos
+      <div className="flex h-8 shrink-0 items-center border-b border-tv-border text-[11px] font-semibold">
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex h-8 flex-1 items-center gap-2 px-3 transition-colors hover:bg-tv-panel-hover"
+        >
+          <span className="inline-flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-tv-yellow" />
+            Paper Trading Account
           </span>
-        )}
-        {restingOrders.length > 0 && (
-          <span className="rounded bg-tv-yellow/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-yellow">
-            {restingOrders.length} orders
-          </span>
-        )}
-        <span className="ml-auto flex items-center gap-1">
-          {!collapsed && (
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                setFullscreen((f) => !f);
-              }}
-              className="rounded p-1 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
-              role="button"
-            >
-              {fullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+          {positions.length > 0 && (
+            <span className="rounded bg-tv-blue/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-blue">
+              {positions.length} pos
             </span>
           )}
-          {collapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          {restingOrders.length > 0 && (
+            <span className="rounded bg-tv-yellow/20 px-1.5 py-0.5 text-[9px] font-bold text-tv-yellow">
+              {restingOrders.length} orders
+            </span>
+          )}
+        </button>
+        <span className="flex items-center gap-1 pr-3">
+          {!collapsed && (
+            <button
+              onClick={() => setFullscreen((f) => !f)}
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="rounded p-1 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
+            >
+              {fullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+            </button>
+          )}
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? "Expand" : "Collapse"}
+            className="rounded p-1 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
+          >
+            {collapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
         </span>
-      </button>
+      </div>
 
       {!collapsed && (
         <>
