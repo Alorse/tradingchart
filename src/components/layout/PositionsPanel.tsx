@@ -113,7 +113,7 @@ export function PositionsPanel() {
               value={unrealizedPnL.toFixed(2)}
               valueClass={unrealizedPnL >= 0 ? "text-tv-green" : "text-tv-red"}
             />
-            <span className="ml-auto text-[9px] uppercase tracking-wider text-tv-text-muted">
+            <span className="ml-auto text-[9px] uppercase text-tv-text-muted">
               {exchange} · {testnet ? "Testnet" : "Mainnet"}
             </span>
           </div>
@@ -156,7 +156,7 @@ export function PositionsPanel() {
 function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] uppercase tracking-wider text-tv-text-muted">{label}</span>
+      <span className="text-[9px] text-tv-text-muted">{label}</span>
       <span className={cn("font-mono text-xs tabular-nums", valueClass ?? "text-tv-text")}>
         {value}
       </span>
