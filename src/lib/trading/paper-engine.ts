@@ -80,10 +80,11 @@ export interface PaperOrder {
   reserved: number;
   /**
    * The decorated chart symbol (`.P` / `BYBIT:` intact) this order was placed
-   * from, i.e. what a live WS subscription needs — `symbol` above is already
-   * `cleanSym`'d and can't tell a Binance perp from a Bybit one sharing the
-   * same bare ticker. `null` when the request that created this order didn't
-   * carry one (a direct engine call outside the UI). See `paperFeedExposure`.
+   * from, i.e. what a live WS subscription needs — `symbol` above has had its
+   * venue prefix stripped (positions net across venues but not across
+   * spot/perp) and so can't tell a Binance perp from a Bybit one sharing the
+   * same ticker. `null` when the request that created this order didn't carry
+   * one (a direct engine call outside the UI). See `paperFeedExposure`.
    */
   feedSymbol: string | null;
   createdAt: number;

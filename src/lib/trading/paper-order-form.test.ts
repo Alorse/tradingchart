@@ -7,6 +7,9 @@ import {
   paperFormToLimitRequest,
   paperFormToMarketRequest,
 } from "./paper-order-form";
+import { createAccount, fillMarketOrder } from "./paper-engine";
+
+const NOW = 1_700_000_000_000;
 
 describe("defaultPaperOrderForm", () => {
   it("starts flat on MARKET/BUY with no brackets", () => {
@@ -41,7 +44,7 @@ describe("paperFormToMarketRequest / paperFormToLimitRequest", () => {
   it("carries side, qty and leverage through (leverage only applies to perps, see below)", () => {
     const form = { ...defaultPaperOrderForm(25), side: "SELL" as const, qty: "0.5" };
     const req = paperFormToMarketRequest(form, "BTCUSDT.P");
-    expect(req.symbol).toBe("BTCUSDT");
+    expect(req.symbol).toBe("BTCUSDT.P");
     expect(req.side).toBe("SELL");
     expect(req.qty).toBe(0.5);
     expect(req.leverage).toBe(25);
@@ -80,13 +83,30 @@ describe("paperFormToMarketRequest / paperFormToLimitRequest", () => {
     expect(marketReq.price).toBe(undefined);
   });
 
-  it("canonicalizes a decorated symbol to its bare exchange symbol (adversarial review finding 3)", () => {
+  it("canonicalizes a decorated symbol by stripping the venue prefix only, keeping .P (holistic review finding 4)", () => {
     const form = { ...defaultPaperOrderForm(10), qty: "1" };
-    expect(paperFormToMarketRequest(form, "BTCUSDT.P").symbol).toBe("BTCUSDT");
-    expect(paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P").symbol).toBe("SOLUSDT");
+    expect(paperFormToMarketRequest(form, "BTCUSDT").symbol).toBe("BTCUSDT");
+    expect(paperFormToMarketRequest(form, "BTCUSDT.P").symbol).toBe("BTCUSDT.P");
+    expect(paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P").symbol).toBe("SOLUSDT.P");
     expect(paperFormToLimitRequest({ ...form, type: "LIMIT" as const, price: "100" }, "BYBIT:SOLUSDT.P").symbol).toBe(
-      "SOLUSDT",
+      "SOLUSDT.P",
     );
+  });
+
+  it("gives spot and perp of one ticker distinct keys, so the engine can't net them (holistic review finding 4)", () => {
+    // Sized to fit the seed balance: the spot leg is forced to 1x, so its
+    // margin is the full notional.
+    const form = { ...defaultPaperOrderForm(10), qty: "0.1" };
+    const spot = paperFormToMarketRequest(form, "BTCUSDT");
+    const perp = paperFormToMarketRequest({ ...form, side: "SELL" as const }, "BTCUSDT.P");
+    expect(spot.symbol === perp.symbol).toBe(false);
+
+    // Netting is by `symbol` string equality inside the engine, so distinct
+    // keys are exactly what keeps these two fills from closing each other.
+    let account = fillMarketOrder(createAccount(), spot, 20_000, NOW).account;
+    account = fillMarketOrder(account, perp, 20_000, NOW + 1).account;
+    expect(account.positions).toHaveLength(2);
+    expect(account.history).toHaveLength(0);
   });
 
   it("forces leverage to 1 for a non-perp (spot) symbol regardless of the form's leverage (adversarial review finding 8)", () => {

@@ -1,5 +1,5 @@
 import { sourceKindOf } from "@/lib/symbols/source";
-import { cleanSym } from "@/lib/binance/rest";
+import { stripExchangePrefix } from "@/lib/symbols/prefix";
 import type { PaperAccount } from "./paper-engine";
 
 /**
@@ -35,28 +35,34 @@ export interface PaperFeedExposure {
  * feedless symbol today. `typeof` guards against a corrupted persisted value
  * of the wrong type reaching `sourceKindOf`, which assumes a string.
  *
- * Keyed by `cleanSym` (bare exchange symbol) rather than the decorated
- * feedSymbol itself: `evaluateTick` (see `paper-trading-store.ts`) matches
- * positions/orders by their *bare* `symbol`, so `BYBIT:SOLUSDT.P` and
- * `SOLUSDT.P` — two different feeds — would otherwise both drive the same
- * `SOLUSDT` mark, and whichever socket ticks last silently owns it (a Bybit
- * position priced off Binance spot). Only one decorated feedSymbol survives
- * per bare symbol, so at most one venue is ever subscribed for it — a
- * position's feed wins over a resting order's (positions are scanned first
- * and claim the bare symbol before orders are considered).
+ * Keyed by `stripExchangePrefix` rather than the decorated feedSymbol itself,
+ * and with the exact same key the engine stores on a position/order (see
+ * `paperFormToMarketRequest`): `evaluateTick` (in `paper-trading-store.ts`)
+ * matches positions/orders by that key, so `BYBIT:SOLUSDT.P` and `SOLUSDT.P`
+ * — one instrument on two venues — must resolve to a single owner, or
+ * whichever socket ticks last silently owns the mark (a Bybit position priced
+ * off Binance). Only one decorated feedSymbol survives per key, so at most
+ * one venue is ever subscribed for it — a position's feed wins over a resting
+ * order's (positions are scanned first and claim the key before orders are
+ * considered).
+ *
+ * The `.P` suffix stays *in* the key, since spot and perp are separate
+ * instruments with separate positions and separate feeds (holistic review
+ * finding 4) — dropping it here would resubscribe only one of the two and
+ * leave the other's mark frozen.
  */
 export function paperFeedExposure(account: PaperAccount): PaperFeedExposure {
   const owners = new Map<string, string>();
   for (const p of account.positions) {
     if (typeof p.feedSymbol === "string" && p.feedSymbol) {
-      const bare = cleanSym(p.feedSymbol);
-      if (!owners.has(bare)) owners.set(bare, p.feedSymbol);
+      const key = stripExchangePrefix(p.feedSymbol);
+      if (!owners.has(key)) owners.set(key, p.feedSymbol);
     }
   }
   for (const o of account.orders) {
     if (o.status === "NEW" && typeof o.feedSymbol === "string" && o.feedSymbol) {
-      const bare = cleanSym(o.feedSymbol);
-      if (!owners.has(bare)) owners.set(bare, o.feedSymbol);
+      const key = stripExchangePrefix(o.feedSymbol);
+      if (!owners.has(key)) owners.set(key, o.feedSymbol);
     }
   }
 

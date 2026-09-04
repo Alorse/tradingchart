@@ -146,14 +146,47 @@ describe("paper-trading-store actions", () => {
     const req = paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P");
     st().placeOrder(req, 100);
     expect(st().account.positions).toHaveLength(1);
-    expect(st().account.positions[0].symbol).toBe("SOLUSDT");
-    expect(st().marks.SOLUSDT).toBe(100);
+    // Venue prefix stripped, `.P` kept — see holistic review finding 4.
+    expect(st().account.positions[0].symbol).toBe("SOLUSDT.P");
+    expect(st().marks["SOLUSDT.P"]).toBe(100);
 
     // A tick keyed by the same canonical symbol (as `usePaperExposureFeed`
-    // now emits after cleaning) reaches the position it opened.
-    st().evaluateTick("SOLUSDT", 110);
+    // emits after stripping the venue prefix) reaches the position it opened.
+    st().evaluateTick("SOLUSDT.P", 110);
     expect(st().account.positions).toHaveLength(1);
-    expect(st().marks.SOLUSDT).toBe(110);
+    expect(st().marks["SOLUSDT.P"]).toBe(110);
+  });
+
+  it("keeps a spot position and a perp position on the same ticker separate (holistic review finding 4)", () => {
+    // Sized to fit the seed balance: the spot leg is forced to 1x, so its
+    // margin is the full notional.
+    const form = { ...defaultPaperOrderForm(10), qty: "0.1" };
+    // Spot long, then a perp sell of the same size: two instruments, so the
+    // sell must open a second (short) position rather than close the first.
+    st().placeOrder(paperFormToMarketRequest(form, "BTCUSDT"), 20_000);
+    st().placeOrder(
+      paperFormToMarketRequest({ ...form, side: "SELL" }, "BTCUSDT.P"),
+      20_000,
+    );
+
+    expect(st().account.positions).toHaveLength(2);
+    expect(st().account.positions.map((p) => p.symbol)).toEqual(["BTCUSDT", "BTCUSDT.P"]);
+    expect(st().account.positions.map((p) => p.side)).toEqual(["LONG", "SHORT"]);
+    expect(st().account.history).toHaveLength(0);
+
+    // And their marks stay independent: a perp tick can't reprice the spot leg.
+    st().evaluateTick("BTCUSDT.P", 21_000);
+    expect(st().marks["BTCUSDT.P"]).toBe(21_000);
+    expect(st().marks.BTCUSDT).toBe(20_000);
+  });
+
+  it("still nets one instrument charted from two venues (BYBIT: prefix only)", () => {
+    const form = { ...defaultPaperOrderForm(10), qty: "1" };
+    st().placeOrder(paperFormToMarketRequest(form, "SOLUSDT.P"), 100);
+    st().placeOrder(paperFormToMarketRequest({ ...form, side: "SELL" }, "BYBIT:SOLUSDT.P"), 100);
+
+    expect(st().account.positions).toHaveLength(0);
+    expect(st().account.history).toHaveLength(1);
   });
 
   it("updateSettings re-seeds the balance only while the account is untouched", () => {
