@@ -88,6 +88,31 @@ export function xToTime(
 }
 
 /**
+ * Convert a fractional logical index to a pixel x-coordinate.
+ *
+ * Public `logicalToCoordinate()` only accepts integers — the underlying
+ * `indexToCoordinate` returns 0 for fractional logicals, which would stack
+ * every off-grid anchor on the left edge of the chart. Drawing anchors are
+ * timestamps that usually don't sit on the charted timeframe's bar grid
+ * (a drawing made on 1h has half-hour-offset anchors once the chart flips
+ * to 4h), so we interpolate linearly between the two neighbouring bars,
+ * which is exactly what the integer mapping does between whole bars.
+ */
+export function fractionalLogicalToX(
+  chart: IChartApi,
+  logical: number,
+): number | null {
+  if (!Number.isFinite(logical)) return null;
+  const xLo = chart.timeScale().logicalToCoordinate(Math.floor(logical) as never);
+  if (xLo === null) return null;
+  const frac = logical - Math.floor(logical);
+  if (frac === 0) return xLo;
+  const xHi = chart.timeScale().logicalToCoordinate((Math.floor(logical) + 1) as never);
+  if (xHi === null) return xLo;
+  return xLo + frac * (xHi - xLo);
+}
+
+/**
  * Convert a unix-second timestamp to a pixel x-coordinate. Handles timestamps
  * past the last candle by using the logical-to-coordinate mapping.
  */
@@ -104,14 +129,14 @@ export function timeToX(
   const last = candles[candles.length - 1];
   if (t > last.time) {
     const barsAhead = (t - last.time) / intervalSec;
-    return chart.timeScale().logicalToCoordinate((candles.length - 1 + barsAhead) as never);
+    return fractionalLogicalToX(chart, candles.length - 1 + barsAhead);
   }
   if (t < first.time) {
     const barsBefore = (first.time - t) / intervalSec;
-    return chart.timeScale().logicalToCoordinate(-barsBefore as never);
+    return fractionalLogicalToX(chart, -barsBefore);
   }
   // Fractional timestamp between existing candles (e.g. brush strokes).
   // Approximate logical position via interval spacing.
   const logical = (t - first.time) / intervalSec;
-  return chart.timeScale().logicalToCoordinate(logical as never);
+  return fractionalLogicalToX(chart, logical);
 }

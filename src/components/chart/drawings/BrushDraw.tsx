@@ -2,7 +2,7 @@
 
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import type { BrushDrawing, HighlighterDrawing } from "@/lib/drawings/types";
-import { timeToX, timeframeToSeconds } from "@/lib/chart/coords";
+import { timeToX, fractionalLogicalToX, timeframeToSeconds } from "@/lib/chart/coords";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import { useChartStore } from "@/lib/store/chart-store";
 
@@ -15,23 +15,6 @@ interface Props {
 }
 
 type Pt = { x: number; y: number };
-
-/**
- * logicalToCoordinate in lightweight-charts snaps to integer bar centers —
- * it does NOT linearly interpolate for fractional logical indices.
- * This helper manually interpolates between the two neighboring integer bars,
- * giving a true sub-pixel float x position for any float logical value.
- */
-function logicalToXFloat(chart: IChartApi, logical: number): number | null {
-  const base = Math.floor(logical);
-  const frac = logical - base;
-  const x0 = chart.timeScale().logicalToCoordinate(base as never);
-  if (x0 === null) return null;
-  if (frac === 0) return x0 as number;
-  const x1 = chart.timeScale().logicalToCoordinate((base + 1) as never);
-  if (x1 === null) return x0 as number;
-  return (x0 as number) + frac * ((x1 as number) - (x0 as number));
-}
 
 function pointsToPath(pts: Pt[]): string {
   if (pts.length < 2) return "";
@@ -49,7 +32,7 @@ export function BrushDraw({ drawing, chart, candleSeries, selected, onSelect }: 
     // Use sub-bar float interpolation when logicals are stored; fall back to timeToX
     // for legacy drawings that predate the logicals field.
     const x = logical !== undefined
-      ? logicalToXFloat(chart, logical)
+      ? fractionalLogicalToX(chart, logical)
       : timeToX(chart, pt.time, globalCandlesRef.current, intervalSec);
     const y = candleSeries.priceToCoordinate(pt.price);
     if (x !== null && y !== null) pixels.push({ x: x as number, y: y as number });
