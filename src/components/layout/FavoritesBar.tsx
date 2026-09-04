@@ -101,7 +101,7 @@ export function FavoritesBar() {
       style={{ left: pos?.x ?? -9999, top: pos?.y ?? 8, userSelect: "none" }}
     >
       <div
-        className="flex cursor-grab items-center px-0.5 text-tv-text-dim hover:text-tv-text-muted active:cursor-grabbing"
+        className="flex cursor-grab items-center px-0.5 text-tv-text-muted hover:text-tv-text active:cursor-grabbing"
         onPointerDown={startMove}
         onPointerMove={onMove}
         onPointerUp={endMove}
