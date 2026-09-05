@@ -213,4 +213,12 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+  /* Scoped opt-out of the global 8px scrollbar above — for zones where a
+     visible scrollbar would eat vertical space (e.g. the mobile dock). */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
