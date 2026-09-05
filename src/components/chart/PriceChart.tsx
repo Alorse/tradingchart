@@ -77,7 +77,7 @@ import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
 import { useAlertMonitor } from "@/hooks/useAlertMonitor";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile, MOBILE_BREAKPOINT } from "@/hooks/useIsMobile";
 
 interface MeasurePoint {
   time: number;
@@ -111,6 +111,11 @@ const TV_COLORS = getTvColors();
 
 // Tools whose second point snaps to a horizontal/vertical axis while Shift is held.
 const AXIS_CONSTRAIN_TOOLS = new Set<string>(["trendline", "ray", "arrow"]);
+
+// Long-press timing for the touch equivalent of the right-click context menu
+// (mirrors WatchlistScreen's pointerdown-timer + slop pattern).
+const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP = 10;
 
 /**
  * With Shift held, snap `cur` to a horizontal or vertical line relative to
@@ -398,7 +403,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     // The `useIsMobile` hook's state is still false on this first effect pass
     // (its own effect hasn't run yet), so first paint would flash desktop
     // sizing on a phone unless read synchronously here instead.
-    const mobileNow = window.matchMedia("(max-width: 767px)").matches;
+    const mobileNow = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches;
     const chart = createChart(containerRef.current, {
       layout: {
         background: { color: initColors.bg },
@@ -1067,6 +1072,44 @@ export function PriceChart({ symbol, timeframe }: Props) {
     };
     containerRef.current.addEventListener("contextmenu", onContextMenu);
 
+    // Touch has no native long-press-to-contextmenu on a canvas, so open the
+    // same menu from a pointerdown timer instead — `contextmenu` above never
+    // fires on touch.
+    let pressTimer: ReturnType<typeof setTimeout> | null = null;
+    let pressStart: { x: number; y: number } | null = null;
+    const clearPressTimer = () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = null;
+    };
+    const onTouchPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      pressStart = { x: e.clientX, y: e.clientY };
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        if (!candleSeriesRef.current || !containerRef.current || !pressStart) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = pressStart.x - rect.left;
+        const y = pressStart.y - rect.top;
+        const price = candleSeriesRef.current.coordinateToPrice(y);
+        if (price === null || isNaN(price as number)) return;
+        const region: "chart" | "scale" = x > chart.timeScale().width() ? "scale" : "chart";
+        setChartContextMenu({ x, y, price: price as number, region });
+      }, LONG_PRESS_MS);
+    };
+    const onTouchPointerMove = (e: PointerEvent) => {
+      if (!pressStart || !pressTimer) return;
+      if (
+        Math.abs(e.clientX - pressStart.x) > LONG_PRESS_SLOP ||
+        Math.abs(e.clientY - pressStart.y) > LONG_PRESS_SLOP
+      ) {
+        clearPressTimer();
+      }
+    };
+    containerRef.current.addEventListener("pointerdown", onTouchPointerDown);
+    containerRef.current.addEventListener("pointermove", onTouchPointerMove);
+    containerRef.current.addEventListener("pointerup", clearPressTimer);
+    containerRef.current.addEventListener("pointercancel", clearPressTimer);
+
     recomputePaneOffsets();
     const initRect = containerRef.current.getBoundingClientRect();
     setContainerSize({ width: initRect.width, height: initRect.height });
@@ -1077,6 +1120,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
       ro.disconnect();
       containerRef.current?.removeEventListener("mouseup", onPaneMouseUp);
       containerRef.current?.removeEventListener("contextmenu", onContextMenu);
+      clearPressTimer();
+      containerRef.current?.removeEventListener("pointerdown", onTouchPointerDown);
+      containerRef.current?.removeEventListener("pointermove", onTouchPointerMove);
+      containerRef.current?.removeEventListener("pointerup", clearPressTimer);
+      containerRef.current?.removeEventListener("pointercancel", clearPressTimer);
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
@@ -3638,8 +3686,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
       />
 
       {/* A / L buttons per pane — positioned at the bottom-right of each
-          pane (just above the next pane separator / time axis) */}
-      {paneOffsets.map((p, paneIdx) => {
+          pane (just above the next pane separator / time axis), offset past
+          the right price scale so they don't sit on top of it. */}
+      {(() => {
+        const scaleWidth = chartRef.current?.priceScale("right").width() ?? 0;
+        return paneOffsets.map((p, paneIdx) => {
         // Resolve which indicator owns this pane (for log scale state)
         let key: "main" | IndicatorKey = "main";
         if (paneIdx > 0) {
@@ -3689,7 +3740,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             key={paneIdx}
             style={{
               top: p.top + p.height - 26,
-              right: 4,
+              right: scaleWidth + 8,
             }}
             className="pointer-events-auto absolute z-10 flex items-center gap-0.5"
           >
@@ -3717,7 +3768,8 @@ export function PriceChart({ symbol, timeframe }: Props) {
             </button>
           </div>
         );
-      })}
+        });
+      })()}
 
       {/* Top-left of main pane: symbol info + OHLC + Volume pill + EMA pills */}
       <div
@@ -3727,20 +3779,24 @@ export function PriceChart({ symbol, timeframe }: Props) {
         {/* Row 1: symbol · timeframe · Binance + live price inline; OHLC on hover */}
         <div className="flex flex-nowrap items-center gap-x-2 overflow-hidden whitespace-nowrap text-[12px]">
           <span className="font-semibold text-tv-text">{symbol}</span>
-          <span className="text-tv-text-muted">·</span>
-          <span className="font-semibold text-tv-text-muted">{timeframeLabel(timeframe)}</span>
-          <span className="text-tv-text-muted">·</span>
-          <span className="font-semibold text-tv-text-muted">
-            {(() => {
-              const k = resolveSource(symbol).kind;
-              if (k === "fred") return "FRED";
-              if (k === "coingecko") return "CoinGecko";
-              if (k === "yahoo") return "Yahoo";
-              if (k === "synthetic") return "Synthetic";
-              if (k === "bybit") return "Bybit";
-              return "Binance";
-            })()}
-          </span>
+          {!isMobile && (
+            <>
+              <span className="text-tv-text-muted">·</span>
+              <span className="font-semibold text-tv-text-muted">{timeframeLabel(timeframe)}</span>
+              <span className="text-tv-text-muted">·</span>
+              <span className="font-semibold text-tv-text-muted">
+                {(() => {
+                  const k = resolveSource(symbol).kind;
+                  if (k === "fred") return "FRED";
+                  if (k === "coingecko") return "CoinGecko";
+                  if (k === "yahoo") return "Yahoo";
+                  if (k === "synthetic") return "Synthetic";
+                  if (k === "bybit") return "Bybit";
+                  return "Binance";
+                })()}
+              </span>
+            </>
+          )}
           {!hover && lastPrice && (
             <>
               <span className={`font-semibold tabular-nums ${greenOrRed(lastPrice.pct)}`}>
@@ -3787,7 +3843,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             <>
               {mainPaneEntries.map((entry, i) => (
                 <div key={entry.key} className="pointer-events-auto flex items-center gap-0.5">
-                  {mainPaneEntries.length > 1 && (
+                  {mainPaneEntries.length > 1 && !isMobile && (
                     <div className="flex flex-col">
                       <button
                         title="Move up"

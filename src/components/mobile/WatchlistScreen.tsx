@@ -36,6 +36,7 @@ import { CoinIcon, getBaseAsset } from "@/components/watchlist/CoinIcon";
 import { FlagPennant } from "@/components/watchlist/FlagPennant";
 import { FLAG_COLORS } from "@/lib/watchlist/flags";
 import { MobileSheet } from "./MobileSheet";
+import { IconButton } from "./IconButton";
 
 interface Row {
   symbol: string;
@@ -234,6 +235,8 @@ export function WatchlistScreen() {
     setTab("chart");
   }
 
+  // TODO: this screen's window.prompt/confirm/alert calls (native dialogs) are
+  // deferred to a later pass, not migrated to an in-app dialog here.
   function addLabelHere(beforeId?: string) {
     if (!active) return;
     const text = window.prompt("Section label:");
@@ -289,7 +292,7 @@ export function WatchlistScreen() {
         </button>
         <button
           onClick={() => addLabelHere(undefined)}
-          className="rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Add label"
         >
           <Type className="h-4 w-4" />
@@ -299,7 +302,7 @@ export function WatchlistScreen() {
             setSymbolDialogInsertAfterId(null);
             openSymbolDialog(true);
           }}
-          className="rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Add symbol"
         >
           <Plus className="h-4 w-4" />
@@ -755,26 +758,26 @@ function SymbolRow({
         // the row's own pointerdown/up handlers, which drive long-press and
         // tap-to-open; without this, tapping × would also open the chart.
         <div className="flex items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-          <button
+          <IconButton
             onClick={(e) => {
               e.stopPropagation();
               onMore();
             }}
-            className="rounded p-1.5 text-tv-text-dim"
+            className="text-tv-text-dim"
             aria-label="More actions"
           >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          <button
+            <MoreHorizontal className="size-4" />
+          </IconButton>
+          <IconButton
             onClick={(e) => {
               e.stopPropagation();
               onRemove();
             }}
-            className="rounded p-1.5 text-tv-text-dim active:text-tv-red"
+            className="text-tv-text-dim active:text-tv-red"
             aria-label={`Remove ${s} from watchlist`}
           >
-            <X className="h-4 w-4" />
-          </button>
+            <X className="size-4" />
+          </IconButton>
         </div>
       )}
     </div>
@@ -861,7 +864,7 @@ function SortHeader({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center justify-end gap-0.5 text-right uppercase tracking-wider",
+        "flex min-h-9 items-center justify-end gap-0.5 text-right uppercase tracking-wider",
         active ? "text-tv-blue-text" : "text-tv-text-dim",
       )}
     >

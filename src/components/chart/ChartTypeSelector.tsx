@@ -136,7 +136,7 @@ export function ChartTypeSelector() {
                 : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text",
             )}
           >
-            <opt.Icon className="h-3.5 w-3.5" />
+            <opt.Icon className="size-5" />
           </button>
         );
       })}

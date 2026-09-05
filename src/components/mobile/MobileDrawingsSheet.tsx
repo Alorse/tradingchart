@@ -24,6 +24,10 @@ import {
  * desktop sidebar keeps at its bottom (magnet mode, per-drawing alert
  * toggle, clear drawings) plus a per-tool favorite star, since there's no
  * right-click to favorite from on touch.
+ *
+ * TODO: no mobile equivalent of desktop's `ObjectTreePanel` (browsing/
+ * managing drawings as a list rather than tapping them on the canvas) —
+ * larger scope, deferred to a later pass.
  */
 export function MobileDrawingsSheet() {
   const tool = useChartStore((s) => s.tool);

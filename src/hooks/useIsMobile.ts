@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
  * initial client render, then re-renders with the real value after mount.
  * This avoids hydration mismatches while keeping the component reactive.
  */
-const MOBILE_BREAKPOINT = 768;
+export const MOBILE_BREAKPOINT = 768;
 
 export function useIsMobile(breakpoint = MOBILE_BREAKPOINT): boolean {
   const [isMobile, setIsMobile] = useState(false);

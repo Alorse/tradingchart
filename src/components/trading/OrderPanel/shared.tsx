@@ -23,6 +23,7 @@ import {
   type SlCtx,
 } from "@/lib/trading/sizing";
 import { cn } from "@/lib/utils";
+import { formatPrice } from "@/lib/format";
 import type { OrderSide, SizingMode, SlMode } from "@/lib/binance/trading-types";
 
 export const SIZING_LABELS: Record<SizingMode, string> = {
@@ -161,7 +162,7 @@ export function BidAskBar({
       >
         <span className="text-[9px] uppercase tracking-wider text-tv-red">Sell</span>
         <span className="font-mono text-sm font-semibold text-tv-red tabular-nums">
-          {bid ? bid.toFixed(2) : "—"}
+          {bid ? formatPrice(bid) : "—"}
         </span>
       </button>
       <button
@@ -173,7 +174,7 @@ export function BidAskBar({
       >
         <span className="text-[9px] uppercase tracking-wider text-tv-blue-text">Buy</span>
         <span className="font-mono text-sm font-semibold text-tv-blue-text tabular-nums">
-          {ask ? ask.toFixed(2) : "—"}
+          {ask ? formatPrice(ask) : "—"}
         </span>
       </button>
     </div>
