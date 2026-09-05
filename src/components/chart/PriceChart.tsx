@@ -112,6 +112,11 @@ const TV_COLORS = getTvColors();
 // Tools whose second point snaps to a horizontal/vertical axis while Shift is held.
 const AXIS_CONSTRAIN_TOOLS = new Set<string>(["trendline", "ray", "arrow"]);
 
+// Long-press timing for the touch equivalent of the right-click context menu
+// (mirrors WatchlistScreen's pointerdown-timer + slop pattern).
+const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP = 10;
+
 /**
  * With Shift held, snap `cur` to a horizontal or vertical line relative to
  * `first` — whichever the drag is closer to, measured in screen pixels (so the
@@ -1067,6 +1072,44 @@ export function PriceChart({ symbol, timeframe }: Props) {
     };
     containerRef.current.addEventListener("contextmenu", onContextMenu);
 
+    // Touch has no native long-press-to-contextmenu on a canvas, so open the
+    // same menu from a pointerdown timer instead — `contextmenu` above never
+    // fires on touch.
+    let pressTimer: ReturnType<typeof setTimeout> | null = null;
+    let pressStart: { x: number; y: number } | null = null;
+    const clearPressTimer = () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = null;
+    };
+    const onTouchPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      pressStart = { x: e.clientX, y: e.clientY };
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        if (!candleSeriesRef.current || !containerRef.current || !pressStart) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = pressStart.x - rect.left;
+        const y = pressStart.y - rect.top;
+        const price = candleSeriesRef.current.coordinateToPrice(y);
+        if (price === null || isNaN(price as number)) return;
+        const region: "chart" | "scale" = x > chart.timeScale().width() ? "scale" : "chart";
+        setChartContextMenu({ x, y, price: price as number, region });
+      }, LONG_PRESS_MS);
+    };
+    const onTouchPointerMove = (e: PointerEvent) => {
+      if (!pressStart || !pressTimer) return;
+      if (
+        Math.abs(e.clientX - pressStart.x) > LONG_PRESS_SLOP ||
+        Math.abs(e.clientY - pressStart.y) > LONG_PRESS_SLOP
+      ) {
+        clearPressTimer();
+      }
+    };
+    containerRef.current.addEventListener("pointerdown", onTouchPointerDown);
+    containerRef.current.addEventListener("pointermove", onTouchPointerMove);
+    containerRef.current.addEventListener("pointerup", clearPressTimer);
+    containerRef.current.addEventListener("pointercancel", clearPressTimer);
+
     recomputePaneOffsets();
     const initRect = containerRef.current.getBoundingClientRect();
     setContainerSize({ width: initRect.width, height: initRect.height });
@@ -1077,6 +1120,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
       ro.disconnect();
       containerRef.current?.removeEventListener("mouseup", onPaneMouseUp);
       containerRef.current?.removeEventListener("contextmenu", onContextMenu);
+      clearPressTimer();
+      containerRef.current?.removeEventListener("pointerdown", onTouchPointerDown);
+      containerRef.current?.removeEventListener("pointermove", onTouchPointerMove);
+      containerRef.current?.removeEventListener("pointerup", clearPressTimer);
+      containerRef.current?.removeEventListener("pointercancel", clearPressTimer);
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
