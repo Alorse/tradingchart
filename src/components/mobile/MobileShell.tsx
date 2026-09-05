@@ -17,7 +17,7 @@ export function MobileShell() {
   const tab = useMobileStore((s) => s.tab);
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-tv-bg text-tv-text">
+    <div className="pt-safe fixed inset-0 flex flex-col bg-tv-bg text-tv-text">
       <main className="min-h-0 flex-1 overflow-hidden">
         {tab === "watchlist" && <WatchlistScreen />}
         {tab === "chart" && <ChartScreen />}

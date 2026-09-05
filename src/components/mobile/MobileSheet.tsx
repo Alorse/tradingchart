@@ -21,7 +21,7 @@ export function MobileSheet({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-tv-bg"
+      className="pt-safe fixed inset-0 z-50 flex flex-col bg-tv-bg"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       role="dialog"
       aria-modal="true"
