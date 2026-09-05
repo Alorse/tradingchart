@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Bell, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
+import { Bell, ChevronDown, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
@@ -15,9 +15,11 @@ import { cn } from "@/lib/utils";
  * Mobile chart screen.
  *
  * No top strip — the chart is full-bleed. A single bottom dock, stacked
- * directly above the app's bottom tab bar, holds symbol, timeframe, chart
- * type, drawings, indicators, bar replay, snapshot, alerts, undo and redo
- * (the last three migrated down from the removed top strip).
+ * directly above the app's bottom tab bar, is split into two zones:
+ * a fixed left zone (symbol, timeframe — dropdown-style chips: tap opens
+ * the picker sheet, swipe cycles inline) and a horizontally-scrolling right
+ * zone with everything else (chart type, drawings, indicators, replay,
+ * snapshot, alerts, undo, redo).
  *
  * The chart itself uses the existing desktop <PriceChart /> — it already
  * supports pinch-zoom and pan on touch devices. `ChartTypeSelector` and
@@ -66,97 +68,96 @@ export function ChartScreen() {
         <PriceChart symbol={symbol} timeframe={timeframe} />
       </div>
 
-      {/* Bottom dock — symbol, timeframe, chart type, drawings, indicators,
-          replay, snapshot, alerts, undo, redo. A grid (not scrollable)
-          stacked directly above the app's bottom tab bar. */}
-      <div className="grid h-12 shrink-0 grid-cols-10 border-t border-tv-border bg-tv-panel">
-        <div className="flex h-full items-center justify-center">
+      {/* Bottom dock, stacked directly above the app's bottom tab bar.
+          Left zone (symbol, timeframe) is fixed and never scrolls; the
+          right zone scrolls horizontally to fit the rest. */}
+      <div className="flex h-12 shrink-0 items-stretch border-t border-tv-border bg-tv-panel">
+        <div className="flex shrink-0 items-center gap-1 px-1">
           <SwipeChip
             label={symbol}
             onSwipe={nextSymbol}
             onTap={() => openSheet("symbolSearch")}
             ariaLabel="Symbol — tap to search, swipe to switch"
-            compact
           />
-        </div>
-        <div className="flex h-full items-center justify-center">
           <SwipeChip
             label={timeframe.toUpperCase()}
             onSwipe={nextTimeframe}
             onTap={() => openSheet("timeframe")}
             ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
-            compact
           />
         </div>
-        <div className="flex h-full items-center justify-center">
-          <ChartTypeSelector />
-        </div>
-        <button
-          onClick={() => openSheet("drawings")}
-          className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-          aria-label="Drawing tools"
-        >
-          <Pencil className="size-5" />
-        </button>
-        <button
-          onClick={() => openSheet("indicators")}
-          className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-          aria-label="Indicators"
-        >
-          <Sigma className="size-5" />
-        </button>
-        {!replayActive && (
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pr-2">
+          <div className="flex h-full w-11 shrink-0 items-center justify-center">
+            <ChartTypeSelector />
+          </div>
           <button
-            onClick={enterReplayPicking}
-            className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-            aria-label="Bar replay"
+            onClick={() => openSheet("drawings")}
+            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+            aria-label="Drawing tools"
           >
-            <Rewind className="size-5" />
+            <Pencil className="size-5" />
           </button>
-        )}
-        <div className="flex h-full items-center justify-center">
-          <SnapshotButton />
+          <button
+            onClick={() => openSheet("indicators")}
+            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+            aria-label="Indicators"
+          >
+            <Sigma className="size-5" />
+          </button>
+          {!replayActive && (
+            <button
+              onClick={enterReplayPicking}
+              className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+              aria-label="Bar replay"
+            >
+              <Rewind className="size-5" />
+            </button>
+          )}
+          <div className="flex h-full w-11 shrink-0 items-center justify-center">
+            <SnapshotButton />
+          </div>
+          <button
+            onClick={() => openSheet("alerts")}
+            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+            aria-label="Alerts"
+          >
+            <Bell className="size-5" />
+          </button>
+          <button
+            onClick={() => void undo()}
+            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+            aria-label="Undo"
+          >
+            <Undo2 className="size-5" />
+          </button>
+          <button
+            onClick={() => void redo()}
+            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+            aria-label="Redo"
+          >
+            <Redo2 className="size-5" />
+          </button>
         </div>
-        <button
-          onClick={() => openSheet("alerts")}
-          className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-          aria-label="Alerts"
-        >
-          <Bell className="size-5" />
-        </button>
-        <button
-          onClick={() => void undo()}
-          className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-          aria-label="Undo"
-        >
-          <Undo2 className="size-5" />
-        </button>
-        <button
-          onClick={() => void redo()}
-          className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-          aria-label="Redo"
-        >
-          <Redo2 className="size-5" />
-        </button>
       </div>
     </div>
   );
 }
 
 /**
- * A chip with swipe-up / swipe-down detection (and a tap fallback).
- * `touchAction: "none"` is required for the swipe gesture to be reliably
- * captured (a touch browser otherwise treats it as a scroll attempt), which
- * is safe here since the bottom dock doesn't scroll.
+ * A dropdown-style chip with swipe-up / swipe-down detection (and a tap
+ * fallback): value + a trailing chevron signal "tap opens a picker", while
+ * the swipe cycles the value inline without opening anything. `touchAction:
+ * "none"` is required for the swipe gesture to be reliably captured (a touch
+ * browser otherwise treats it as a scroll attempt) — safe here since this
+ * chip sits in the dock's fixed left zone, which never scrolls.
  */
 function SwipeChip({
-  label, onSwipe, onTap, ariaLabel, compact,
+  label, onSwipe, onTap, ariaLabel,
 }: {
   label: string;
   onSwipe: (dir: 1 | -1) => void;
   onTap: () => void;
   ariaLabel: string;
-  compact?: boolean;
 }) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const [active, setActive] = useState(false);
@@ -166,8 +167,7 @@ function SwipeChip({
       type="button"
       aria-label={ariaLabel}
       className={cn(
-        "select-none rounded border border-tv-border bg-tv-bg text-sm font-semibold transition-colors shrink-0",
-        compact ? "px-2 py-2 text-xs" : "px-2.5 py-1",
+        "flex shrink-0 select-none items-center gap-0.5 rounded border border-tv-border bg-tv-bg px-2 py-1.5 text-xs font-semibold transition-colors",
         active && "bg-tv-panel-hover",
       )}
       style={{ touchAction: "none" }}
@@ -197,7 +197,8 @@ function SwipeChip({
         setActive(false);
       }}
     >
-      {label}
+      <span className="max-w-[110px] truncate">{label}</span>
+      <ChevronDown className="size-3 shrink-0 text-tv-text-muted" />
     </button>
   );
 }
