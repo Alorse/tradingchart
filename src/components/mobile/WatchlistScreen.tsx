@@ -235,6 +235,8 @@ export function WatchlistScreen() {
     setTab("chart");
   }
 
+  // TODO: this screen's window.prompt/confirm/alert calls (native dialogs) are
+  // deferred to a later pass, not migrated to an in-app dialog here.
   function addLabelHere(beforeId?: string) {
     if (!active) return;
     const text = window.prompt("Section label:");
