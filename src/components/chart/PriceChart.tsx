@@ -3731,10 +3731,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
         {/* Row 1: symbol · timeframe · Binance + live price inline; OHLC on hover */}
         <div className="flex flex-nowrap items-center gap-x-2 overflow-hidden whitespace-nowrap text-[12px]">
           <span className="font-semibold text-tv-text">{symbol}</span>
-          <span className="text-tv-text-muted">·</span>
-          <span className="font-semibold text-tv-text-muted">{timeframeLabel(timeframe)}</span>
           {!isMobile && (
             <>
+              <span className="text-tv-text-muted">·</span>
+              <span className="font-semibold text-tv-text-muted">{timeframeLabel(timeframe)}</span>
               <span className="text-tv-text-muted">·</span>
               <span className="font-semibold text-tv-text-muted">
                 {(() => {
@@ -3795,7 +3795,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             <>
               {mainPaneEntries.map((entry, i) => (
                 <div key={entry.key} className="pointer-events-auto flex items-center gap-0.5">
-                  {mainPaneEntries.length > 1 && (
+                  {mainPaneEntries.length > 1 && !isMobile && (
                     <div className="flex flex-col">
                       <button
                         title="Move up"
