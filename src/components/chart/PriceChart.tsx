@@ -3550,7 +3550,15 @@ export function PriceChart({ symbol, timeframe }: Props) {
         />
       )}
       {tradingMode === "paper" && (
-        <PaperOrderLinesLayer candleSeries={candleSeriesRef.current} symbol={symbol} />
+        <PaperOrderLinesLayer
+          chart={chartRef.current}
+          candleSeries={candleSeriesRef.current}
+          container={containerRef.current}
+          width={containerSize.width}
+          mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
+          renderTick={renderTick}
+          symbol={symbol}
+        />
       )}
 
       {indicators.keylevels && !hidden.keylevels && (

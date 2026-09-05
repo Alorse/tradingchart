@@ -13,6 +13,7 @@ import {
   placeLimitOrder,
   positionRoi,
   resetAccount,
+  reversePosition,
   setBrackets,
   totalUnrealizedPnl,
   unrealizedPnl,
@@ -991,6 +992,77 @@ describe("feedSymbol", () => {
     ).account;
     a = evaluateTick(a, "BTCUSDT", 18_900, NOW + 1).account;
     expect(pos(a).feedSymbol).toBe("BTCUSDT.P");
+  });
+});
+
+describe("reversePosition", () => {
+  it("is a no-op on a flat symbol", () => {
+    const a = acct();
+    const res = reversePosition(a, "BTCUSDT", 20_000, NOW);
+    expect(res.account).toBe(a);
+    expect(res.events).toHaveLength(0);
+  });
+
+  it("flips the full position to the opposite side at the same size", () => {
+    const a = openLong(acct(), 20_000, 1, 10);
+    const res = reversePosition(a, "BTCUSDT", 21_000, NOW + 1);
+    const p = pos(res.account);
+    expect(p.side).toBe("SHORT");
+    expect(p.qty).toBe(1);
+    expect(p.entryPrice).toBe(21_000);
+    expect(p.leverage).toBe(10);
+    // A close (booking the long's realized P&L) plus a fill for the flip.
+    expect(res.events.some((e) => e.type === "close")).toBe(true);
+    expect(res.events.some((e) => e.type === "fill")).toBe(true);
+  });
+
+  it("nets a partial reverse down to a smaller remainder on the original side", () => {
+    // qty=10 @ 200 on 10x margins only 200 — small enough to fit the 10,000
+    // seed balance several times over.
+    const a = openLong(acct(), 200, 10, 10);
+    // Reversing 4 of 10: closes 8 (2x the reverse qty) off the long, leaving
+    // 2 still LONG — the netting-consistent result of "flip 4 units".
+    const res = reversePosition(a, "BTCUSDT", 205, NOW + 1, 4);
+    const p = pos(res.account);
+    expect(p.side).toBe("LONG");
+    expect(p.qty).toBeCloseTo(2, 9);
+    expect(p.entryPrice).toBe(200); // remainder keeps its original entry
+  });
+
+  it("nets a partial reverse past the midpoint into a smaller opposite position", () => {
+    const a = openLong(acct(), 200, 10, 10);
+    // Reversing 8 of 10: order qty is 16, so the full 10 is closed and 6
+    // opens fresh on the SHORT side.
+    const res = reversePosition(a, "BTCUSDT", 205, NOW + 1, 8);
+    const p = pos(res.account);
+    expect(p.side).toBe("SHORT");
+    expect(p.qty).toBeCloseTo(6, 9);
+    expect(p.entryPrice).toBe(205);
+  });
+
+  it("books the long's floating profit into realized P&L on a full reverse", () => {
+    const a = openLong(acct(), 20_000, 1, 10);
+    const before = a.balance;
+    const res = reversePosition(a, "BTCUSDT", 22_000, NOW + 1);
+    const closeEvent = res.events.find((e) => e.type === "close");
+    if (closeEvent?.type !== "close") throw new Error("expected a close event");
+    // Gross P&L on the closed long: (22,000 - 20,000) * 1 = 2,000, fees aside.
+    expect(closeEvent.trade.grossPnl).toBeCloseTo(2_000, 6);
+    expect(closeEvent.trade.realizedPnl).toBeGreaterThan(0);
+    // Balance moves by the released margin + realized P&L, minus the new
+    // position's margin + opening fee — net positive given the size of the move.
+    expect(res.account.balance).toBeGreaterThan(before);
+  });
+
+  it("rejects the whole flip when closing at the reversal price would overdraw the account", () => {
+    // A loss far beyond the position's own margin (well past its liquidation
+    // price — reachable here since `reversePosition` doesn't itself gate on
+    // liquidation) must refuse the fill atomically rather than leave the
+    // account partway through a flip.
+    const a = openLong(acct(), 20_000, 1, 10);
+    const res = reversePosition(a, "BTCUSDT", 1_000, NOW + 1);
+    expect(res.account).toBe(a);
+    expect(res.events).toEqual([{ type: "reject", symbol: "BTCUSDT", message: "Insufficient paper balance" }]);
   });
 });
 

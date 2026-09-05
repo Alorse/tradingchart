@@ -789,6 +789,48 @@ export function closePosition(
 }
 
 /**
+ * Flip `qty` (default: the whole position) from one side to the other in a
+ * single netting fill: close it at `price`, pay the exit fee, then reopen the
+ * same size on the opposite side at the same price and leverage, margined
+ * fresh off that price — exactly what submitting an order of `2 * qty` on the
+ * closing side does to `applyFill`'s existing netting logic (a `qty` equal to
+ * the full position reduces it to zero and opens the remainder on the other
+ * side; a smaller `qty` nets down to a smaller remainder on whichever side
+ * ends up larger). Reusing that path rather than hand-rolling a close+open
+ * pair is what keeps balance/margin consistent — a partial reverse that
+ * cannot afford its reopened leg is rejected atomically, same as any other
+ * fill. Brackets don't carry over, since TP/SL set for one direction usually
+ * doesn't make sense for the other. A flat symbol (no position) is a no-op,
+ * not a reject — there is nothing to reverse.
+ */
+export function reversePosition(
+  account: PaperAccount,
+  symbol: string,
+  price: number,
+  now: number,
+  qty?: number,
+): EngineResult {
+  const position = account.positions.find((p) => p.symbol === symbol);
+  if (!position || !isPositive(price)) return { account, events: [] };
+  const reverseQty = qty === undefined ? position.qty : Math.min(qty, position.qty);
+  if (!isPositive(reverseQty)) return { account, events: [] };
+
+  return applyFill(account, {
+    symbol,
+    side: closingSide(position.side),
+    qty: reverseQty * 2,
+    price,
+    leverage: position.leverage,
+    feeRate: account.settings.takerFeeRate,
+    tp: null,
+    sl: null,
+    feedSymbol: position.feedSymbol,
+    orderId: null,
+    now,
+  });
+}
+
+/**
  * Attach or clear a position's brackets. Absent keys are left alone. Both
  * the resulting tp and sl are re-validated against `referencePrice` (the
  * caller's current mark for the symbol — the store passes the last live

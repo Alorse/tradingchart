@@ -91,6 +91,30 @@ describe("paper-trading-store actions", () => {
     expect(st().account.balance).toBeGreaterThan(DEFAULT_PAPER_SETTINGS.seedBalance);
   });
 
+  it("reversePosition flips the position at the last known mark", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    st().evaluateTick("BTCUSDT", 21_000);
+    st().reversePosition("BTCUSDT");
+    expect(st().account.positions).toHaveLength(1);
+    expect(st().account.positions[0].side).toBe("SHORT");
+    expect(st().account.positions[0].entryPrice).toBe(21_000);
+    expect(st().account.history).toHaveLength(1);
+  });
+
+  it("reversePosition is a no-op with no mark and no explicit price", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    usePaperTradingStore.setState({ marks: {} });
+    const before = st().account;
+    st().reversePosition("BTCUSDT");
+    expect(st().account).toBe(before);
+  });
+
+  it("setPnlDisplayMode updates the persisted preference", () => {
+    expect(st().pnlDisplayMode).toBe("MONEY");
+    st().setPnlDisplayMode("PERCENT");
+    expect(st().pnlDisplayMode).toBe("PERCENT");
+  });
+
   it("setBrackets attaches TP/SL that later ticks trigger", () => {
     st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
     st().setBrackets("BTCUSDT", { tp: 21_000, sl: 19_500 });
@@ -227,6 +251,24 @@ describe("paper-trading-store persistence", () => {
     expect(st().account.positions).toHaveLength(1);
     expect(st().account.positions[0].entryPrice).toBe(20_000);
     expect(st().account.balance).toBeCloseTo(7_990, 6);
+  });
+
+  it("persists pnlDisplayMode across a rehydrate, ignoring an unknown value", async () => {
+    st().setPnlDisplayMode("TICKS");
+    const raw = localStorage.getItem(PAPER_STORAGE_KEY);
+    usePaperTradingStore.setState({ pnlDisplayMode: "MONEY" });
+    localStorage.setItem(PAPER_STORAGE_KEY, raw as string);
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().pnlDisplayMode).toBe("TICKS");
+
+    // An unrecognized value falls back to whatever the store currently holds
+    // instead of rendering an unmapped unit.
+    const corrupted = JSON.parse(raw as string) as { state: Record<string, unknown> };
+    corrupted.state.pnlDisplayMode = "BOGUS";
+    localStorage.setItem(PAPER_STORAGE_KEY, JSON.stringify(corrupted));
+    usePaperTradingStore.setState({ pnlDisplayMode: "PERCENT" });
+    await usePaperTradingStore.persist.rehydrate();
+    expect(st().pnlDisplayMode).toBe("PERCENT");
   });
 
   it("rehydrating a legacy blob without an account falls back to the seed", async () => {

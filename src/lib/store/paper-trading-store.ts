@@ -12,6 +12,7 @@ import {
   evaluateTick as engineEvaluateTick,
   fillMarketOrder,
   placeLimitOrder as enginePlaceLimitOrder,
+  reversePosition as engineReversePosition,
   setBrackets as engineSetBrackets,
   updateSettings as engineUpdateSettings,
 } from "@/lib/trading/paper-engine";
@@ -25,6 +26,8 @@ import type {
   PaperSettings,
   PaperTrade,
 } from "@/lib/trading/paper-engine";
+import { PNL_DISPLAY_MODES } from "@/lib/trading/paper-position-display";
+import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 
 /**
  * Simulated trading account: a thin stateful shell over the pure engine in
@@ -56,6 +59,11 @@ interface PaperTradingState {
   /** Events from the most recent action, for a future toast/journal surface.
    *  Replaced rather than appended, so it can't grow over a long session. */
   lastEvents: PaperEvent[];
+  /** How a position's floating P&L is displayed across the panel/chart —
+   *  Money/Ticks/Percentage. ROE% is a separate, always-present column and
+   *  isn't affected by this. Persisted like the account, since it's a user
+   *  preference rather than session state. */
+  pnlDisplayMode: PnlDisplayMode;
 
   /** Market order: fills at `price`, or at the symbol's last mark if omitted. */
   placeOrder: (req: MarketOrderRequest, price?: number) => void;
@@ -63,7 +71,11 @@ interface PaperTradingState {
   cancelOrder: (orderId: string) => void;
   /** Closes at `price`, or at the symbol's last mark. `qty` closes part of it. */
   closePosition: (symbol: string, price?: number, qty?: number) => void;
+  /** Flips `qty` (default: the whole position) to the opposite side at
+   *  `price`, or at the symbol's last mark. See engine `reversePosition`. */
+  reversePosition: (symbol: string, price?: number, qty?: number) => void;
   setBrackets: (symbol: string, brackets: { tp?: number | null; sl?: number | null }) => void;
+  setPnlDisplayMode: (mode: PnlDisplayMode) => void;
   /** Drive fills and bracket triggers off one live tick. Safe on every WS message. */
   evaluateTick: (symbol: string, price: number) => void;
   resetAccount: () => void;
@@ -76,29 +88,31 @@ interface PaperTradingState {
   equity: () => number;
 }
 
-type Persisted = { account: PaperAccount };
+type Persisted = { account: PaperAccount; pnlDisplayMode: PnlDisplayMode };
 
 /**
  * `persist`'s wrapped `set` re-serializes the whole store to localStorage on
  * *every* call, regardless of whether the persisted slice actually changed —
- * see `partialize` below, which is just `{ account }`. `evaluateTick` calls
- * `set` on a mark-only tick too (a manual close or `equity()` needs the fresh
- * mark, so it can't just skip `set`), which would otherwise mean a full
- * JSON.stringify of positions/orders/history on every live price update.
- * Caching the last `account` reference actually written and skipping the
- * write when it's unchanged keeps that cost tied to real account mutations
- * instead of ticks.
+ * see `partialize` below, which is just `{ account, pnlDisplayMode }`.
+ * `evaluateTick` calls `set` on a mark-only tick too (a manual close or
+ * `equity()` needs the fresh mark, so it can't just skip `set`), which would
+ * otherwise mean a full JSON.stringify of positions/orders/history on every
+ * live price update. Caching the last `account`/`pnlDisplayMode` actually
+ * written and skipping the write when both are unchanged keeps that cost tied
+ * to real mutations instead of ticks.
  */
 function createPaperStorage(): PersistStorage<Persisted> {
   let lastAccount: PaperAccount | null = null;
+  let lastMode: PnlDisplayMode | null = null;
   return {
     getItem: (name) => {
       const raw = globalThis.localStorage.getItem(name);
       return raw ? (JSON.parse(raw) as StorageValue<Persisted>) : null;
     },
     setItem: (name, value) => {
-      if (value.state.account === lastAccount) return;
+      if (value.state.account === lastAccount && value.state.pnlDisplayMode === lastMode) return;
       lastAccount = value.state.account;
+      lastMode = value.state.pnlDisplayMode;
       globalThis.localStorage.setItem(name, JSON.stringify(value));
     },
     removeItem: (name) => globalThis.localStorage.removeItem(name),
@@ -249,6 +263,7 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       account: createAccount(),
       marks: {},
       lastEvents: [],
+      pnlDisplayMode: "MONEY",
 
       placeOrder: (req, price) => {
         const { account, marks } = get();
@@ -281,6 +296,16 @@ export const usePaperTradingStore = create<PaperTradingState>()(
         const res = engineClosePosition(account, symbol, quote, Date.now(), qty);
         set({ account: res.account, lastEvents: res.events });
       },
+
+      reversePosition: (symbol, price, qty) => {
+        const { account, marks } = get();
+        const quote = price ?? marks[symbol];
+        if (!isQuote(quote)) return;
+        const res = engineReversePosition(account, symbol, quote, Date.now(), qty);
+        set({ account: res.account, lastEvents: res.events });
+      },
+
+      setPnlDisplayMode: (mode) => set({ pnlDisplayMode: mode }),
 
       setBrackets: (symbol, brackets) => {
         const { account, marks } = get();
@@ -350,8 +375,9 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       // identical in the browser and is what lets the offline `node --test`
       // suite exercise this round trip for real.
       storage: createPaperStorage(),
-      // Only the account survives a reload; marks and events are session data.
-      partialize: (s) => ({ account: s.account }),
+      // Account and the P&L display preference survive a reload; marks and
+      // events are session data.
+      partialize: (s) => ({ account: s.account, pnlDisplayMode: s.pnlDisplayMode }),
       /**
        * Defensive merge: a blob written before a settings key existed (or a
        * corrupted one) must not leave the account half-built, since every fee
@@ -360,12 +386,18 @@ export const usePaperTradingStore = create<PaperTradingState>()(
        * individually (adversarial re-audit finding 4) — a single bad
        * position/order/setting is dropped rather than sinking the whole
        * account back to `current`, since the rest of a mostly-intact blob is
-       * still worth keeping.
+       * still worth keeping. A `pnlDisplayMode` outside the known enum (a
+       * stale value from before a mode was renamed, or a hand-edited blob)
+       * falls back to the current default instead of rendering an unmapped
+       * unit as blank.
        */
       merge: (persisted, current) => {
-        const raw = (persisted as { account?: unknown } | undefined)?.account;
-        const account = sanitizePaperAccount(raw);
-        return account ? { ...current, account } : current;
+        const raw = persisted as { account?: unknown; pnlDisplayMode?: unknown } | undefined;
+        const account = sanitizePaperAccount(raw?.account);
+        const pnlDisplayMode = PNL_DISPLAY_MODES.includes(raw?.pnlDisplayMode as PnlDisplayMode)
+          ? (raw!.pnlDisplayMode as PnlDisplayMode)
+          : current.pnlDisplayMode;
+        return { ...current, ...(account ? { account } : {}), pnlDisplayMode };
       },
     },
   ),

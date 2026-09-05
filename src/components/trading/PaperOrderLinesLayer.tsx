@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { ISeriesApi, IPriceLine } from "lightweight-charts";
+import { useEffect, useRef, useState } from "react";
+import type { IChartApi, ISeriesApi, IPriceLine } from "lightweight-charts";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { useSymbolInfo } from "@/lib/trading/symbol-info";
+import { unrealizedPnl } from "@/lib/trading/paper-engine";
+import { formatPnlDisplay, pnlDisplayValue } from "@/lib/trading/paper-position-display";
 import { TV_PINE } from "@/lib/chart/theme";
+import {
+  ClosePositionDialog,
+  EditPositionDialog,
+  ReversePositionDialog,
+} from "@/components/layout/PaperPositionsPanel";
+import type { PaperPosition } from "@/lib/trading/paper-engine";
 
 /** Same five as `OrderLinesLayer` — both read them from the one Pine set. */
 const LIMIT_COLOR = TV_PINE.blue;
@@ -12,6 +21,8 @@ const SELL_COLOR = TV_PINE.liquidation;
 const TP_COLOR = TV_PINE.green;
 const SL_COLOR = TV_PINE.amber;
 const LIQ_COLOR = TV_PINE.liquidation;
+/** Gap kept between the toolbar and the price scale on the right, same as `OrderLinesLayer`. */
+const AXIS_GAP = 48;
 
 interface Level {
   id: string;
@@ -21,35 +32,57 @@ interface Level {
 }
 
 /**
- * Thin paper-mode adapter for `OrderLinesLayer`: shows resting paper limit
- * orders and the open paper position's entry/TP/SL/liquidation on the chart,
- * using lightweight-charts' native price lines only — no draggable SVG
- * toolbar, no right-click "modify" menu. `OrderLinesLayer` itself is deeply
- * coupled to `trading-store` (form previews, drag-to-modify, position edit
- * dialogs — none of which exist for paper positions yet, see issue #7 for
- * the positions table), so forking its ~1300 lines for read-only lines would
- * be far more surface than this needs. Native price lines already give the
- * same color-matched axis label `OrderLinesLayer` relies on; dragging a
- * paper order's line is a natural follow-up once #7 lands the panel that
- * would receive the edit.
+ * Paper-mode adapter for `OrderLinesLayer`: native price lines for resting
+ * limit orders and the open paper position's TP/SL/liquidation (unchanged —
+ * these stay read-only, dashed for orders, solid side-colored for the
+ * position), PLUS an interactive SVG toolbar on the entry line for the
+ * charted symbol's position — side chip, qty, live uPnL (in whichever
+ * `pnlDisplayMode` the panel is set to), and inline Edit TP/SL, Reverse and
+ * Close buttons. No drag-to-modify in this pass (see CLAUDE.md/issue #7) —
+ * every button opens the same dialog the positions panel uses, so there is
+ * exactly one implementation of each confirmation flow.
  */
 export function PaperOrderLinesLayer({
+  chart,
   candleSeries,
+  container,
+  width,
+  mainPaneHeight,
+  renderTick,
   symbol,
 }: {
+  chart: IChartApi | null;
   candleSeries: ISeriesApi<"Candlestick"> | null;
+  container: HTMLElement | null;
+  width: number;
+  mainPaneHeight: number;
+  renderTick: number;
   symbol: string;
 }) {
+  void container;
+  // Forces a re-render (and a fresh `priceToCoordinate` read) on chart
+  // pan/zoom, same as `OrderLinesLayer` — a price-scale rescale moves the
+  // entry toolbar's y position without touching any of our own state.
+  void renderTick;
   const orders = usePaperTradingStore((s) => s.account.orders);
   const positions = usePaperTradingStore((s) => s.account.positions);
+  const marks = usePaperTradingStore((s) => s.marks);
+  const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
+
+  const [editing, setEditing] = useState<PaperPosition | null>(null);
+  const [closing, setClosing] = useState<PaperPosition | null>(null);
+  const [reversing, setReversing] = useState<PaperPosition | null>(null);
 
   const priceLinesRef = useRef<Map<string, IPriceLine>>(new Map());
 
+  // The key positions/orders are stored under: exchange prefix stripped,
+  // `.P` kept, so a spot chart never draws the perp position's lines.
+  const key = stripExchangePrefix(symbol);
+  const chartedPosition = positions.find((p) => p.symbol === key) ?? null;
+  const tickSize = useSymbolInfo(symbol).tickSize;
+
   useEffect(() => {
     if (!candleSeries) return;
-    // The key positions/orders are stored under: exchange prefix stripped,
-    // `.P` kept, so a spot chart never draws the perp position's lines.
-    const key = stripExchangePrefix(symbol);
     const levels: Level[] = [];
 
     for (const order of orders) {
@@ -65,12 +98,19 @@ export function PaperOrderLinesLayer({
     for (const pos of positions) {
       if (pos.symbol !== key) continue;
       const long = pos.side === "LONG";
-      levels.push({
-        id: `${pos.id}-EP`,
-        price: pos.entryPrice,
-        color: long ? LIMIT_COLOR : SELL_COLOR,
-        title: `${pos.side} ${pos.qty} (paper)`,
-      });
+      // The entry line itself is drawn by the SVG toolbar below when this is
+      // the charted symbol's position — a native line here too would just be
+      // a second, chip-less copy sitting under it. Every OTHER symbol's
+      // position (there is at most one per symbol) still gets its native EP
+      // line, same as before.
+      if (pos.id !== chartedPosition?.id) {
+        levels.push({
+          id: `${pos.id}-EP`,
+          price: pos.entryPrice,
+          color: long ? LIMIT_COLOR : SELL_COLOR,
+          title: `${pos.side} ${pos.qty} (paper)`,
+        });
+      }
       if (pos.tp !== null) {
         levels.push({ id: `${pos.id}-TP`, price: pos.tp, color: TP_COLOR, title: "TP (paper)" });
       }
@@ -115,7 +155,7 @@ export function PaperOrderLinesLayer({
         map.delete(id);
       }
     }
-  }, [candleSeries, orders, positions, symbol]);
+  }, [candleSeries, orders, positions, key, chartedPosition?.id]);
 
   // Drop all price lines when the series itself goes away (symbol/chart teardown).
   useEffect(() => {
@@ -133,5 +173,173 @@ export function PaperOrderLinesLayer({
     };
   }, [candleSeries]);
 
-  return null;
+  if (!chart || !candleSeries || !chartedPosition) return null;
+
+  const mark = marks[chartedPosition.symbol] ?? chartedPosition.entryPrice;
+  const y = candleSeries.priceToCoordinate(chartedPosition.entryPrice);
+  const plotW = chart.timeScale().width() || width;
+
+  return (
+    <>
+      {y !== null && (y as number) >= 0 && (y as number) <= mainPaneHeight && (
+        <svg
+          className="pointer-events-none absolute inset-0 z-20 h-full w-full"
+          style={{ overflow: "visible" }}
+        >
+          <g style={{ pointerEvents: "all" }}>
+            <EntryToolbarRow
+              y={y as number}
+              width={plotW}
+              position={chartedPosition}
+              mark={mark}
+              tickSize={tickSize}
+              pnlDisplayMode={pnlDisplayMode}
+              onEdit={() => setEditing(chartedPosition)}
+              onReverse={() => setReversing(chartedPosition)}
+              onClose={() => setClosing(chartedPosition)}
+            />
+          </g>
+        </svg>
+      )}
+      {editing && <EditPositionDialog position={editing} onOpenChange={(open) => !open && setEditing(null)} />}
+      {closing && (
+        <ClosePositionDialog
+          position={closing}
+          initialQty={closing.qty}
+          onOpenChange={(open) => !open && setClosing(null)}
+        />
+      )}
+      {reversing && (
+        <ReversePositionDialog position={reversing} onOpenChange={(open) => !open && setReversing(null)} />
+      )}
+    </>
+  );
+}
+
+function stopEvt(e: React.MouseEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+const chipWidth = (s: string) => Math.max(s.length * 7 + 12, 24);
+
+/**
+ * The paper position's entry line: a TradingView-style chip toolbar — side +
+ * qty, live uPnL, and [Edit] [Reverse] [×] buttons — laid out right-to-left
+ * like `OrderLinesLayer`'s `EntryToolbarRow`, but with no drag handling and
+ * every action opening a dialog instead of manipulating the line directly.
+ */
+function EntryToolbarRow({
+  y, width, position, mark, tickSize, pnlDisplayMode, onEdit, onReverse, onClose,
+}: {
+  y: number;
+  width: number;
+  position: PaperPosition;
+  mark: number;
+  tickSize: number;
+  pnlDisplayMode: Parameters<typeof pnlDisplayValue>[2];
+  onEdit: () => void;
+  onReverse: () => void;
+  onClose: () => void;
+}) {
+  const H = 20;
+  const GAP = 4;
+  const yTop = y - 10;
+  const isLong = position.side === "LONG";
+  const entryColor = isLong ? LIMIT_COLOR : SELL_COLOR;
+  const pnl = unrealizedPnl(position, mark);
+  const displayPnl = pnlDisplayValue(position, mark, pnlDisplayMode, tickSize);
+  const pnlColor = pnl >= 0 ? TP_COLOR : LIQ_COLOR;
+  const pnlStr = formatPnlDisplay(displayPnl, pnlDisplayMode);
+
+  const chips: { w: number; el: (x: number) => React.ReactNode }[] = [];
+
+  // Rightmost: P&L merged with the close (×) button into one outlined box.
+  const pnlW = chipWidth(pnlStr);
+  const closeW = 20;
+  const mergedW = pnlW + closeW;
+  chips.push({
+    w: mergedW,
+    el: (x) => (
+      <g key="pnl-close">
+        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} />
+        <text x={x + pnlW / 2} y={y + 4} fill={pnlColor} fontSize={11} fontFamily="var(--font-mono), monospace" textAnchor="middle">{pnlStr}</text>
+        <line x1={x + pnlW} x2={x + pnlW} y1={yTop} y2={yTop + H} stroke={entryColor} strokeWidth={1} />
+        <text x={x + pnlW + closeW / 2} y={y + 4} fill={entryColor} fontSize={13} fontWeight="bold" textAnchor="middle">×</text>
+        <rect
+          x={x + pnlW}
+          y={yTop}
+          width={closeW}
+          height={H}
+          fill="transparent"
+          style={{ pointerEvents: "all", cursor: "pointer" }}
+          onMouseDown={stopEvt}
+          onClick={(e) => { stopEvt(e); onClose(); }}
+        />
+      </g>
+    ),
+  });
+
+  // Reverse (⇄) button.
+  const reverseW = 24;
+  chips.push({
+    w: reverseW,
+    el: (x) => (
+      <g
+        key="reverse"
+        style={{ pointerEvents: "all", cursor: "pointer" }}
+        onMouseDown={stopEvt}
+        onClick={(e) => { stopEvt(e); onReverse(); }}
+      >
+        <rect x={x} y={yTop} width={reverseW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} />
+        <text x={x + reverseW / 2} y={y + 4} fill={entryColor} fontSize={12} fontWeight="bold" textAnchor="middle">⇄</text>
+      </g>
+    ),
+  });
+
+  // Edit TP/SL button.
+  const editW = chipWidth("TP/SL");
+  chips.push({
+    w: editW,
+    el: (x) => (
+      <g
+        key="edit"
+        style={{ pointerEvents: "all", cursor: "pointer" }}
+        onMouseDown={stopEvt}
+        onClick={(e) => { stopEvt(e); onEdit(); }}
+      >
+        <rect x={x} y={yTop} width={editW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} strokeDasharray="3,2" />
+        <text x={x + editW / 2} y={y + 4} fill={entryColor} fontSize={11} fontWeight="bold" textAnchor="middle">TP/SL</text>
+      </g>
+    ),
+  });
+
+  // Side + qty chip (solid).
+  const sizeStr = `${isLong ? "Long" : "Short"} ${position.qty}`;
+  const sizeW = chipWidth(sizeStr);
+  chips.push({
+    w: sizeW,
+    el: (x) => (
+      <g key="size">
+        <rect x={x} y={yTop} width={sizeW} height={H} rx={3} fill={entryColor} />
+        <text x={x + sizeW / 2} y={y + 4} fill={TV_PINE.white} fontSize={11} fontWeight="bold" fontFamily="var(--font-mono), monospace" textAnchor="middle">{sizeStr}</text>
+      </g>
+    ),
+  });
+
+  let x = width - AXIS_GAP;
+  const placed: React.ReactNode[] = [];
+  for (const c of chips) {
+    x -= c.w;
+    placed.push(c.el(x));
+    x -= GAP;
+  }
+  const lineEnd = Math.max(0, x);
+
+  return (
+    <g>
+      <line x1={0} x2={lineEnd} y1={y} y2={y} stroke={entryColor} strokeWidth={1.6} style={{ pointerEvents: "none" }} />
+      {placed}
+    </g>
+  );
 }

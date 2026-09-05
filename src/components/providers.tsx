@@ -10,6 +10,7 @@ import { useBybitSymbols } from "@/hooks/useBybitSymbols";
 import { usePaperExposureFeed } from "@/hooks/usePaperExposureFeed";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AlertsToast } from "@/components/alerts/AlertsToast";
+import { PaperTradeToasts } from "@/components/trading/PaperTradeToasts";
 
 function CloudSyncInner({ children }: { children: React.ReactNode }) {
   useCloudSync();
@@ -23,6 +24,7 @@ function CloudSyncInner({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <AlertsToast />
+      <PaperTradeToasts />
     </>
   );
 }
