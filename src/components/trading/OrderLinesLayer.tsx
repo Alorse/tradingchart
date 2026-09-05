@@ -926,6 +926,9 @@ export function OrderLinesLayer({
   }
 
   for (const order of orders) {
+    // `orders` is account-wide; only draw lines for the symbol actually
+    // charted, or another symbol's working order would appear on this chart.
+    if (order.symbol !== cleanedSymForOrders) continue;
     if (coveredOrderIds.has(order.orderId)) continue;
     const price = order.stopPrice ?? order.price;
     if (!price || price <= 0) continue;

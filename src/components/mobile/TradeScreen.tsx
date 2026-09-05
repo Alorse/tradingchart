@@ -46,6 +46,9 @@ export function TradeScreen() {
   // open position on a different symbol than the one charted would never
   // show up here (same fix as the desktop PositionsPanel).
   const allPositions = useTradingStore((s) => s.allPositions);
+  // Also account-wide since /api/trade/sync fetches orders unscoped — a
+  // chart-scoped fetch used to make "Open Orders" silently drop every order
+  // for a symbol other than the one charted.
   const orders = useTradingStore((s) => s.orders);
   const balance = useTradingStore((s) => s.balance);
   const closePosition = useTradingStore((s) => s.closePosition);

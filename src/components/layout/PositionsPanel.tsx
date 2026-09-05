@@ -599,7 +599,10 @@ export function EditOrderPopover({
       await modifyOrder(symbol, order, patch);
     }
     if (order.isPerp && isFinite(leverageNum) && leverageNum > 0 && leverageNum !== currentLeverage) {
-      await setLeverage(symbol, leverageNum);
+      // Target the order's own symbol, not the chart's — `orders` is now
+      // account-wide, so this popover can be editing an order for a symbol
+      // other than whatever's currently charted.
+      await setLeverage(order.symbol, leverageNum);
     }
     setSaving(false);
     onClose();

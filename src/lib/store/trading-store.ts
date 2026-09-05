@@ -570,8 +570,14 @@ export const useTradingStore = create<TradingState>()(
       cancelOrder: async (symbol, orderId) => {
         const { apiKey, apiSecret, testnet, exchange } = get();
         if (!apiKey || !apiSecret) return;
-        const perp = isPerp(symbol);
-        const sym = cleanSym(symbol);
+        // `orders` is account-wide, so the order being cancelled may belong to
+        // a different symbol than whatever's charted — target its own
+        // symbol/market type, not the chart's, or the exchange rejects the
+        // cancel as a symbol/orderId mismatch. Falls back to the chart symbol
+        // if the order isn't in the cached list for some reason.
+        const target = get().orders.find((o) => o.orderId === orderId);
+        const perp = target ? target.isPerp : isPerp(symbol);
+        const sym = target ? target.symbol : cleanSym(symbol);
         try {
           const res = await fetch("/api/trade/order", {
             method: "DELETE",
@@ -594,8 +600,11 @@ export const useTradingStore = create<TradingState>()(
       modifyOrder: async (symbol, order, patch) => {
         const { apiKey, apiSecret, testnet, exchange } = get();
         if (!apiKey || !apiSecret) return { ok: false, error: "No credentials" };
-        const perp = isPerp(symbol);
-        const sym = cleanSym(symbol);
+        // `order` carries its own symbol/market type — target that, not the
+        // chart's `symbol` (account-wide `orders` means the two can differ).
+        // `symbol` is still used below only to scope the post-action refresh.
+        const perp = order.isPerp;
+        const sym = order.symbol;
 
         // Re-post the quantity still working, not the original size. Anything
         // already filled has become position, and adding it back on top would
