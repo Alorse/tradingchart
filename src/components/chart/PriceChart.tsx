@@ -77,6 +77,7 @@ import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
 import { useAlertMonitor } from "@/hooks/useAlertMonitor";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 interface MeasurePoint {
   time: number;
@@ -354,6 +355,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // and — being effect-driven the same way — it has to be unmounted, not
   // hidden, for those lines to actually go away.
   const tradingMode = useTradingModeStore((s) => s.mode);
+  const isMobile = useIsMobile();
 
   // Helper — compute pane top offsets from chart layout
   function recomputePaneOffsets() {
@@ -393,6 +395,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (!containerRef.current) return;
 
     const initColors = chartColorsRef.current;
+    // The `useIsMobile` hook's state is still false on this first effect pass
+    // (its own effect hasn't run yet), so first paint would flash desktop
+    // sizing on a phone unless read synchronously here instead.
+    const mobileNow = window.matchMedia("(max-width: 767px)").matches;
     const chart = createChart(containerRef.current, {
       layout: {
         background: { color: initColors.bg },
@@ -400,7 +406,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         // Resolved, not `var(--font-sans)`: an unresolved var() makes the
         // canvas font string invalid, which silently drops fontSize too.
         fontFamily: getTvFontFamily(),
-        fontSize: 14,
+        fontSize: mobileNow ? 11 : 14,
         panes: { separatorColor: TV_COLORS.border, separatorHoverColor: TV_COLORS.borderStrong },
       },
       grid: {
@@ -420,6 +426,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         // Less headroom above the highest bar (default top is ~0.2, which on a
         // log scale squeezes the candles). Bottom leaves room for the volume overlay.
         scaleMargins: { top: 0.06, bottom: 0.08 },
+        // Floor only — grows for wider prices. Mobile's smaller fontSize would
+        // otherwise auto-fit the axis narrower than a comfortable tap target.
+        minimumWidth: mobileNow ? 56 : 0,
       },
       timeScale: {
         borderColor: TV_COLORS.borderStrong,
@@ -1083,6 +1092,16 @@ export function PriceChart({ symbol, timeframe }: Props) {
       macdHistRef.current = null;
     };
   }, []);
+
+  // Repaint the axis/font sizing on a breakpoint crossing (rotation/resize) —
+  // the create-chart effect above only sets it once, from a synchronous read
+  // at mount.
+  useEffect(() => {
+    chartRef.current?.applyOptions({
+      layout: { fontSize: isMobile ? 11 : 14 },
+      rightPriceScale: { minimumWidth: isMobile ? 56 : 0 },
+    });
+  }, [isMobile]);
 
   // Switch chart display type (candles / line / area)
   useEffect(() => {
