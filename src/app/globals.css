@@ -203,4 +203,7 @@
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
 }
