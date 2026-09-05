@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
@@ -39,6 +39,31 @@ export function ChartScreen() {
   const { undo, redo } = useDrawings();
   const replayActive = useReplayStore((s) => s.active);
   const enterReplayPicking = useReplayStore((s) => s.enterPicking);
+
+  // Edge shadows for the dock's scrollable right zone, signaling there is
+  // more content past either edge. Driven off scroll position + size rather
+  // than CSS scroll-shadows (no cross-browser support yet for the latter).
+  const scrollZoneRef = useRef<HTMLDivElement>(null);
+  const [edgeShadow, setEdgeShadow] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = scrollZoneRef.current;
+    if (!el) return;
+    const update = () => {
+      setEdgeShadow({
+        left: el.scrollLeft > 0,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+      });
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, []);
 
   // Build the rotating symbol list from the active watchlist.
   const wlSymbols = (() => {
@@ -86,57 +111,68 @@ export function ChartScreen() {
             ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
           />
         </div>
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pr-2">
-          <div className="flex h-full w-11 shrink-0 items-center justify-center">
-            <ChartTypeSelector />
-          </div>
-          <button
-            onClick={() => openSheet("drawings")}
-            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-            aria-label="Drawing tools"
+        <div className="relative min-w-0 flex-1">
+          <div
+            ref={scrollZoneRef}
+            className="no-scrollbar flex h-full items-center gap-1 overflow-x-auto pr-2"
           >
-            <Pencil className="size-5" />
-          </button>
-          <button
-            onClick={() => openSheet("indicators")}
-            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-            aria-label="Indicators"
-          >
-            <Sigma className="size-5" />
-          </button>
-          {!replayActive && (
+            <div className="flex h-full w-11 shrink-0 items-center justify-center">
+              <ChartTypeSelector />
+            </div>
             <button
-              onClick={enterReplayPicking}
+              onClick={() => openSheet("drawings")}
               className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-              aria-label="Bar replay"
+              aria-label="Drawing tools"
             >
-              <Rewind className="size-5" />
+              <Pencil className="size-5" />
             </button>
-          )}
-          <div className="flex h-full w-11 shrink-0 items-center justify-center">
-            <SnapshotButton />
+            <button
+              onClick={() => openSheet("indicators")}
+              className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+              aria-label="Indicators"
+            >
+              <Sigma className="size-5" />
+            </button>
+            {!replayActive && (
+              <button
+                onClick={enterReplayPicking}
+                className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+                aria-label="Bar replay"
+              >
+                <Rewind className="size-5" />
+              </button>
+            )}
+            <div className="flex h-full w-11 shrink-0 items-center justify-center">
+              <SnapshotButton />
+            </div>
+            <button
+              onClick={() => openSheet("alerts")}
+              className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+              aria-label="Alerts"
+            >
+              <Bell className="size-5" />
+            </button>
+            <button
+              onClick={() => void undo()}
+              className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+              aria-label="Undo"
+            >
+              <Undo2 className="size-5" />
+            </button>
+            <button
+              onClick={() => void redo()}
+              className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+              aria-label="Redo"
+            >
+              <Redo2 className="size-5" />
+            </button>
           </div>
-          <button
-            onClick={() => openSheet("alerts")}
-            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-            aria-label="Alerts"
-          >
-            <Bell className="size-5" />
-          </button>
-          <button
-            onClick={() => void undo()}
-            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-            aria-label="Undo"
-          >
-            <Undo2 className="size-5" />
-          </button>
-          <button
-            onClick={() => void redo()}
-            className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
-            aria-label="Redo"
-          >
-            <Redo2 className="size-5" />
-          </button>
+          {edgeShadow.left && (
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-tv-panel to-transparent" />
+          )}
+          {edgeShadow.right && (
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-tv-panel to-transparent" />
+          )}
         </div>
       </div>
     </div>
@@ -195,6 +231,14 @@ function SwipeChip({
       onPointerCancel={() => {
         startRef.current = null;
         setActive(false);
+      }}
+      onTouchEnd={(e) => {
+        // Suppress the browser's synthesized compatibility mouse events
+        // (mousedown/mouseup/click) that follow a touch tap. Without this,
+        // the synthesized mousedown lands on the just-opened dialog's
+        // backdrop and Base UI's Dialog treats it as an outside press,
+        // closing whatever onTap just opened on the same gesture.
+        e.preventDefault();
       }}
     >
       <span className="max-w-[110px] truncate">{label}</span>
