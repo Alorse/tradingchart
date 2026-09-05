@@ -184,6 +184,10 @@ function Form({
   const [qtyPrecision, setQtyPrecision] = useState<number>(
     isPosition ? ((drawing as { qtyPrecision?: number }).qtyPrecision ?? 3) : 3,
   );
+  // Applies to future drawings of this tool, not this one — read from/written
+  // to `toolDefaults`, never to the drawing's own persisted fields.
+  const [defaultRiskReward, setDefaultRiskReward] = useState<number>(1);
+  const [defaultZoneDistancePct, setDefaultZoneDistancePct] = useState<number>(16);
 
   const symbolInfo = useSymbolInfo(drawing.symbol);
   const tickSize = symbolInfo.tickSize > 0 ? symbolInfo.tickSize : 0.01;
@@ -215,6 +219,11 @@ function Form({
       setLeverage(drawing.leverage);
       setLotSize(drawing.lotSize ?? 1);
       setQtyPrecision(drawing.qtyPrecision ?? 3);
+      const toolDefaults = useChartStore.getState().toolDefaults[drawing.kind] as
+        | { defaultRiskReward?: number; defaultZoneDistancePct?: number }
+        | undefined;
+      setDefaultRiskReward(toolDefaults?.defaultRiskReward ?? 1);
+      setDefaultZoneDistancePct(toolDefaults?.defaultZoneDistancePct ?? 16);
     }
     if (drawing.kind === "rectangle") {
       setFillColor(drawing.fillColor ?? TV_PINE.blue);
@@ -255,6 +264,12 @@ function Form({
     if (isRect) {
       (patch as Record<string, unknown>).fillColor = fillColor;
       (patch as Record<string, unknown>).fillOpacity = fillOpacity;
+    }
+    if (isPosition) {
+      useChartStore.getState().setToolDefault(drawing.kind, {
+        defaultRiskReward,
+        defaultZoneDistancePct,
+      });
     }
     onApply(patch);
   }
@@ -379,6 +394,8 @@ function Form({
           leverage={leverage} onLeverage={setLeverage}
           lotSize={lotSize} onLotSize={setLotSize}
           qtyPrecision={qtyPrecision} onQtyPrecision={setQtyPrecision}
+          defaultRiskReward={defaultRiskReward} onDefaultRiskReward={setDefaultRiskReward}
+          defaultZoneDistancePct={defaultZoneDistancePct} onDefaultZoneDistancePct={setDefaultZoneDistancePct}
         />
       )}
 
@@ -611,6 +628,8 @@ function PositionInputsTab({
   leverage, onLeverage,
   lotSize, onLotSize,
   qtyPrecision, onQtyPrecision,
+  defaultRiskReward, onDefaultRiskReward,
+  defaultZoneDistancePct, onDefaultZoneDistancePct,
 }: {
   tickSize: number;
   entry: number; target: number; stop: number;
@@ -621,6 +640,8 @@ function PositionInputsTab({
   leverage?: number; onLeverage: (v: number | undefined) => void;
   lotSize: number; onLotSize: (v: number) => void;
   qtyPrecision: number; onQtyPrecision: (v: number) => void;
+  defaultRiskReward: number; onDefaultRiskReward: (v: number) => void;
+  defaultZoneDistancePct: number; onDefaultZoneDistancePct: (v: number) => void;
 }) {
   return (
     <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1">
@@ -664,6 +685,16 @@ function PositionInputsTab({
       <NumberField label="Entry price" value={entry} onChange={onEntry} />
       <PricePlusTicks label="Profit (target)" entry={entry} level={target} tickSize={tickSize} onLevel={onTarget} />
       <PricePlusTicks label="Stop" entry={entry} level={stop} tickSize={tickSize} onLevel={onStop} />
+
+      <div className="mt-1 border-t border-tv-border pt-2 text-[10px] font-semibold uppercase tracking-wide text-tv-text-dim">
+        Defaults for new positions
+      </div>
+      <NumberField label="Risk:reward" value={defaultRiskReward} onChange={(v) => onDefaultRiskReward(v > 0 ? v : 1)} />
+      <NumberField
+        label="Zone distance %"
+        value={defaultZoneDistancePct}
+        onChange={(v) => onDefaultZoneDistancePct(v > 0 ? v : 16)}
+      />
     </div>
   );
 }

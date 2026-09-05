@@ -237,6 +237,14 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const prevSubPanesHiddenRef = useRef(false);
   const firstPointRef = useRef<{ time: number; price: number } | null>(null);
   const placementPointsRef = useRef<Array<{ time: number; price: number }>>([]);
+  /** In-flight long/short placement gesture — mousedown sets the entry,
+   *  a horizontal drag before mouseup sets the right edge (timeB) live. */
+  const positionDragRef = useRef<{
+    kind: "long" | "short";
+    entry: { time: number; price: number };
+    startClientX: number;
+    moved: boolean;
+  } | null>(null);
   // Last unconstrained cursor (time/price) — lets Shift snap the preview the
   // instant it's pressed, without needing a mouse move.
   const lastCursorRef = useRef<{ time: number; price: number } | null>(null);
@@ -670,47 +678,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
         return;
       }
 
-      if (toolRef.current === "long" || toolRef.current === "short") {
-        if (resolvedTime === null) return;
-        const time = resolvedTime;
-        const kind = toolRef.current;
-        const entry = price;
-        // Default distance: ~8% of visible price range so the box is proportional on screen
-        const mainPaneH = paneOffsetsRef.current[0]?.height ?? 400;
-        const priceTop = candleSeriesRef.current?.coordinateToPrice(10) ?? null;
-        const priceBot = candleSeriesRef.current?.coordinateToPrice(mainPaneH - 10) ?? null;
-        const visibleRange =
-          priceTop !== null && priceBot !== null
-            ? Math.abs((priceTop as number) - (priceBot as number))
-            : null;
-        const dist = visibleRange ? visibleRange * 0.16 : Math.abs(entry) * 0.01 || 1;
-        const target = kind === "long" ? entry + dist : entry - dist;
-        const stop = kind === "long" ? entry - dist : entry + dist;
-        const intervalSec = timeframeToSeconds(
-          useChartStore.getState().timeframe,
-        );
-        // Default width: fixed pixel target so the box looks the same regardless of zoom/timeframe
-        const tsOpts = chart.timeScale().options() as { barSpacing?: number };
-        const barSpacing = tsOpts.barSpacing ?? 8;
-        const widthBars = Math.max(3, Math.round(144 / barSpacing));
-        const timeB = time + widthBars * intervalSec;
-        const defaults = useChartStore.getState().toolDefaults[kind] ?? {};
-        void drawingsApiRef.current.add({
-          id: generateId(),
-          kind,
-          symbol: symbolRef.current,
-          entry,
-          stop,
-          target,
-          timeA: time,
-          timeB,
-          ...defaults,
-        } as Parameters<typeof drawingsApiRef.current.add>[0]);
-        firstPointRef.current = null;
-        setPreviewState(null);
-        setToolRef.current("cursor");
-        return;
-      }
+      // Long/short placement is handled entirely by the capture-phase
+      // mousedown/mousemove/mouseup effect below (it needs to distinguish a
+      // plain click from a click-drag that sets the right edge), which
+      // stops propagation so this click handler never sees that gesture.
 
       if (toolRef.current === "price-range") {
         if (resolvedTime === null) return;
@@ -3381,6 +3352,139 @@ export function PriceChart({ symbol, timeframe }: Props) {
     }
     outer.addEventListener("mousedown", onShiftCapture, { capture: true });
     return () => outer.removeEventListener("mousedown", onShiftCapture, { capture: true });
+  }, []);
+
+  // Capture-phase mousedown: long/short placement. A plain click (no drag)
+  // keeps the old single-click fallback — default risk:reward + zone
+  // distance, fixed pixel width. A click-drag before mouseup instead sets
+  // the right edge (timeB) to the release point; stop/target are still
+  // sized from the same defaults, only the box's width comes from the drag.
+  // Runs at capture phase and stops propagation so the chart's own click
+  // detection never also fires for this gesture (same trick the
+  // shift-capture listener above uses for the measure tool).
+  useEffect(() => {
+    const outer = outerRef.current;
+    if (!outer) return;
+
+    function computePoint(e: MouseEvent): { time: number; price: number } | null {
+      if (!containerRef.current || !chartRef.current || !candleSeriesRef.current) return null;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const rawPrice = candleSeriesRef.current.coordinateToPrice(y);
+      if (rawPrice === null || !isFinite(rawPrice as number)) return null;
+      const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
+      const time = xToTime(chartRef.current, x, candlesRef.current, intervalSec);
+      if (time === null) return null;
+      return { time, price: rawPrice as number };
+    }
+
+    function defaultTimeB(entryTime: number): number {
+      const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
+      const tsOpts = chartRef.current?.timeScale().options() as { barSpacing?: number } | undefined;
+      const barSpacing = tsOpts?.barSpacing ?? 8;
+      const widthBars = Math.max(3, Math.round(144 / barSpacing));
+      return entryTime + widthBars * intervalSec;
+    }
+
+    /** Default stop/target from the tool's configurable risk:reward + zone
+     *  distance (falls back to the historical 1:1 / ~16% of visible range). */
+    function defaultLevels(kind: "long" | "short", entryPrice: number): { stop: number; target: number } {
+      const defaults = useChartStore.getState().toolDefaults[kind] as
+        | { defaultRiskReward?: number; defaultZoneDistancePct?: number }
+        | undefined;
+      const rr = defaults?.defaultRiskReward && defaults.defaultRiskReward > 0 ? defaults.defaultRiskReward : 1;
+      const zonePct = defaults?.defaultZoneDistancePct && defaults.defaultZoneDistancePct > 0 ? defaults.defaultZoneDistancePct : 16;
+      const mainPaneH = paneOffsetsRef.current[0]?.height ?? 400;
+      const priceTop = candleSeriesRef.current?.coordinateToPrice(10) ?? null;
+      const priceBot = candleSeriesRef.current?.coordinateToPrice(mainPaneH - 10) ?? null;
+      const visibleRange =
+        priceTop !== null && priceBot !== null
+          ? Math.abs((priceTop as number) - (priceBot as number))
+          : null;
+      const riskDist = visibleRange ? visibleRange * (zonePct / 100) : Math.abs(entryPrice) * 0.01 || 1;
+      const rewardDist = riskDist * rr;
+      return kind === "long"
+        ? { stop: entryPrice - riskDist, target: entryPrice + rewardDist }
+        : { stop: entryPrice + riskDist, target: entryPrice - rewardDist };
+    }
+
+    function finishPlacement(
+      kind: "long" | "short",
+      entry: { time: number; price: number },
+      stop: number,
+      target: number,
+      timeB: number,
+    ) {
+      // Style fields (color, widths, ...) still seed the new drawing; the two
+      // placement-only defaults above must not leak into the persisted row.
+      const styleDefaults = { ...useChartStore.getState().toolDefaults[kind] } as Record<string, unknown>;
+      delete styleDefaults.defaultRiskReward;
+      delete styleDefaults.defaultZoneDistancePct;
+      void drawingsApiRef.current.add({
+        id: generateId(),
+        kind,
+        symbol: symbolRef.current,
+        entry: entry.price,
+        stop,
+        target,
+        timeA: entry.time,
+        timeB,
+        ...styleDefaults,
+      } as Parameters<typeof drawingsApiRef.current.add>[0]);
+      firstPointRef.current = null;
+      setPreviewState(null);
+      setToolRef.current("cursor");
+    }
+
+    function onMouseDown(e: MouseEvent) {
+      if (toolRef.current !== "long" && toolRef.current !== "short") return;
+      if (!containerRef.current || !chartRef.current || !candleSeriesRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const plotW = chartRef.current.timeScale().width();
+      const mainPaneH = paneOffsetsRef.current[0]?.height ?? 400;
+      if (x < 0 || x > plotW || y < 0 || y > mainPaneH) return;
+      const entryPoint = computePoint(e);
+      if (!entryPoint) return;
+      const entry = entryPoint;
+      e.preventDefault();
+      e.stopPropagation();
+      const kind = toolRef.current;
+      const { stop, target } = defaultLevels(kind, entry.price);
+      positionDragRef.current = { kind, entry, startClientX: e.clientX, moved: false };
+      setPreviewState({ first: entry, extra: [], cursor: entry });
+
+      function onMove(ev: MouseEvent) {
+        const drag = positionDragRef.current;
+        if (!drag) return;
+        if (Math.abs(ev.clientX - drag.startClientX) > 4) drag.moved = true;
+        const cursor = computePoint(ev);
+        // Synthesize the preview's cursor price as the precomputed target so
+        // PlacementPreview draws the box at its real stop/target distance —
+        // only the time (width) tracks the actual drag.
+        if (cursor) setPreviewState({ first: entry, extra: [], cursor: { time: cursor.time, price: target } });
+      }
+      function onUp(ev: MouseEvent) {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        const drag = positionDragRef.current;
+        positionDragRef.current = null;
+        if (!drag) return;
+        let timeB = defaultTimeB(entry.time);
+        if (drag.moved) {
+          const release = computePoint(ev);
+          if (release && release.time > entry.time) timeB = release.time;
+        }
+        finishPlacement(kind, entry, stop, target, timeB);
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    }
+
+    outer.addEventListener("mousedown", onMouseDown, { capture: true });
+    return () => outer.removeEventListener("mousedown", onMouseDown, { capture: true });
   }, []);
 
   // OHLC/Vol legend + native crosshair fallback: chart.subscribeCrosshairMove
