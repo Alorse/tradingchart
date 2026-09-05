@@ -13,6 +13,9 @@ import { MobileSheet } from "./MobileSheet";
  * primitive) that would clip against a narrow viewport, and whose per-row
  * favorite star is hover-revealed for non-favorited rows. A fullscreen sheet
  * sidesteps both: no positioning to clip, and the star is always visible.
+ *
+ * TODO: row density here still isn't touch-tuned pass-for-pass with the rest
+ * of the mobile shell (e.g. hit-area/spacing) — deferred to a later pass.
  */
 
 const TF_FULL: Record<Timeframe, string> = {
