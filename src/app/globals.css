@@ -206,4 +206,11 @@
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
+  /* In landscape a notch/rounded corner sits at the left or right edge, not
+     the top — without this the chart and bottom dock render flush against
+     it and get clipped by the device's own curved glass. */
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }
