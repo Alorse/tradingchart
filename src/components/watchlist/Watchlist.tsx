@@ -694,7 +694,7 @@ export function Watchlist() {
                   )}
                 </div>
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <CoinIcon symbol={displaySymbol} size={16} />
+                  <CoinIcon symbol={displaySymbol} size={24} />
                   <span className="truncate font-medium text-tv-text">
                     {posSide ? getBaseAsset(displaySymbol) : displaySymbol}
                   </span>

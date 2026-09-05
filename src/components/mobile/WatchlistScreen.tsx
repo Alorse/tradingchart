@@ -720,7 +720,7 @@ function SymbolRow({
       )}
 
       <div className="flex min-w-0 items-center gap-1.5">
-        <CoinIcon symbol={displaySymbol} size={18} />
+        <CoinIcon symbol={displaySymbol} size={26} />
         <div className="flex min-w-0 flex-col">
           <span className="flex items-center gap-1.5 truncate text-sm font-semibold">
             {posSide ? getBaseAsset(displaySymbol) : displaySymbol}

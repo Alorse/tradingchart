@@ -37,7 +37,9 @@ export function CoinIcon({ symbol, size = 18, remote = true }: Props) {
   const base = getBaseAsset(symbol);
   const slug = base.toLowerCase();
   const [errored, setErrored] = useState(false);
-  const iconUrl = `https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/${slug}.svg`;
+  // unpkg resolves the bare package name to its latest published version
+  // (302 redirect), so the icon set stays current without pinning a version.
+  const iconUrl = `https://unpkg.com/@bitgo-forks/cryptocurrency-icons/svg/color/${slug}.svg`;
 
   if (remote && !errored) {
     return (
