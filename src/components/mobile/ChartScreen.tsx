@@ -196,6 +196,14 @@ function SwipeChip({
         startRef.current = null;
         setActive(false);
       }}
+      onTouchEnd={(e) => {
+        // Suppress the browser's synthesized compatibility mouse events
+        // (mousedown/mouseup/click) that follow a touch tap. Without this,
+        // the synthesized mousedown lands on the just-opened dialog's
+        // backdrop and Base UI's Dialog treats it as an outside press,
+        // closing whatever onTap just opened on the same gesture.
+        e.preventDefault();
+      }}
     >
       <span className="max-w-[110px] truncate">{label}</span>
       <ChevronDown className="size-3 shrink-0 text-tv-text-muted" />
