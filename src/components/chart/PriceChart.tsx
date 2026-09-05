@@ -3638,8 +3638,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
       />
 
       {/* A / L buttons per pane — positioned at the bottom-right of each
-          pane (just above the next pane separator / time axis) */}
-      {paneOffsets.map((p, paneIdx) => {
+          pane (just above the next pane separator / time axis), offset past
+          the right price scale so they don't sit on top of it. */}
+      {(() => {
+        const scaleWidth = chartRef.current?.priceScale("right").width() ?? 0;
+        return paneOffsets.map((p, paneIdx) => {
         // Resolve which indicator owns this pane (for log scale state)
         let key: "main" | IndicatorKey = "main";
         if (paneIdx > 0) {
@@ -3689,7 +3692,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             key={paneIdx}
             style={{
               top: p.top + p.height - 26,
-              right: 4,
+              right: scaleWidth + 8,
             }}
             className="pointer-events-auto absolute z-10 flex items-center gap-0.5"
           >
@@ -3717,7 +3720,8 @@ export function PriceChart({ symbol, timeframe }: Props) {
             </button>
           </div>
         );
-      })}
+        });
+      })()}
 
       {/* Top-left of main pane: symbol info + OHLC + Volume pill + EMA pills */}
       <div
