@@ -64,7 +64,7 @@ export function ChartScreen() {
     <div className="flex h-full flex-col">
       {/* Top strip — symbol chip + undo/redo/alerts. Never scrolls; the
           symbol chip takes the remaining width. */}
-      <header className="flex h-9 shrink-0 items-center gap-1.5 border-b border-tv-border bg-tv-panel px-2">
+      <header className="flex h-10 shrink-0 items-center gap-1.5 border-b border-tv-border bg-tv-panel px-2">
         <div className="min-w-0 flex-1">
           <SwipeChip
             label={symbol}
@@ -76,21 +76,21 @@ export function ChartScreen() {
         </div>
         <button
           onClick={() => void undo()}
-          className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
+          className="shrink-0 rounded p-2 text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Undo"
         >
           <Undo2 className="size-4" />
         </button>
         <button
           onClick={() => void redo()}
-          className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
+          className="shrink-0 rounded p-2 text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Redo"
         >
           <Redo2 className="size-4" />
         </button>
         <button
           onClick={() => openSheet("alerts")}
-          className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
+          className="shrink-0 rounded p-2 text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Alerts"
         >
           <Bell className="size-4" />

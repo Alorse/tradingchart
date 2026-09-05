@@ -292,7 +292,7 @@ export function WatchlistScreen() {
         </button>
         <button
           onClick={() => addLabelHere(undefined)}
-          className="rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Add label"
         >
           <Type className="h-4 w-4" />
@@ -302,7 +302,7 @@ export function WatchlistScreen() {
             setSymbolDialogInsertAfterId(null);
             openSymbolDialog(true);
           }}
-          className="rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Add symbol"
         >
           <Plus className="h-4 w-4" />
