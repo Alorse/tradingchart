@@ -3733,18 +3733,22 @@ export function PriceChart({ symbol, timeframe }: Props) {
           <span className="font-semibold text-tv-text">{symbol}</span>
           <span className="text-tv-text-muted">·</span>
           <span className="font-semibold text-tv-text-muted">{timeframeLabel(timeframe)}</span>
-          <span className="text-tv-text-muted">·</span>
-          <span className="font-semibold text-tv-text-muted">
-            {(() => {
-              const k = resolveSource(symbol).kind;
-              if (k === "fred") return "FRED";
-              if (k === "coingecko") return "CoinGecko";
-              if (k === "yahoo") return "Yahoo";
-              if (k === "synthetic") return "Synthetic";
-              if (k === "bybit") return "Bybit";
-              return "Binance";
-            })()}
-          </span>
+          {!isMobile && (
+            <>
+              <span className="text-tv-text-muted">·</span>
+              <span className="font-semibold text-tv-text-muted">
+                {(() => {
+                  const k = resolveSource(symbol).kind;
+                  if (k === "fred") return "FRED";
+                  if (k === "coingecko") return "CoinGecko";
+                  if (k === "yahoo") return "Yahoo";
+                  if (k === "synthetic") return "Synthetic";
+                  if (k === "bybit") return "Bybit";
+                  return "Binance";
+                })()}
+              </span>
+            </>
+          )}
           {!hover && lastPrice && (
             <>
               <span className={`font-semibold tabular-nums ${greenOrRed(lastPrice.pct)}`}>
