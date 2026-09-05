@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Pencil, MoreHorizontal, Redo2, Rewind, Undo2 } from "lucide-react";
+import { Bell, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
@@ -14,10 +14,11 @@ import { cn } from "@/lib/utils";
 /**
  * Mobile chart screen.
  *
- * Top bar: symbol chip (swipe up/down → previous/next symbol in active
- * watchlist), timeframe chip (swipe up/down → previous/next *pinned*
- * timeframe, tap → full picker), chart type, undo/redo, drawing tools,
- * replay, and a "…" for indicators.
+ * Slim top strip: symbol chip (swipe up/down → previous/next symbol in
+ * active watchlist, tap → search) plus undo/redo/alerts. A bottom dock —
+ * mirroring TradingView mobile — holds timeframe, chart type, drawings,
+ * indicators, bar replay and snapshot, stacked directly above the app's
+ * bottom tab bar.
  *
  * The chart itself uses the existing desktop <PriceChart /> — it already
  * supports pinch-zoom and pan on touch devices. `ChartTypeSelector` and
@@ -61,64 +62,38 @@ export function ChartScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Top bar — scrolls horizontally rather than wrapping/clipping on a
-          narrow phone, since it packs in every desktop header action. */}
-      <header className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-tv-border bg-tv-panel px-2 py-1.5">
-        <SwipeChip
-          label={symbol}
-          onSwipe={nextSymbol}
-          onTap={() => openSheet("symbolSearch")}
-          ariaLabel="Symbol — tap to search, swipe to switch"
-        />
-        <SwipeChip
-          label={timeframe.toUpperCase()}
-          onSwipe={nextTimeframe}
-          onTap={() => openSheet("timeframe")}
-          ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
-          compact
-        />
-        <div className="shrink-0">
-          <ChartTypeSelector />
+      {/* Top strip — symbol chip + undo/redo/alerts. Never scrolls; the
+          symbol chip takes the remaining width. */}
+      <header className="flex h-9 shrink-0 items-center gap-1.5 border-b border-tv-border bg-tv-panel px-2">
+        <div className="min-w-0 flex-1">
+          <SwipeChip
+            label={symbol}
+            onSwipe={nextSymbol}
+            onTap={() => openSheet("symbolSearch")}
+            ariaLabel="Symbol — tap to search, swipe to switch"
+            fullWidth
+          />
         </div>
         <button
           onClick={() => void undo()}
           className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Undo"
         >
-          <Undo2 className="h-4 w-4" />
+          <Undo2 className="size-4" />
         </button>
         <button
           onClick={() => void redo()}
           className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
           aria-label="Redo"
         >
-          <Redo2 className="h-4 w-4" />
+          <Redo2 className="size-4" />
         </button>
         <button
-          onClick={() => openSheet("drawings")}
+          onClick={() => openSheet("alerts")}
           className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
-          aria-label="Drawing tools"
+          aria-label="Alerts"
         >
-          <Pencil className="h-4 w-4" />
-        </button>
-        {!replayActive && (
-          <button
-            onClick={enterReplayPicking}
-            className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
-            aria-label="Bar replay"
-          >
-            <Rewind className="h-4 w-4" />
-          </button>
-        )}
-        <div className="shrink-0">
-          <SnapshotButton />
-        </div>
-        <button
-          onClick={() => openSheet("indicators")}
-          className="shrink-0 rounded p-1.5 text-tv-text-muted active:bg-tv-panel-hover"
-          aria-label="Indicators"
-        >
-          <MoreHorizontal className="h-4 w-4" />
+          <Bell className="size-4" />
         </button>
       </header>
 
@@ -126,22 +101,69 @@ export function ChartScreen() {
       <div className="relative min-h-0 flex-1">
         <PriceChart symbol={symbol} timeframe={timeframe} />
       </div>
+
+      {/* Bottom dock — timeframe, chart type, drawings, indicators, replay,
+          snapshot. A grid (not scrollable) stacked directly above the app's
+          bottom tab bar. */}
+      <div className="grid h-12 shrink-0 grid-cols-6 border-t border-tv-border bg-tv-panel">
+        <div className="flex h-full items-center justify-center">
+          <SwipeChip
+            label={timeframe.toUpperCase()}
+            onSwipe={nextTimeframe}
+            onTap={() => openSheet("timeframe")}
+            ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
+            compact
+          />
+        </div>
+        <div className="flex h-full items-center justify-center">
+          <ChartTypeSelector />
+        </div>
+        <button
+          onClick={() => openSheet("drawings")}
+          className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+          aria-label="Drawing tools"
+        >
+          <Pencil className="size-5" />
+        </button>
+        <button
+          onClick={() => openSheet("indicators")}
+          className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+          aria-label="Indicators"
+        >
+          <Sigma className="size-5" />
+        </button>
+        {!replayActive && (
+          <button
+            onClick={enterReplayPicking}
+            className="flex h-full items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
+            aria-label="Bar replay"
+          >
+            <Rewind className="size-5" />
+          </button>
+        )}
+        <div className="flex h-full items-center justify-center">
+          <SnapshotButton />
+        </div>
+      </div>
     </div>
   );
 }
 
 /**
  * A chip with swipe-up / swipe-down detection (and a tap fallback).
- * Uses passive pointer events so it does not interfere with native scrolling.
+ * `touchAction: "none"` is required for the swipe gesture to be reliably
+ * captured (a touch browser otherwise treats it as a scroll attempt), which
+ * is safe here since neither the top strip nor the bottom dock scroll.
  */
 function SwipeChip({
-  label, onSwipe, onTap, ariaLabel, compact,
+  label, onSwipe, onTap, ariaLabel, compact, fullWidth,
 }: {
   label: string;
   onSwipe: (dir: 1 | -1) => void;
   onTap: () => void;
   ariaLabel: string;
   compact?: boolean;
+  fullWidth?: boolean;
 }) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const [active, setActive] = useState(false);
@@ -151,8 +173,9 @@ function SwipeChip({
       type="button"
       aria-label={ariaLabel}
       className={cn(
-        "shrink-0 select-none rounded border border-tv-border bg-tv-bg text-sm font-semibold transition-colors",
-        compact ? "px-2 py-1 text-xs" : "px-2.5 py-1",
+        "select-none rounded border border-tv-border bg-tv-bg text-sm font-semibold transition-colors",
+        compact ? "px-2 py-2 text-xs" : "px-2.5 py-1",
+        fullWidth ? "w-full truncate" : "shrink-0",
         active && "bg-tv-panel-hover",
       )}
       style={{ touchAction: "none" }}
