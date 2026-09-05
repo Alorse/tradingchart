@@ -1,4 +1,5 @@
-import type { CloseReason } from "./paper-engine";
+import { formatPrice } from "@/lib/format";
+import type { CloseReason, PaperEvent } from "./paper-engine";
 
 /**
  * Compact human duration for a closed paper trade's `durationMs`, e.g. for
@@ -40,4 +41,22 @@ const REASON_LABELS: Record<CloseReason, string> = {
 /** Human-readable label for a `PaperTrade.reason`. */
 export function reasonLabel(reason: CloseReason): string {
   return REASON_LABELS[reason];
+}
+
+/** One-line summary of a `PaperEvent`, shared by the bottom-left toasts and
+ *  the panel's Notifications tab — both just render this over the raw event. */
+export function describePaperEvent(event: PaperEvent): string {
+  switch (event.type) {
+    case "fill":
+      return `${event.side === "BUY" ? "Bought" : "Sold"} ${event.qty} ${event.symbol} @ ${formatPrice(event.price)}`;
+    case "close": {
+      const t = event.trade;
+      const sign = t.realizedPnl >= 0 ? "+" : "";
+      return `Closed ${t.qty} ${event.symbol} (${reasonLabel(event.reason)}) — ${sign}${t.realizedPnl.toFixed(2)} USDT`;
+    }
+    case "cancel":
+      return `Canceled order on ${event.symbol}`;
+    case "reject":
+      return `${event.symbol}: ${event.message}`;
+  }
 }

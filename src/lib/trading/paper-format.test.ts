@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
-import { formatDuration, reasonLabel } from "./paper-format";
+import { describePaperEvent, formatDuration, reasonLabel } from "./paper-format";
+import type { PaperEvent, PaperTrade } from "./paper-engine";
 
 describe("formatDuration", () => {
   it("shows seconds alone under a minute", () => {
@@ -41,5 +42,39 @@ describe("reasonLabel", () => {
     expect(reasonLabel("TP")).toBe("TP");
     expect(reasonLabel("SL")).toBe("SL");
     expect(reasonLabel("LIQUIDATION")).toBe("Liquidation");
+  });
+});
+
+const TRADE: PaperTrade = {
+  id: "t", symbol: "BTCUSDT", side: "LONG", qty: 1, entryPrice: 20_000, exitPrice: 21_000,
+  leverage: 10, margin: 2_000, fees: 10, grossPnl: 1_000, realizedPnl: 990, roi: 0.495,
+  reason: "TP", openedAt: 0, closedAt: 1, durationMs: 1,
+};
+
+describe("describePaperEvent", () => {
+  it("describes a fill", () => {
+    const e: PaperEvent = { type: "fill", orderId: null, symbol: "BTCUSDT", side: "BUY", qty: 1, price: 20_000, fee: 10 };
+    expect(describePaperEvent(e)).toBe("Bought 1 BTCUSDT @ 20,000");
+  });
+
+  it("describes a profitable close with a sign and the reason", () => {
+    const e: PaperEvent = { type: "close", symbol: "BTCUSDT", reason: "TP", trade: TRADE };
+    expect(describePaperEvent(e)).toBe("Closed 1 BTCUSDT (TP) — +990.00 USDT");
+  });
+
+  it("describes a losing close without a leading plus", () => {
+    const losing: PaperTrade = { ...TRADE, realizedPnl: -50, reason: "SL" };
+    const e: PaperEvent = { type: "close", symbol: "BTCUSDT", reason: "SL", trade: losing };
+    expect(describePaperEvent(e)).toBe("Closed 1 BTCUSDT (SL) — -50.00 USDT");
+  });
+
+  it("describes a cancel", () => {
+    const e: PaperEvent = { type: "cancel", orderId: "o1", symbol: "BTCUSDT" };
+    expect(describePaperEvent(e)).toBe("Canceled order on BTCUSDT");
+  });
+
+  it("describes a reject with its message", () => {
+    const e: PaperEvent = { type: "reject", symbol: "BTCUSDT", message: "Insufficient paper balance" };
+    expect(describePaperEvent(e)).toBe("BTCUSDT: Insufficient paper balance");
   });
 });
