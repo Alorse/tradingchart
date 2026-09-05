@@ -9,6 +9,8 @@ import {
   balanceAfter,
   offsetPct,
   offsetTicks,
+  signedPct,
+  signedTicks,
   rewardRiskRatio,
   openPnl,
   openPnlCurrency,
@@ -128,6 +130,23 @@ describe("offsetPct / offsetTicks / rewardRiskRatio", () => {
   });
   it("computes reward:risk from entry/stop/target", () => {
     expect(rewardRiskRatio(100, 90, 120)).toBeCloseTo(2, 5);
+  });
+});
+
+describe("signedPct / signedTicks", () => {
+  it("keeps a long's raw price-direction sign", () => {
+    expect(signedPct(100, 110, "long")).toBeCloseTo(10, 5);
+    expect(signedPct(100, 90, "long")).toBeCloseTo(-10, 5);
+  });
+  it("flips sign for a short so profit is always positive", () => {
+    // A short's target sits below entry — a price drop, but a gain.
+    expect(signedPct(100, 90, "short")).toBeCloseTo(10, 5);
+    // A short's stop sits above entry — a price rise, but a loss.
+    expect(signedPct(100, 110, "short")).toBeCloseTo(-10, 5);
+  });
+  it("mirrors the same flip for ticks", () => {
+    expect(signedTicks(100, 90, 0.1, "short")).toBe(100);
+    expect(signedTicks(100, 110, 0.1, "short")).toBe(-100);
   });
 });
 

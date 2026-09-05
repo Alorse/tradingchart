@@ -129,6 +129,27 @@ export function offsetTicks(entry: number, level: number, tickSize: number): num
   return ticksBetween(entry, level, tickSize);
 }
 
+/**
+ * `offsetPct` is signed by price direction, not P&L — a short's target sits
+ * below entry, so its raw offset is negative even though it's the profitable
+ * side. These flip the sign for a short so a profit is always positive and a
+ * loss always negative, matching how the stats block colors them.
+ */
+export function signedPct(entry: number, level: number, side: PositionSide): number {
+  const pct = offsetPct(entry, level);
+  return side === "long" ? pct : -pct;
+}
+
+export function signedTicks(
+  entry: number,
+  level: number,
+  tickSize: number,
+  side: PositionSide,
+): number {
+  const t = offsetTicks(entry, level, tickSize);
+  return side === "long" ? t : -t;
+}
+
 /** Reward:risk for an entry/stop/target triplet. */
 export function rewardRiskRatio(entry: number, stop: number, target: number): number {
   return rrRatio(entry, stop, target);
