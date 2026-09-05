@@ -6,6 +6,7 @@ import { PaperOrderPanel } from "@/components/trading/OrderPanel/PaperOrderPanel
 import { PaperPositionsPanel } from "@/components/layout/PaperPositionsPanel";
 import { TradeModeToggle } from "@/components/trading/TradeModeToggle";
 import { matchTpSl, EditOrderPopover } from "@/components/layout/PositionsPanel";
+import { IconButton } from "@/components/mobile/IconButton";
 import { useTradingStore } from "@/lib/store/trading-store";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
@@ -171,20 +172,20 @@ export function TradeScreen() {
                         {p.percentage >= 0 ? "+" : ""}{p.percentage.toFixed(2)}%
                       </span>
                     </div>
-                    <button
+                    <IconButton
                       onClick={() => openPositionEdit(posSymbol, p)}
                       aria-label="Edit take profit / stop loss"
-                      className="rounded p-1 text-tv-text-muted active:bg-tv-panel-hover active:text-tv-text"
+                      className="text-tv-text-muted active:bg-tv-panel-hover active:text-tv-text"
                     >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
+                      <Pencil className="size-4" />
+                    </IconButton>
+                    <IconButton
                       onClick={() => void closePosition(posSymbol, p)}
                       aria-label="Close position"
-                      className="rounded p-1 text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
+                      className="text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
                     >
-                      <X className="h-4 w-4" />
-                    </button>
+                      <X className="size-4" />
+                    </IconButton>
                   </div>
                 </div>
                 {(tp !== null || sl !== null || p.liquidationPrice > 0) && (
@@ -227,20 +228,20 @@ export function TradeScreen() {
                 </span>
               </div>
               <div className="flex items-center gap-1">
-                <button
+                <IconButton
                   onClick={() => setEditingOrder(o)}
                   aria-label="Edit order"
-                  className="rounded p-1 text-tv-text-muted active:bg-tv-panel-hover active:text-tv-text"
+                  className="text-tv-text-muted active:bg-tv-panel-hover active:text-tv-text"
                 >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
+                  <Pencil className="size-4" />
+                </IconButton>
+                <IconButton
                   onClick={() => void cancelOrder(symbol, o.orderId)}
                   aria-label="Cancel order"
-                  className="rounded p-1 text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
+                  className="text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
                 >
-                  <X className="h-4 w-4" />
-                </button>
+                  <X className="size-4" />
+                </IconButton>
               </div>
             </div>
           ))}
