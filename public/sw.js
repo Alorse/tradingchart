@@ -8,8 +8,8 @@
  *      • Never cache API routes (they need fresh data).
  *  - Skip caching POST/non-GET requests and cross-origin requests.
  */
-const CACHE = "tvf-shell-v1";
-const SHELL = ["/", "/manifest.webmanifest", "/logo.svg"];
+const CACHE = "tvf-shell-v2";
+const SHELL = ["/", "/manifest.webmanifest", "/logo.svg", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
