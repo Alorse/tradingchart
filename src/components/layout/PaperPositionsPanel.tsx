@@ -637,7 +637,7 @@ function PositionRowMenu({
 
 /* ───────────────────────── Close dialog ───────────────────────── */
 
-function ClosePositionDialog({
+export function ClosePositionDialog({
   position, initialQty, onOpenChange,
 }: { position: PaperPosition; initialQty: number; onOpenChange: (open: boolean) => void }) {
   const closePosition = usePaperTradingStore((s) => s.closePosition);
@@ -721,7 +721,7 @@ function ClosePositionDialog({
 
 /* ───────────────────────── Reverse dialog ───────────────────────── */
 
-function ReversePositionDialog({
+export function ReversePositionDialog({
   position, onOpenChange,
 }: { position: PaperPosition; onOpenChange: (open: boolean) => void }) {
   const reversePosition = usePaperTradingStore((s) => s.reversePosition);
@@ -765,7 +765,7 @@ function ReversePositionDialog({
 
 /* ───────────────────────── Edit position dialog ───────────────────────── */
 
-function EditPositionDialog({
+export function EditPositionDialog({
   position, onOpenChange,
 }: { position: PaperPosition; onOpenChange: (open: boolean) => void }) {
   const setBrackets = usePaperTradingStore((s) => s.setBrackets);
