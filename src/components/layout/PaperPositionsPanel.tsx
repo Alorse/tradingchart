@@ -256,7 +256,7 @@ function TabBtn({
   );
 }
 
-function SideChip({ side }: { side: "LONG" | "SHORT" }) {
+export function SideChip({ side }: { side: "LONG" | "SHORT" }) {
   const long = side === "LONG";
   return (
     <span
@@ -447,7 +447,7 @@ const LONG_PRESS_MS = 450;
 const LONG_PRESS_SLOP = 10;
 
 /** Right-click (desktop) / long-press (mobile) trigger for a row's action menu. */
-function useRowMenuTrigger(open: (x: number, y: number) => void) {
+export function useRowMenuTrigger(open: (x: number, y: number) => void) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
@@ -582,7 +582,7 @@ function PositionRow({
   );
 }
 
-function PositionRowMenu({
+export function PositionRowMenu({
   x, y, onEdit, onReverse, onClose, onClosePartial, onDismiss,
 }: {
   x: number;

@@ -3,16 +3,29 @@
 import { useMemo, useState } from "react";
 import { OrderPanel } from "@/components/trading/OrderPanel/OrderPanel";
 import { PaperOrderPanel } from "@/components/trading/OrderPanel/PaperOrderPanel";
-import { PaperPositionsPanel } from "@/components/layout/PaperPositionsPanel";
+import {
+  ClosePositionDialog,
+  EditPositionDialog,
+  PositionRowMenu,
+  ReversePositionDialog,
+  SideChip,
+  useRowMenuTrigger,
+} from "@/components/layout/PaperPositionsPanel";
 import { TradeModeToggle } from "@/components/trading/TradeModeToggle";
 import { matchTpSl, EditOrderPopover } from "@/components/layout/PositionsPanel";
 import { IconButton } from "@/components/mobile/IconButton";
 import { useTradingStore } from "@/lib/store/trading-store";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
+import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
+import { useSymbolInfo } from "@/lib/trading/symbol-info";
+import { computePositionFigures, formatPnlDisplay } from "@/lib/trading/paper-position-display";
+import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
+import { totalUnrealizedPnl } from "@/lib/trading/paper-engine";
+import type { PaperPosition } from "@/lib/trading/paper-engine";
 import type { Order } from "@/lib/binance/trading-types";
 import type { TradingMode } from "@/lib/store/trading-mode-store";
 
@@ -92,7 +105,7 @@ export function TradeScreen() {
           <div className="shrink-0 border-b border-tv-border">
             <PaperOrderPanel key={symbol} />
           </div>
-          <PaperPositionsPanel />
+          <PaperTradeSection />
         </div>
       </div>
     );
@@ -289,5 +302,174 @@ function Section({
         <div>{children}</div>
       )}
     </section>
+  );
+}
+
+/**
+ * Paper mode's mobile body: a stats row + the positions/orders lists, in the
+ * same shape as the live section above — but the positions render as cards
+ * (`PaperPositionCard`) instead of reusing the desktop `PaperPositionsPanel`
+ * table wholesale, since a `<table>` doesn't reflow onto a phone width.
+ * History/Notifications stay desktop-only for now (not part of this pass).
+ */
+function PaperTradeSection() {
+  const account = usePaperTradingStore((s) => s.account);
+  const marks = usePaperTradingStore((s) => s.marks);
+  const equity = usePaperTradingStore((s) => s.equity());
+  const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
+  const cancelOrder = usePaperTradingStore((s) => s.cancelOrder);
+
+  const restingOrders = useMemo(
+    () => account.orders.filter((o) => o.status === "NEW"),
+    [account.orders],
+  );
+  const unrealized = useMemo(
+    () => totalUnrealizedPnl(account.positions, marks),
+    [account.positions, marks],
+  );
+
+  return (
+    <>
+      <div className="grid shrink-0 grid-cols-3 gap-2 border-b border-tv-border bg-tv-panel px-3 py-2 text-[11px]">
+        <Stat label="Equity" value={equity.toFixed(2)} />
+        <Stat
+          label="uPnL"
+          value={unrealized.toFixed(2)}
+          valueClass={unrealized >= 0 ? "text-tv-green" : "text-tv-red"}
+        />
+        <Stat label="Open" value={`${account.positions.length} pos · ${restingOrders.length} ord`} />
+      </div>
+
+      <Section title="Positions" emptyMessage="No open positions">
+        {account.positions.map((p) => (
+          <PaperPositionCard
+            key={p.id}
+            position={p}
+            mark={marks[p.symbol] ?? p.entryPrice}
+            pnlDisplayMode={pnlDisplayMode}
+          />
+        ))}
+      </Section>
+
+      <Section title="Open Orders" emptyMessage="No pending orders">
+        {restingOrders.map((o) => (
+          <div
+            key={o.id}
+            className="flex items-center justify-between border-b border-tv-border/60 px-3 py-2"
+          >
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold">
+                {o.feedSymbol ?? o.symbol}{" "}
+                <span className={cn(
+                  "rounded px-1 text-[9px]",
+                  o.side === "BUY" ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
+                )}>
+                  {o.side === "BUY" ? "Buy" : "Sell"}
+                </span>
+              </span>
+              <span className="font-mono text-[10px] text-tv-text-muted tabular-nums">
+                {o.type} · {o.qty} @ {formatPrice(o.price)}
+              </span>
+            </div>
+            <IconButton
+              onClick={() => cancelOrder(o.id)}
+              aria-label="Cancel order"
+              className="text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
+            >
+              <X className="size-4" />
+            </IconButton>
+          </div>
+        ))}
+      </Section>
+    </>
+  );
+}
+
+function PaperPositionCard({
+  position, mark, pnlDisplayMode,
+}: { position: PaperPosition; mark: number; pnlDisplayMode: PnlDisplayMode }) {
+  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const tickSize = useSymbolInfo(displaySymbol).tickSize;
+  const figures = computePositionFigures(position, { [position.symbol]: mark }, pnlDisplayMode, tickSize);
+
+  const [editing, setEditing] = useState(false);
+  const [closingQty, setClosingQty] = useState<number | null>(null);
+  const [reversing, setReversing] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const menuTrigger = useRowMenuTrigger((x, y) => setMenu({ x, y }));
+
+  return (
+    <div className="border-b border-tv-border/60 px-3 py-2.5" {...menuTrigger}>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            {displaySymbol} <SideChip side={position.side} />
+          </span>
+          <span className="font-mono text-[10px] text-tv-text-muted tabular-nums">
+            {position.qty} @ {formatPrice(position.entryPrice)}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-0.5">
+            <span className={cn("font-mono text-xs tabular-nums", figures.pnl >= 0 ? "text-tv-green" : "text-tv-red")}>
+              {formatPnlDisplay(figures.displayPnl, pnlDisplayMode)}
+            </span>
+            <span className={cn("font-mono text-[10px] tabular-nums", figures.roe >= 0 ? "text-tv-green" : "text-tv-red")}>
+              {figures.roe >= 0 ? "+" : ""}{figures.roe.toFixed(2)}%
+            </span>
+          </div>
+          <IconButton
+            onClick={() => setEditing(true)}
+            aria-label="Edit take profit / stop loss"
+            className="text-tv-text-muted active:bg-tv-panel-hover active:text-tv-text"
+          >
+            <Pencil className="size-4" />
+          </IconButton>
+          <IconButton
+            onClick={() => setClosingQty(position.qty)}
+            aria-label="Close position"
+            className="text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
+          >
+            <X className="size-4" />
+          </IconButton>
+        </div>
+      </div>
+      {(position.tp !== null || position.sl !== null || position.liquidationPrice > 0) && (
+        <div className="mt-1.5 flex items-center gap-3 font-mono text-[10px] tabular-nums">
+          {position.tp !== null && <span className="text-tv-green">TP {formatPrice(position.tp)}</span>}
+          {position.sl !== null && <span className="text-tv-yellow">SL {formatPrice(position.sl)}</span>}
+          {position.liquidationPrice > 0 && (
+            <span className={cn(figures.liquidationUrgent ? "font-bold text-tv-red" : "text-tv-red")}>
+              Liq {formatPrice(position.liquidationPrice)}
+              {figures.liquidationUrgent && " ⚠"}
+            </span>
+          )}
+        </div>
+      )}
+      {editing && (
+        <EditPositionDialog position={position} onOpenChange={(open) => !open && setEditing(false)} />
+      )}
+      {closingQty !== null && (
+        <ClosePositionDialog
+          position={position}
+          initialQty={closingQty}
+          onOpenChange={(open) => !open && setClosingQty(null)}
+        />
+      )}
+      {reversing && (
+        <ReversePositionDialog position={position} onOpenChange={(open) => !open && setReversing(false)} />
+      )}
+      {menu && (
+        <PositionRowMenu
+          x={menu.x}
+          y={menu.y}
+          onEdit={() => { setEditing(true); setMenu(null); }}
+          onReverse={() => { setReversing(true); setMenu(null); }}
+          onClose={() => { setClosingQty(position.qty); setMenu(null); }}
+          onClosePartial={() => { setClosingQty(position.qty / 2); setMenu(null); }}
+          onDismiss={() => setMenu(null)}
+        />
+      )}
+    </div>
   );
 }
