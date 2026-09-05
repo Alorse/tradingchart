@@ -699,6 +699,19 @@ function PositionInputsTab({
   );
 }
 
+/** Syncs a text-input draft to an external value without an effect: React's
+ *  documented "adjust state during render" escape hatch for a controlled
+ *  input whose source of truth can also change from outside (e.g. a chart drag). */
+function useSyncedDraft<T>(value: T, format: (v: T) => string) {
+  const [prevValue, setPrevValue] = useState(value);
+  const [draft, setDraft] = useState(() => format(value));
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setDraft(format(value));
+  }
+  return [draft, setDraft] as const;
+}
+
 function NumberField({
   label,
   value,
@@ -708,8 +721,7 @@ function NumberField({
   value: number;
   onChange: (n: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
+  const [draft, setDraft] = useSyncedDraft(value, (v) => String(v));
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs text-tv-text">{label}</span>
@@ -758,8 +770,7 @@ function DraftNumberInput({
   placeholder?: string;
   className?: string;
 }) {
-  const [draft, setDraft] = useState(value === undefined ? "" : String(value));
-  useEffect(() => setDraft(value === undefined ? "" : String(value)), [value]);
+  const [draft, setDraft] = useSyncedDraft(value, (v) => (v === undefined ? "" : String(v)));
   return (
     <Input
       type="number"
@@ -795,10 +806,8 @@ function PricePlusTicks({
   onLevel: (v: number) => void;
 }) {
   const ticks = tickSize > 0 ? Math.round((level - entry) / tickSize) : 0;
-  const [priceDraft, setPriceDraft] = useState(String(level));
-  const [ticksDraft, setTicksDraft] = useState(String(ticks));
-  useEffect(() => setPriceDraft(String(level)), [level]);
-  useEffect(() => setTicksDraft(String(ticks)), [ticks]);
+  const [priceDraft, setPriceDraft] = useSyncedDraft(level, (v) => String(v));
+  const [ticksDraft, setTicksDraft] = useSyncedDraft(ticks, (v) => String(v));
 
   return (
     <div className="flex items-center justify-between gap-3">
