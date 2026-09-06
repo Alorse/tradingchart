@@ -7,13 +7,7 @@ import { useChartStore } from "@/lib/store/chart-store";
 import { useBookTicker } from "@/lib/binance/use-book-ticker";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { tradeGate } from "@/lib/trading/exchange-gate";
-import {
-  qtyToSizings,
-  sizingToQty,
-  modeRequiresSl,
-  ticksBetween,
-  type SizingCtx,
-} from "@/lib/trading/sizing";
+import { ticksBetween } from "@/lib/trading/sizing";
 import { isPerp } from "@/lib/binance/rest";
 import { getBaseAsset } from "@/components/watchlist/CoinIcon";
 import { cn } from "@/lib/utils";
@@ -28,7 +22,9 @@ import {
   SizingControl,
   SubmitButton,
   Switch,
-  nextSizingInput,
+  TicketPriceInput,
+  orderSummaryLabel,
+  useOrderTicket,
 } from "./shared";
 
 const TIF_OPTIONS: TimeInForce[] = ["GTC", "IOC", "FOK", "GTX"];
@@ -88,47 +84,15 @@ export function OrderPanel() {
     return usdt ? usdt.free : 0;
   }, [balance]);
 
-  // Best price for the active form type
-  const referencePrice = useMemo(() => {
-    if (form.type === "MARKET") {
-      return form.side === "BUY" ? ask : bid;
-    }
-    return parseFloat(form.price) || ask || bid || 0;
-  }, [form.type, form.price, form.side, bid, ask]);
-
-  const sl = form.slEnabled && form.sl ? parseFloat(form.sl) : null;
-
-  const ctx: SizingCtx = useMemo(
-    () => ({
-      entry: referencePrice ?? 0,
-      sl,
-      leverage: form.leverage,
-      balanceUsd,
-      tickSize: symInfo.tickSize,
-      stepSize: symInfo.stepSize,
-    }),
-    [referencePrice, sl, form.leverage, balanceUsd, symInfo.tickSize, symInfo.stepSize],
-  );
-
-  // Derived sizing values from canonical qty
-  const qtyNum = parseFloat(form.qty) || 0;
-  const derived = useMemo(() => qtyToSizings(qtyNum, ctx), [qtyNum, ctx]);
-
-  // In the risk modes the typed risk is the fixed side, so moving the stop (or
-  // the entry) re-sizes the position instead of changing what's at stake.
-  // `ctx` carries the stop, so this reacts to chart drags too; writing only on
-  // a real change keeps it from looping.
-  useEffect(() => {
-    if (!modeRequiresSl(form.sizingMode) || sl === null) return;
-    const risk = parseFloat(form.sizingInput);
-    if (!isFinite(risk) || risk <= 0) return;
-    const newQty = sizingToQty(form.sizingMode, risk, ctx);
-    const formatted = newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "";
-    if (formatted !== form.qty) updateForm({ qty: formatted });
-  }, [
-    form.sizingMode, form.sizingInput, form.qty, sl, ctx,
-    symInfo.quantityPrecision, updateForm,
-  ]);
+  const { referencePrice, qtyNum, derived, sizingHandlers } = useOrderTicket({
+    form,
+    patch: updateForm,
+    bid,
+    ask,
+    balanceUsd,
+    leverage: form.leverage,
+    symInfo,
+  });
 
   if (!apiKey || !apiSecret) {
     return (
@@ -146,8 +110,7 @@ export function OrderPanel() {
     return <PositionEditPanel symbol={editingPosition.symbol} position={editingPosition.position} />;
   }
 
-  const cleanSymForSummary = symbol.replace(/\.P$/, "");
-  const priceLabel = `${form.qty || "0"} ${cleanSymForSummary} ${form.type === "LIMIT" ? `@ ${form.price || "—"} LIMIT` : form.type}`;
+  const priceLabel = orderSummaryLabel(form, symbol);
 
   return (
     <div className="flex h-full flex-col overflow-hidden text-tv-text">
@@ -169,16 +132,14 @@ export function OrderPanel() {
 
       <div className="flex-1 overflow-y-auto px-3 py-2.5 space-y-3">
         {form.type !== "MARKET" && (
-          <PriceInput
+          <TicketPriceInput
             value={form.price}
+            side={form.side}
+            bid={bid}
+            ask={ask}
+            referencePrice={referencePrice}
+            pricePrecision={symInfo.pricePrecision}
             onChange={(v) => updateForm({ price: v })}
-            placeholder={referencePrice ? referencePrice.toFixed(symInfo.pricePrecision) : "0.0"}
-            onSnapToBidAsk={() => {
-              const target = form.side === "BUY" ? bid : ask;
-              if (target) updateForm({ price: target.toFixed(symInfo.pricePrecision) });
-            }}
-            label="Price"
-            ticksLabel={ask ? `${form.side === "BUY" ? "Bid" : "Ask"} ${(form.side === "BUY" ? bid : ask)?.toFixed(symInfo.pricePrecision) ?? "—"}` : null}
           />
         )}
 
@@ -196,29 +157,7 @@ export function OrderPanel() {
           input={form.sizingInput}
           derived={derived}
           baseAsset={baseAsset}
-          onChangeMode={(mode) => {
-            // Recompute the visible input from canonical qty so it stays consistent.
-            updateForm({
-              sizingMode: mode,
-              sizingInput: nextSizingInput(qtyNum, mode, ctx),
-            });
-            // Force SL on if mode requires it.
-            if (modeRequiresSl(mode) && !form.slEnabled) {
-              updateForm({ slEnabled: true });
-            }
-          }}
-          onChangeInput={(raw) => {
-            const value = parseFloat(raw);
-            if (isFinite(value) && value > 0) {
-              const newQty = sizingToQty(form.sizingMode, value, ctx);
-              updateForm({
-                sizingInput: raw,
-                qty: newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "",
-              });
-            } else {
-              updateForm({ sizingInput: raw, qty: "" });
-            }
-          }}
+          {...sizingHandlers}
         />
 
         <ExitsSection

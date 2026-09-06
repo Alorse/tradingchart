@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useBookTicker } from "@/lib/binance/use-book-ticker";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
-import { qtyToSizings, sizingToQty, modeRequiresSl, type SizingCtx } from "@/lib/trading/sizing";
 import { isPerp } from "@/lib/binance/rest";
 import { paperFeedSource } from "@/lib/trading/paper-feed";
 import { getBaseAsset } from "@/components/watchlist/CoinIcon";
@@ -23,10 +22,11 @@ import {
   ExitsSection,
   LeverageSlider,
   OrderTypeTabs,
-  PriceInput,
   SizingControl,
   SubmitButton,
-  nextSizingInput,
+  TicketPriceInput,
+  orderSummaryLabel,
+  useOrderTicket,
 } from "./shared";
 
 const PAPER_ORDER_TYPE_TABS: Array<{ key: "MARKET" | "LIMIT"; label: string }> = [
@@ -96,49 +96,24 @@ export function PaperOrderPanel() {
   const [form, setForm] = useState<PaperOrderForm>(() =>
     defaultPaperOrderForm(account.settings.defaultLeverage),
   );
-  const patchForm = (patch: Partial<PaperOrderForm>) => setForm((f) => ({ ...f, ...patch }));
-
-  const referencePrice = useMemo(() => {
-    if (form.type === "MARKET") return form.side === "BUY" ? ask : bid;
-    return parseFloat(form.price) || ask || bid || 0;
-  }, [form.type, form.price, form.side, bid, ask]);
-
-  const sl = form.slEnabled && form.sl ? parseFloat(form.sl) : null;
-
-  const ctx: SizingCtx = useMemo(
-    () => ({
-      entry: referencePrice ?? 0,
-      sl,
-      // Mirrors `paperFormToMarketRequest`'s leverage cap: the slider is
-      // hidden for a non-perp symbol, so the sizing preview shouldn't act
-      // like a leverage the actual submission will never apply.
-      leverage: perp ? form.leverage : 1,
-      balanceUsd: account.balance,
-      tickSize: symInfo.tickSize,
-      stepSize: symInfo.stepSize,
-    }),
-    [referencePrice, sl, perp, form.leverage, account.balance, symInfo.tickSize, symInfo.stepSize],
+  // Stable so `useOrderTicket`'s risk effect can depend on it.
+  const patchForm = useCallback(
+    (patch: Partial<PaperOrderForm>) => setForm((f) => ({ ...f, ...patch })),
+    [],
   );
 
-  const qtyNum = parseFloat(form.qty) || 0;
-  const derived = useMemo(() => qtyToSizings(qtyNum, ctx), [qtyNum, ctx]);
-
-  // In the risk modes the typed risk is the fixed side, so moving the stop
-  // re-sizes the position instead of changing what's at stake — same effect
-  // as the live OrderPanel's, so a RISK_USD/RISK_PCT ticket isn't stuck at
-  // whatever qty it had when the mode was picked.
-  useEffect(() => {
-    if (!modeRequiresSl(form.sizingMode) || sl === null) return;
-    const risk = parseFloat(form.sizingInput);
-    if (!isFinite(risk) || risk <= 0) return;
-    const newQty = sizingToQty(form.sizingMode, risk, ctx);
-    const formatted = newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "";
-    // OrderPanel's identical effect writes `qty` back through a Zustand
-    // store action, which this lint rule doesn't recognize as setState; this
-    // panel's form is local useState, so the same reactive write trips it.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (formatted !== form.qty) patchForm({ qty: formatted });
-  }, [form.sizingMode, form.sizingInput, form.qty, sl, ctx, symInfo.quantityPrecision]);
+  const { referencePrice, qtyNum, derived, sizingHandlers } = useOrderTicket({
+    form,
+    patch: patchForm,
+    bid,
+    ask,
+    balanceUsd: account.balance,
+    // Mirrors `paperFormToMarketRequest`'s leverage cap: the slider is hidden
+    // for a non-perp symbol, so the sizing preview shouldn't act like a
+    // leverage the actual submission will never apply.
+    leverage: perp ? form.leverage : 1,
+    symInfo,
+  });
 
   const lastReject = lastEvents.find((e) => e.type === "reject");
 
@@ -169,8 +144,7 @@ export function PaperOrderPanel() {
     }
   }
 
-  const cleanSymForSummary = symbol.replace(/\.P$/, "");
-  const priceLabel = `${form.qty || "0"} ${cleanSymForSummary} ${form.type === "LIMIT" ? `@ ${form.price || "—"} LIMIT` : form.type}`;
+  const priceLabel = orderSummaryLabel(form, symbol);
 
   return (
     <div className="flex h-full flex-col overflow-hidden text-tv-text">
@@ -191,16 +165,14 @@ export function PaperOrderPanel() {
 
       <div className="flex-1 overflow-y-auto px-3 py-2.5 space-y-3">
         {form.type === "LIMIT" && (
-          <PriceInput
+          <TicketPriceInput
             value={form.price}
+            side={form.side}
+            bid={bid}
+            ask={ask}
+            referencePrice={referencePrice}
+            pricePrecision={symInfo.pricePrecision}
             onChange={(v) => patchForm({ price: v })}
-            placeholder={referencePrice ? referencePrice.toFixed(symInfo.pricePrecision) : "0.0"}
-            onSnapToBidAsk={() => {
-              const target = form.side === "BUY" ? bid : ask;
-              if (target) patchForm({ price: target.toFixed(symInfo.pricePrecision) });
-            }}
-            label="Price"
-            ticksLabel={ask ? `${form.side === "BUY" ? "Bid" : "Ask"} ${(form.side === "BUY" ? bid : ask)?.toFixed(symInfo.pricePrecision) ?? "—"}` : null}
           />
         )}
 
@@ -209,27 +181,7 @@ export function PaperOrderPanel() {
           input={form.sizingInput}
           derived={derived}
           baseAsset={baseAsset}
-          onChangeMode={(mode) => {
-            patchForm({
-              sizingMode: mode,
-              sizingInput: nextSizingInput(qtyNum, mode, ctx),
-            });
-            if (modeRequiresSl(mode) && !form.slEnabled) {
-              patchForm({ slEnabled: true });
-            }
-          }}
-          onChangeInput={(raw) => {
-            const value = parseFloat(raw);
-            if (isFinite(value) && value > 0) {
-              const newQty = sizingToQty(form.sizingMode, value, ctx);
-              patchForm({
-                sizingInput: raw,
-                qty: newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "",
-              });
-            } else {
-              patchForm({ sizingInput: raw, qty: "" });
-            }
-          }}
+          {...sizingHandlers}
         />
 
         <ExitsSection
