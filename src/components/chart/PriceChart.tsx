@@ -111,6 +111,19 @@ interface Props {
 // canvas stays in sync with the CSS/Tailwind theme. See src/lib/chart/theme.ts.
 const TV_COLORS = getTvColors();
 
+// Volume bars and the MACD histogram tint by direction at a fixed alpha. Both
+// arms are constant, so they are built once here rather than re-concatenated
+// per bar inside the `setData` maps below (a few thousand bars per load, replay
+// scrub, timeframe switch and symbol switch).
+const VOL_UP = `${TV_COLORS.green}66`;
+const VOL_DOWN = `${TV_COLORS.red}66`;
+const MACD_HIST_UP = `${TV_COLORS.green}80`;
+const MACD_HIST_DOWN = `${TV_COLORS.red}80`;
+
+/** Volume bar tint for one bar, by whether it closed up. */
+const volumeColor = (bar: { open: number; close: number }) =>
+  bar.close >= bar.open ? VOL_UP : VOL_DOWN;
+
 // Tools whose second point snaps to a horizontal/vertical axis while Shift is held.
 const AXIS_CONSTRAIN_TOOLS = new Set<string>(["trendline", "ray", "arrow"]);
 
@@ -1329,7 +1342,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       const data = candlesRef.current.map((k) => ({
         time: k.time as UTCTimestamp,
         value: k.volume,
-        color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+        color: volumeColor(k),
       }));
       v.setData(data);
     } else if (!indicators.volume && volumeSeriesRef.current && chartRef.current) {
@@ -2467,7 +2480,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       m.map((p) => ({
         time: p.time as UTCTimestamp,
         value: p.histogram,
-        color: p.histogram >= 0 ? `${TV_COLORS.green}80` : `${TV_COLORS.red}80`,
+        color: p.histogram >= 0 ? MACD_HIST_UP : MACD_HIST_DOWN,
       })),
     );
     const last = m.at(-1);
@@ -2741,7 +2754,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             klines.map((k) => ({
               time: k.time as UTCTimestamp,
               value: k.volume,
-              color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+              color: volumeColor(k),
             })),
           );
         }
@@ -2828,7 +2841,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                   fresh.map((k) => ({
                     time: k.time as UTCTimestamp,
                     value: k.volume,
-                    color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+                    color: volumeColor(k),
                   })),
                 );
               }
@@ -2917,10 +2930,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                   volumeSeriesRef.current.update({
                     time: synth.time as UTCTimestamp,
                     value: synth.volume,
-                    color:
-                      synth.close >= synth.open
-                        ? `${TV_COLORS.green}66`
-                        : `${TV_COLORS.red}66`,
+                    color: volumeColor(synth),
                   });
                 }
                 updateEMAs();
@@ -2978,7 +2988,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               volumeSeriesRef.current.update({
                 time: k.time as UTCTimestamp,
                 value: k.volume,
-                color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+                color: volumeColor(k),
               });
             }
             updateEMAs();
@@ -3032,7 +3042,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         arr.map((k) => ({
           time: k.time as UTCTimestamp,
           value: k.volume,
-          color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+          color: volumeColor(k),
         })),
       );
     }
