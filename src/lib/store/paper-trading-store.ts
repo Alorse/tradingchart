@@ -2,7 +2,8 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { PersistStorage, StorageValue } from "zustand/middleware";
+import type { PersistStorage } from "zustand/middleware";
+import { localStoragePersist } from "@/lib/store/persist-storage";
 import {
   DEFAULT_PAPER_SETTINGS,
   cancelOrder as engineCancelOrder,
@@ -11,8 +12,10 @@ import {
   equity as engineEquity,
   evaluateTick as engineEvaluateTick,
   fillMarketOrder,
+  isPositive,
   placeLimitOrder as enginePlaceLimitOrder,
   reversePosition as engineReversePosition,
+  sanitizePersistedSettings,
   setBrackets as engineSetBrackets,
   updateSettings as engineUpdateSettings,
 } from "@/lib/trading/paper-engine";
@@ -26,7 +29,7 @@ import type {
   PaperSettings,
   PaperTrade,
 } from "@/lib/trading/paper-engine";
-import { PNL_DISPLAY_MODES } from "@/lib/trading/paper-position-display";
+import { isPnlDisplayMode } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 
 /**
@@ -91,29 +94,30 @@ interface PaperTradingState {
 type Persisted = { account: PaperAccount; pnlDisplayMode: PnlDisplayMode };
 
 /**
- * `persist`'s wrapped `set` re-serializes the whole store to localStorage on
- * *every* call, regardless of whether the persisted slice actually changed —
- * see `partialize` below, which is just `{ account, pnlDisplayMode }`.
- * `evaluateTick` calls `set` on a mark-only tick too (a manual close or
- * `equity()` needs the fresh mark, so it can't just skip `set`), which would
- * otherwise mean a full JSON.stringify of positions/orders/history on every
- * live price update. Caching the last `account`/`pnlDisplayMode` actually
- * written and skipping the write when both are unchanged keeps that cost tied
- * to real mutations instead of ticks.
+ * The shared localStorage backing, plus one extra layer: skip a write whose
+ * persisted slice is identical to the last one written.
+ *
+ * `persist`'s wrapped `set` re-serializes the whole store on *every* call,
+ * regardless of whether the persisted slice actually changed — and `marks`
+ * lives in this same store, so `evaluateTick` reaches `set` on a mark-only
+ * tick too (a manual close or `equity()` needs the fresh mark). Without the
+ * cache that would mean a full JSON.stringify of positions/orders/history on
+ * every live price update. Moving `marks` into a store of its own would fix
+ * it at the source; until then, comparing `account`/`pnlDisplayMode` by
+ * identity keeps the write cost tied to real mutations instead of ticks.
  */
-function createPaperStorage(): PersistStorage<Persisted> {
+function createPaperStorage(): PersistStorage<Persisted> | undefined {
+  const base = localStoragePersist<Persisted>();
+  if (!base) return undefined;
   let lastAccount: PaperAccount | null = null;
   let lastMode: PnlDisplayMode | null = null;
   return {
-    getItem: (name) => {
-      const raw = globalThis.localStorage.getItem(name);
-      return raw ? (JSON.parse(raw) as StorageValue<Persisted>) : null;
-    },
+    ...base,
     setItem: (name, value) => {
       if (value.state.account === lastAccount && value.state.pnlDisplayMode === lastMode) return;
       lastAccount = value.state.account;
       lastMode = value.state.pnlDisplayMode;
-      globalThis.localStorage.setItem(name, JSON.stringify(value));
+      base.setItem(name, value);
     },
     removeItem: (name) => {
       // Drop the write-skip cache along with the blob: after a removal the
@@ -122,13 +126,45 @@ function createPaperStorage(): PersistStorage<Persisted> {
       // happens to produce a fresh `account` object.
       lastAccount = null;
       lastMode = null;
-      globalThis.localStorage.removeItem(name);
+      base.removeItem(name);
     },
   };
 }
 
 function isQuote(price: number | undefined): price is number {
-  return price !== undefined && Number.isFinite(price) && price > 0;
+  return price !== undefined && isPositive(price);
+}
+
+/**
+ * The price a manual action should transact at: the caller's explicit price if
+ * it gave one, else the symbol's last live mark. `null` when neither is a
+ * usable quote, which is every such action's bail-out condition.
+ */
+function quoteFor(
+  marks: Record<string, number>,
+  symbol: string,
+  price?: number,
+): number | null {
+  const quote = price ?? marks[symbol];
+  return isQuote(quote) ? quote : null;
+}
+
+/**
+ * `marks` with `symbol` marked at `price`, reusing the existing object when
+ * the value is unchanged — a repeated tick must not hand subscribers a fresh
+ * identity and re-render them.
+ */
+function withMark(
+  marks: Record<string, number>,
+  symbol: string,
+  price: number,
+): Record<string, number> {
+  return marks[symbol] === price ? marks : { ...marks, [symbol]: price };
+}
+
+/** Narrows an unknown persisted blob to something with readable fields. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
 }
 
 function isFiniteNumber(n: unknown): n is number {
@@ -142,27 +178,28 @@ function isFiniteOrNull(n: unknown): n is number | null {
   return n === null || isFiniteNumber(n);
 }
 
-const PAPER_DIRECTIONS = new Set(["LONG", "SHORT"]);
-const PAPER_ORDER_SIDES = new Set(["BUY", "SELL"]);
-const PAPER_ORDER_STATUSES = new Set(["NEW", "FILLED", "CANCELED"]);
+// Typed as `unknown` sets on purpose: they are handed fields off an unvalidated
+// blob, so `has` should accept whatever is there rather than force a cast.
+const PAPER_DIRECTIONS: ReadonlySet<unknown> = new Set(["LONG", "SHORT"]);
+const PAPER_ORDER_SIDES: ReadonlySet<unknown> = new Set(["BUY", "SELL"]);
+const PAPER_ORDER_STATUSES: ReadonlySet<unknown> = new Set(["NEW", "FILLED", "CANCELED"]);
 
 /**
  * A persisted position/order/trade needs its money-math fields intact —
  * anything else (a stray `null` from a corrupted write, a field that lost its
  * type across a schema change) would crash `equity()`/`usedMargin()`, which
  * reduce over these arrays unconditionally, or silently rehydrate NaN
- * margin/fees into every calculation downstream (adversarial re-audit
- * finding 4).
+ * margin/fees into every calculation downstream.
  *
  * Every field the engine or a table actually *reads* is checked, not just the
  * headline numbers: a `qty <= 0` position is untradeable and un-closeable
  * (`closeSlice` divides by it), a `side` outside the direction enum inverts
  * every P&L sign through `pnlAtExit`, and a `reserved` that survived as a
  * string turns `usedMargin`'s `+` into string concatenation, poisoning equity
- * for the whole session (holistic review finding 3).
+ * for the whole session.
  */
 function isValidPersistedPosition(p: unknown): p is PaperPosition {
-  if (typeof p !== "object" || p === null) return false;
+  if (!isRecord(p)) return false;
   const pos = p as Partial<PaperPosition>;
   return (
     isFiniteNumber(pos.qty) &&
@@ -172,29 +209,29 @@ function isValidPersistedPosition(p: unknown): p is PaperPosition {
     isFiniteNumber(pos.entryPrice) &&
     isFiniteNumber(pos.leverage) &&
     isFiniteNumber(pos.feesPaid) &&
-    PAPER_DIRECTIONS.has(pos.side as string) &&
+    PAPER_DIRECTIONS.has(pos.side) &&
     isFiniteOrNull(pos.tp) &&
     isFiniteOrNull(pos.sl)
   );
 }
 
 function isValidPersistedOrder(o: unknown): o is PaperOrder {
-  if (typeof o !== "object" || o === null) return false;
+  if (!isRecord(o)) return false;
   const ord = o as Partial<PaperOrder>;
   return (
     isFiniteNumber(ord.price) &&
     isFiniteNumber(ord.qty) &&
     ord.qty > 0 &&
     isFiniteNumber(ord.reserved) &&
-    PAPER_ORDER_SIDES.has(ord.side as string) &&
-    PAPER_ORDER_STATUSES.has(ord.status as string)
+    PAPER_ORDER_SIDES.has(ord.side) &&
+    PAPER_ORDER_STATUSES.has(ord.status)
   );
 }
 
 /** The fields the History table renders — a non-finite one shows up as
  *  "NaN USDT" in a row that can never be corrected. */
 function isValidPersistedTrade(t: unknown): t is PaperTrade {
-  if (typeof t !== "object" || t === null) return false;
+  if (!isRecord(t)) return false;
   const trade = t as Partial<PaperTrade>;
   return (
     isFiniteNumber(trade.realizedPnl) &&
@@ -204,20 +241,6 @@ function isValidPersistedTrade(t: unknown): t is PaperTrade {
     isFiniteNumber(trade.entryPrice) &&
     isFiniteNumber(trade.exitPrice)
   );
-}
-
-/** Keeps a persisted settings key only when it survives as a finite number — a
- *  string or NaN left in place would rehydrate straight into every fee/margin
- *  calculation that reads `settings` (adversarial re-audit finding 4). */
-function sanitizePersistedSettings(raw: unknown): Partial<PaperSettings> {
-  if (typeof raw !== "object" || raw === null) return {};
-  const settings = raw as Record<string, unknown>;
-  const out: Partial<PaperSettings> = {};
-  for (const key of Object.keys(DEFAULT_PAPER_SETTINGS) as (keyof PaperSettings)[]) {
-    const value = settings[key];
-    if (isFiniteNumber(value)) out[key] = value;
-  }
-  return out;
 }
 
 /** True while the account still looks exactly as it was seeded. */
@@ -238,7 +261,7 @@ function isUntouched(account: PaperAccount): boolean {
  * this one over time.
  */
 export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (!isRecord(raw)) return null;
   const account = raw as Partial<PaperAccount>;
   if (
     !Array.isArray(account.positions) ||
@@ -252,9 +275,12 @@ export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
   ) {
     return null;
   }
+  // Built field by field rather than spread over a seed account: `PaperAccount`
+  // is closed and every one of its five fields is written here, so a spread
+  // only carried the blob's stray keys forward — which is exactly what forced
+  // the `as PaperAccount` cast that stopped TypeScript checking this return.
   return {
-    ...createAccount(),
-    ...account,
+    balance: account.balance,
     positions: account.positions.filter(isValidPersistedPosition),
     orders: account.orders.filter(isValidPersistedOrder),
     history: account.history.filter(isValidPersistedTrade),
@@ -262,7 +288,7 @@ export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
       ...DEFAULT_PAPER_SETTINGS,
       ...sanitizePersistedSettings(account.settings),
     },
-  } as PaperAccount;
+  };
 }
 
 export const usePaperTradingStore = create<PaperTradingState>()(
@@ -275,14 +301,14 @@ export const usePaperTradingStore = create<PaperTradingState>()(
 
       placeOrder: (req, price) => {
         const { account, marks } = get();
-        const quote = price ?? marks[req.symbol];
-        if (!isQuote(quote)) return;
+        const quote = quoteFor(marks, req.symbol, price);
+        if (quote === null) return;
         const res = fillMarketOrder(account, req, quote, Date.now());
         set({
           account: res.account,
           // The fill price is a quote by definition, so it seeds the mark and
           // equity is meaningful before the first socket tick arrives.
-          marks: marks[req.symbol] === quote ? marks : { ...marks, [req.symbol]: quote },
+          marks: withMark(marks, req.symbol, quote),
           lastEvents: res.events,
         });
       },
@@ -293,22 +319,22 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       },
 
       cancelOrder: (orderId) => {
-        const res = engineCancelOrder(get().account, orderId, Date.now());
+        const res = engineCancelOrder(get().account, orderId);
         set({ account: res.account, lastEvents: res.events });
       },
 
       closePosition: (symbol, price, qty) => {
         const { account, marks } = get();
-        const quote = price ?? marks[symbol];
-        if (!isQuote(quote)) return;
+        const quote = quoteFor(marks, symbol, price);
+        if (quote === null) return;
         const res = engineClosePosition(account, symbol, quote, Date.now(), qty);
         set({ account: res.account, lastEvents: res.events });
       },
 
       reversePosition: (symbol, price, qty) => {
         const { account, marks } = get();
-        const quote = price ?? marks[symbol];
-        if (!isQuote(quote)) return;
+        const quote = quoteFor(marks, symbol, price);
+        if (quote === null) return;
         const res = engineReversePosition(account, symbol, quote, Date.now(), qty);
         set({ account: res.account, lastEvents: res.events });
       },
@@ -319,14 +345,14 @@ export const usePaperTradingStore = create<PaperTradingState>()(
         const { account, marks } = get();
         // The last live tick, so a bracket typed in on the wrong side of the
         // *current* market is dropped, not just the wrong side of a stale
-        // entry price (adversarial re-audit finding 2). Falls back to entry
-        // inside the engine when no tick has arrived yet.
+        // entry price. Falls back to entry inside the engine when no tick
+        // has arrived yet.
         const next = engineSetBrackets(account, symbol, brackets, marks[symbol]);
         set({ account: next });
       },
 
       evaluateTick: (symbol, price) => {
-        if (!Number.isFinite(price) || price <= 0) return;
+        if (!isPositive(price)) return;
         const { account, marks } = get();
         // The cheap path, and by far the common one: a tick for a symbol the
         // paper account has no exposure to costs two `some` scans and no
@@ -336,7 +362,7 @@ export const usePaperTradingStore = create<PaperTradingState>()(
           account.orders.some((o) => o.symbol === symbol);
         if (!relevant) return;
 
-        const nextMarks = marks[symbol] === price ? marks : { ...marks, [symbol]: price };
+        const nextMarks = withMark(marks, symbol, price);
         const res = engineEvaluateTick(account, symbol, price, Date.now());
         // Identical price, nothing triggered: leave every reference alone so
         // subscribed components don't re-render on a repeated tick. A tick
@@ -379,9 +405,6 @@ export const usePaperTradingStore = create<PaperTradingState>()(
     {
       name: PAPER_STORAGE_KEY,
       version: 1,
-      // Going through `globalThis.localStorage` (rather than `window`) is
-      // identical in the browser and is what lets the offline `node --test`
-      // suite exercise this round trip for real.
       storage: createPaperStorage(),
       // Account and the P&L display preference survive a reload; marks and
       // events are session data.
@@ -391,8 +414,8 @@ export const usePaperTradingStore = create<PaperTradingState>()(
        * corrupted one) must not leave the account half-built, since every fee
        * and margin calculation reads off `settings`. Beyond the top-level
        * shape, every array item and every settings value is validated
-       * individually (adversarial re-audit finding 4) — a single bad
-       * position/order/setting is dropped rather than sinking the whole
+       * individually — a single bad position/order/setting is dropped
+       * rather than sinking the whole
        * account back to `current`, since the rest of a mostly-intact blob is
        * still worth keeping. A `pnlDisplayMode` outside the known enum (a
        * stale value from before a mode was renamed, or a hand-edited blob)
@@ -402,8 +425,8 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       merge: (persisted, current) => {
         const raw = persisted as { account?: unknown; pnlDisplayMode?: unknown } | undefined;
         const account = sanitizePaperAccount(raw?.account);
-        const pnlDisplayMode = PNL_DISPLAY_MODES.includes(raw?.pnlDisplayMode as PnlDisplayMode)
-          ? (raw!.pnlDisplayMode as PnlDisplayMode)
+        const pnlDisplayMode = isPnlDisplayMode(raw?.pnlDisplayMode)
+          ? raw.pnlDisplayMode
           : current.pnlDisplayMode;
         return { ...current, ...(account ? { account } : {}), pnlDisplayMode };
       },

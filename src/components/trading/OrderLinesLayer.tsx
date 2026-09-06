@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { IChartApi, ISeriesApi, IPriceLine } from "lightweight-charts";
+import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { useTradingStore } from "@/lib/store/trading-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { isPerp, cleanSym } from "@/lib/binance/rest";
@@ -12,14 +12,26 @@ import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { pnlAtExit } from "@/lib/trading/sizing";
 import type { Order, Position } from "@/lib/binance/trading-types";
 import { TV_PINE } from "@/lib/chart/theme";
+import { useSeriesPriceLines } from "@/lib/chart/price-lines";
+import {
+  AXIS_GAP,
+  CHIP_HEIGHT,
+  LIMIT_COLOR,
+  LIQ_COLOR,
+  SL_COLOR,
+  TP_COLOR,
+  chipWidth,
+  entryLineColor,
+  layoutChipsRightToLeft,
+  outlineChip,
+  pnlCloseChip,
+  solidChip,
+  stopEvt,
+} from "./chart-chips";
+import type { Chip } from "./chart-chips";
 
-/** Bybit-style colors. Limit is always blue regardless of side. */
-const LIMIT_COLOR = TV_PINE.blue;
-const TP_COLOR = TV_PINE.green;
-const SL_COLOR = TV_PINE.amber;
-const LIQ_COLOR = TV_PINE.liquidation;
-/** Gap kept between the labels/toolbar and the price scale on the right. */
-const AXIS_GAP = 48;
+const NO_ORDERS: Order[] = [];
+const NO_POSITIONS: Position[] = [];
 
 interface Props {
   chart: IChartApi | null;
@@ -309,13 +321,6 @@ function LineRow({
   );
 }
 
-function stopEvt(e: React.MouseEvent) {
-  e.preventDefault();
-  e.stopPropagation();
-}
-
-const chipWidth = (s: string) => Math.max(s.length * 7 + 12, 24);
-
 /**
  * "Place a TP/SL" chip. Shown only while that bracket is unset; pressing it
  * starts a drag that positions the new level (a plain click drops it at a
@@ -330,28 +335,7 @@ function bracketChip(
   h: number,
   onMouseDown: (e: React.MouseEvent) => void,
 ) {
-  const w = chipWidth(label);
-  return {
-    w,
-    el: (x: number) => (
-      <g
-        key={key}
-        style={{ pointerEvents: "all", cursor: "ns-resize" }}
-        onMouseDown={onMouseDown}
-      >
-        <rect
-          x={x} y={yTop} width={w} height={h} rx={3}
-          fill={TV_PINE.pillFill} stroke={color} strokeDasharray="3,2"
-        />
-        <text
-          x={x + w / 2} y={y + 4}
-          fill={color} fontSize={11} fontWeight="bold" textAnchor="middle"
-        >
-          {label}
-        </text>
-      </g>
-    ),
-  };
+  return outlineChip({ key, label, color, y, yTop, h, dashed: true, cursor: "ns-resize", onMouseDown });
 }
 
 interface PendingCtl {
@@ -379,58 +363,28 @@ function EntryToolbarRow({
   onPlaceTp?: (e: React.MouseEvent) => void;
   onPlaceSl?: (e: React.MouseEvent) => void;
 }) {
-  const H = 20;
-  const GAP = 4;
+  const H = CHIP_HEIGHT;
   const yTop = y - 10;
-  const chips: { w: number; el: (x: number) => React.ReactNode }[] = [];
+  const chips: Chip[] = [];
   // Short entries read red end-to-end (line, chips) instead of the long's
   // blue, so the direction is legible at a glance without reading the label.
-  const entryColor = side === "SELL" ? LIQ_COLOR : LIMIT_COLOR;
+  const entryColor = entryLineColor(side !== "SELL");
 
   // P&L percent merged with the close (×) button into ONE continuous outlined
   // box (black fill, blue border), separated by a thin divider — not two
   // separate boxes with a gap.
   const pnlStr = `${pnlPct >= 0 ? "+" : "−"}${Math.abs(pnlPct).toFixed(2)}%`;
-  const pnlColor = pnlPct >= 0 ? TP_COLOR : LIQ_COLOR;
-  const pnlW = chipWidth(pnlStr);
-  const closeW = 20;
-  const mergedW = pnlW + closeW;
-  chips.push({
-    w: mergedW,
-    el: (x) => (
-      <g key="pnl-close">
-        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} />
-        <text x={x + pnlW / 2} y={y + 4} fill={pnlColor} fontSize={11} fontFamily="var(--font-mono), monospace" textAnchor="middle">{pnlStr}</text>
-        <line x1={x + pnlW} x2={x + pnlW} y1={yTop} y2={yTop + H} stroke={entryColor} strokeWidth={1} />
-        <text x={x + pnlW + closeW / 2} y={y + 4} fill={entryColor} fontSize={13} fontWeight="bold" textAnchor="middle">×</text>
-        <rect
-          x={x + pnlW}
-          y={yTop}
-          width={closeW}
-          height={H}
-          fill="transparent"
-          style={{ pointerEvents: "all", cursor: "pointer" }}
-          onMouseDown={stopEvt}
-          onClick={(e) => { stopEvt(e); onClose?.(); }}
-        />
-      </g>
-    ),
-  });
+  chips.push(pnlCloseChip({
+    y, yTop, h: H,
+    pnlStr,
+    pnlColor: pnlPct >= 0 ? TP_COLOR : LIQ_COLOR,
+    borderColor: entryColor,
+    onClose: () => onClose?.(),
+  }));
 
   // Position size.
-  const sizeStr = String(qty);
-  const sizeW = chipWidth(sizeStr);
-  chips.push({
-    w: sizeW,
-    el: (x) => (
-      <g key="size">
-        <rect x={x} y={yTop} width={sizeW} height={H} rx={3} fill={entryColor} />
-        <text x={x + sizeW / 2} y={y + 4} fill={TV_PINE.white} fontSize={11} fontWeight="bold" fontFamily="var(--font-mono), monospace" textAnchor="middle">{sizeStr}</text>
-      </g>
-    ),
-  });
+  chips.push(solidChip({ key: "size", label: String(qty), fill: entryColor, y, yTop, h: H }));
 
-  // Bracket placement chips, to the left of the size chip.
   if (onPlaceSl) chips.push(bracketChip("place-sl", "SL", SL_COLOR, y, yTop, H, onPlaceSl));
   if (onPlaceTp) chips.push(bracketChip("place-tp", "TP", TP_COLOR, y, yTop, H, onPlaceTp));
 
@@ -468,15 +422,7 @@ function EntryToolbarRow({
     });
   }
 
-  // Lay chips out right→left, kept clear of the price scale.
-  let x = width - AXIS_GAP;
-  const placed: React.ReactNode[] = [];
-  for (const c of chips) {
-    x -= c.w;
-    placed.push(c.el(x));
-    x -= GAP;
-  }
-  const lineEnd = Math.max(0, x);
+  const { placed, lineEnd } = layoutChipsRightToLeft(chips, width);
 
   return (
     <g>
@@ -507,10 +453,9 @@ function PreviewOrderRow({
   onCancel?: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
 }) {
-  const H = 20;
-  const GAP = 4;
+  const H = CHIP_HEIGHT;
   const yTop = y - 10;
-  const chips: { w: number; el: (x: number) => React.ReactNode }[] = [];
+  const chips: Chip[] = [];
 
   // Rightmost: [qty | type | ×] merged into one outlined box with dividers.
   const qtyStr = qty > 0 ? String(qty) : "—";
@@ -550,7 +495,7 @@ function PreviewOrderRow({
   // Side chip (solid, like TradingView's Buy/Sell tag).
   const sideLabel = side === "BUY" ? "Buy" : "Sell";
   const sideW = chipWidth(sideLabel);
-  const sideColor = side === "BUY" ? LIMIT_COLOR : LIQ_COLOR;
+  const sideColor = entryLineColor(side === "BUY");
   chips.push({
     w: sideW,
     el: (x) => (
@@ -561,14 +506,7 @@ function PreviewOrderRow({
     ),
   });
 
-  let x = width - AXIS_GAP;
-  const placed: React.ReactNode[] = [];
-  for (const c of chips) {
-    x -= c.w;
-    placed.push(c.el(x));
-    x -= GAP;
-  }
-  const lineEnd = Math.max(0, x);
+  const { placed, lineEnd } = layoutChipsRightToLeft(chips, width);
 
   return (
     <g>
@@ -651,7 +589,7 @@ function computeAxisLevels(
     out.push({
       id: `${cleanedSym}-EP`,
       price: pos.entryPrice,
-      color: pos.positionAmt < 0 ? LIQ_COLOR : LIMIT_COLOR,
+      color: entryLineColor(pos.positionAmt >= 0),
     });
 
     const { tpOrder, slOrder } = findTpSlOrders(pos, orders, cleanedSym);
@@ -701,8 +639,11 @@ export function OrderLinesLayer({
   // a Bybit position never leaks its EP/SL lines onto the Binance chart (or
   // vice versa).
   const symbolMatchesExchange = resolveSource(symbol).kind === tradingExchange;
-  const orders = symbolMatchesExchange ? rawOrders : [];
-  const positions = symbolMatchesExchange ? rawPositions : [];
+  // Gated to the shared empties rather than fresh `[]` literals: these feed
+  // the `levels` memo below, which would otherwise recompute every render
+  // whenever the chart is on another venue's symbol.
+  const orders = symbolMatchesExchange ? rawOrders : NO_ORDERS;
+  const positions = symbolMatchesExchange ? rawPositions : NO_POSITIONS;
 
   // `renderTick` is already a prop from PriceChart — receiving it as a prop
   // re-renders this component on every chart pan/zoom without an extra hook.
@@ -719,64 +660,18 @@ export function OrderLinesLayer({
     x: number; y: number; pos: Position; field: "TP" | "SL"; onRemove: () => void;
   } | null>(null);
 
-  // Native price lines for EP/TP/SL/liquidation: these are drawn on the chart's
-  // own canvas (always in sync, no React-render lag) and span the FULL pane
-  // width, so they visibly continue past our custom SVG box all the way to a
-  // color-matched label on the price scale — instead of a plain last-price tag.
-  const priceLinesRef = useRef<Map<string, IPriceLine>>(new Map());
-  useEffect(() => {
-    if (!candleSeries) return;
-    // A dragged (or pending) TP/SL overrides its stored price so the native
-    // line moves WITH the SVG one instead of leaving a second line behind, and
-    // its axis label live-tracks the price being set.
+  // Native price lines for EP/TP/SL/liquidation, reconciled onto the series by
+  // `useSeriesPriceLines`. A dragged (or pending) TP/SL overrides its stored
+  // price so the native line moves WITH the SVG one instead of leaving a
+  // second line behind, and its axis label live-tracks the price being set.
+  const levels = useMemo(() => {
     const overrides = new Map<string, number>();
     if (preview) overrides.set(preview.id, preview.price);
     if (pending) overrides.set(pending.id, pending.price);
-    const levels = computeAxisLevels(positions, orders, symbol, overrides);
-    const map = priceLinesRef.current;
-    const seen = new Set<string>();
-    for (const lvl of levels) {
-      seen.add(lvl.id);
-      const existing = map.get(lvl.id);
-      if (existing) {
-        existing.applyOptions({ price: lvl.price, color: lvl.color });
-      } else {
-        map.set(
-          lvl.id,
-          candleSeries.createPriceLine({
-            price: lvl.price,
-            color: lvl.color,
-            lineWidth: 1,
-            lineStyle: 0, // Solid
-            axisLabelVisible: true,
-            lineVisible: true,
-            title: "",
-          }),
-        );
-      }
-    }
-    for (const [id, line] of map) {
-      if (!seen.has(id)) {
-        candleSeries.removePriceLine(line);
-        map.delete(id);
-      }
-    }
-  }, [candleSeries, positions, orders, symbol, preview, pending]);
+    return computeAxisLevels(positions, orders, symbol, overrides);
+  }, [positions, orders, symbol, preview, pending]);
 
-  // Drop all price lines when the series itself goes away (symbol/chart teardown).
-  useEffect(() => {
-    return () => {
-      if (!candleSeries) return;
-      for (const line of priceLinesRef.current.values()) {
-        try {
-          candleSeries.removePriceLine(line);
-        } catch {
-          // series may already be disposed
-        }
-      }
-      priceLinesRef.current.clear();
-    };
-  }, [candleSeries]);
+  useSeriesPriceLines(candleSeries, levels, 0);
 
   useEffect(() => {
     function onMove(e: MouseEvent) {

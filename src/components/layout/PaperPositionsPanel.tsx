@@ -18,14 +18,22 @@ import {
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { cn } from "@/lib/utils";
-import { formatPrice } from "@/lib/format";
+import { Badge, Stat, Stub, TabBtn } from "@/components/layout/panel-bits";
+import { formatPct, formatPrice } from "@/lib/format";
 import { bracketEditReason } from "@/lib/trading/paper-brackets";
-import { describePaperEvent, formatDuration, reasonLabel } from "@/lib/trading/paper-format";
+import {
+  describePaperEvent,
+  formatDuration,
+  PAPER_EVENT_TONE,
+  reasonLabel,
+} from "@/lib/trading/paper-format";
 import {
   formatPnlDisplay,
-  isLiquidationUrgent,
-  pnlDisplayValue,
+  markOf,
+  paperDisplaySymbol,
+  positionFiguresAt,
   PNL_DISPLAY_MODES,
+  PNL_MODE_LABEL,
 } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { totalUnrealizedPnl, unrealizedPnl, positionRoi, usedMargin } from "@/lib/trading/paper-engine";
@@ -49,8 +57,8 @@ import type { PaperAccount, PaperEvent, PaperOrder, PaperPosition, PaperTrade } 
  * `equity()`. Marks change on every raw WS tick (Bybit's feed is uncapped,
  * several a second), so subscribing here re-rendered the panel on every tick
  * even while collapsed to a 32px bar, or mounted-but-null in live mode, with
- * nothing on screen that could show the new number (holistic review finding
- * 7). The mark-driven subscriptions live in `AccountSummaryRow`/`PositionsTable`
+ * nothing on screen that could show the new number. The mark-driven
+ * subscriptions live in `AccountSummaryRow`/`PositionsTable`
  * below, which only mount once the panel is expanded onto the relevant tab.
  *
  * The Notifications log (below) intentionally accumulates from `lastEvents`
@@ -90,10 +98,39 @@ export function PaperPositionsPanel() {
   const [fullscreen, setFullscreen] = useState(false);
   const [tab, setTab] = useState<Tab>("positions");
 
+  if (mode !== "paper") return null;
+
   const positions = account.positions;
   const restingOrders = account.orders.filter((o) => o.status === "NEW");
 
-  if (mode !== "paper") return null;
+  // Label, count and body in one row per tab: the three used to be parallel
+  // lists that had to be edited in lockstep to add or reorder one.
+  const tabs: { key: Tab; label: React.ReactNode; count: number; body: () => React.ReactNode }[] = [
+    {
+      key: "positions",
+      label: "Positions",
+      count: positions.length,
+      body: () => <PositionsTable positions={positions} />,
+    },
+    {
+      key: "orders",
+      label: "Orders",
+      count: restingOrders.length,
+      body: () => <OrdersTable orders={restingOrders} />,
+    },
+    {
+      key: "history",
+      label: "History",
+      count: account.history.length,
+      body: () => <HistoryTable trades={account.history} />,
+    },
+    {
+      key: "notifications",
+      label: <Bell className="h-3 w-3" />,
+      count: notifications.length,
+      body: () => <NotificationsTable events={notifications} />,
+    },
+  ];
 
   return (
     <div
@@ -146,25 +183,20 @@ export function PaperPositionsPanel() {
           <AccountSummaryRow account={account} onReset={resetAccount} />
 
           <div className="flex shrink-0 border-b border-tv-border">
-            <TabBtn active={tab === "positions"} onClick={() => setTab("positions")}>
-              Positions {positions.length > 0 && <Badge n={positions.length} />}
-            </TabBtn>
-            <TabBtn active={tab === "orders"} onClick={() => setTab("orders")}>
-              Orders {restingOrders.length > 0 && <Badge n={restingOrders.length} />}
-            </TabBtn>
-            <TabBtn active={tab === "history"} onClick={() => setTab("history")}>
-              History {account.history.length > 0 && <Badge n={account.history.length} />}
-            </TabBtn>
-            <TabBtn active={tab === "notifications"} onClick={() => setTab("notifications")}>
-              <Bell className="h-3 w-3" /> {notifications.length > 0 && <Badge n={notifications.length} />}
-            </TabBtn>
+            {tabs.map((t) => (
+              <TabBtn
+                key={t.key}
+                className="flex items-center"
+                active={tab === t.key}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label} {t.count > 0 && <Badge n={t.count} />}
+              </TabBtn>
+            ))}
           </div>
 
           <div className="flex-1 overflow-auto">
-            {tab === "positions" && <PositionsTable positions={positions} />}
-            {tab === "orders" && <OrdersTable orders={restingOrders} />}
-            {tab === "history" && <HistoryTable trades={account.history} />}
-            {tab === "notifications" && <NotificationsTable events={notifications} />}
+            {tabs.find((t) => t.key === tab)?.body()}
           </div>
         </>
       )}
@@ -176,19 +208,23 @@ export function PaperPositionsPanel() {
 
 /** The mark-driven figures making up the always-visible summary row, split
  *  out of the shell so the tick-rate subscriptions only exist while the
- *  panel is open (holistic review finding 7). */
+ *  panel is open. */
 function AccountSummaryRow({
   account, onReset,
 }: { account: PaperAccount; onReset: () => void }) {
   const marks = usePaperTradingStore((s) => s.marks);
-  const equity = usePaperTradingStore((s) => s.equity());
   const unrealized = totalUnrealizedPnl(account.positions, marks);
   const marginUsed = usedMargin(account);
-  // Realized P&L is a reduce over the whole (unbounded) trade history, and it
-  // depends on `account` alone — no mark anywhere in it. This row re-renders
-  // on every raw WS tick, since the Unrealized/Equity stats beside it are
-  // mark-driven by definition, so without the memo a long history was summed
-  // from scratch several times a second to produce the same number.
+  // `equity()` is defined as exactly this sum, so calling it would walk the
+  // positions twice more per tick — and as a selector it ran on every store
+  // `set`, not just on render.
+  const equity = account.balance + marginUsed + unrealized;
+  // Realized P&L is a reduce over the whole (append-only, uncapped) trade
+  // history, and it depends on `account` alone — no mark anywhere in it. This
+  // row re-renders on every raw WS tick, since the Unrealized/Equity stats
+  // beside it are mark-driven by definition, so without the memo a long
+  // history was summed from scratch several times a second for a number that
+  // only moves when a trade closes.
   const realized = useMemo(
     () => account.history.reduce((sum, t) => sum + t.realizedPnl, 0),
     [account.history],
@@ -228,39 +264,6 @@ function AccountSummaryRow({
         Reset account
       </button>
     </div>
-  );
-}
-
-function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] text-tv-text-muted">{label}</span>
-      <span className={cn("font-mono text-xs tabular-nums", valueClass ?? "text-tv-text")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Badge({ n }: { n: number }) {
-  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue-text">{n}</span>;
-}
-
-function TabBtn({
-  active, onClick, children,
-}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center border-b-2 px-3 py-1.5 text-[11px] font-medium transition-colors",
-        active
-          ? "border-tv-blue text-tv-text"
-          : "border-transparent text-tv-text-muted hover:text-tv-text",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -341,7 +344,7 @@ function sortRows(rows: PositionRow[], sort: SortState | null): PositionRow[] {
 function PositionsTable({ positions }: { positions: PaperPosition[] }) {
   // Subscribed here rather than passed down from the shell: this table is the
   // only thing that renders a per-tick mark, and it only exists while the
-  // Positions tab is open (holistic review finding 7).
+  // Positions tab is open.
   const marks = usePaperTradingStore((s) => s.marks);
   const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
   const setPnlDisplayMode = usePaperTradingStore((s) => s.setPnlDisplayMode);
@@ -356,16 +359,12 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
   }
 
   if (positions.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No open positions
-      </div>
-    );
+    return <Stub message="No open positions" />;
   }
 
   const rows = sortRows(
     positions.map((position) => {
-      const mark = marks[position.symbol] ?? position.entryPrice;
+      const mark = markOf(marks, position);
       return { position, mark, pnl: unrealizedPnl(position, mark), roe: positionRoi(position, mark) * 100 };
     }),
     sort,
@@ -386,7 +385,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
                 : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text",
             )}
           >
-            {m === "MONEY" ? "Money" : m === "TICKS" ? "Ticks" : "%"}
+            {PNL_MODE_LABEL[m]}
           </button>
         ))}
       </div>
@@ -408,13 +407,11 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ position, mark, pnl, roe }) => (
+          {rows.map(({ position, mark }) => (
             <PositionRow
               key={position.id}
               position={position}
               mark={mark}
-              pnl={pnl}
-              roe={roe}
               pnlDisplayMode={pnlDisplayMode}
               onEdit={() => setEditing(position)}
               onClose={() => setClosing({ position, initialQty: position.qty })}
@@ -460,6 +457,16 @@ export function useRowMenuTrigger(open: (x: number, y: number) => void) {
   const start = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
 
+  // A row can unmount mid-press on its own — a TP/SL or liquidation fill takes
+  // the position out of the table — and the pending timer would then fire
+  // `open()` on a dead tree, holding the row's props alive until it did.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
   return {
     onContextMenu: (e: React.MouseEvent) => {
       e.preventDefault();
@@ -491,23 +498,27 @@ export function useRowMenuTrigger(open: (x: number, y: number) => void) {
 }
 
 function PositionRow({
-  position, mark, pnl, roe, pnlDisplayMode, onEdit, onClose, onReverse, onMenu,
+  position, mark, pnlDisplayMode, onEdit, onClose, onReverse, onMenu,
 }: {
   position: PaperPosition;
   mark: number;
-  pnl: number;
-  roe: number;
   pnlDisplayMode: PnlDisplayMode;
   onEdit: () => void;
   onClose: () => void;
   onReverse: () => void;
   onMenu: (x: number, y: number) => void;
 }) {
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
-  const displayPnl = pnlDisplayValue(position, mark, pnlDisplayMode, tickSize);
+  // Same helper the chart's order-line layer and the mobile card derive their
+  // figures from, so the three surfaces can't disagree about one position.
+  const { pnl, roe, displayPnl, liquidationUrgent } = positionFiguresAt(
+    position,
+    mark,
+    pnlDisplayMode,
+    tickSize,
+  );
   const pnlColor = pnl >= 0 ? "text-tv-green" : "text-tv-red";
-  const liquidationUrgent = isLiquidationUrgent(position, mark);
   const menuTrigger = useRowMenuTrigger(onMenu);
 
   return (
@@ -558,8 +569,7 @@ function PositionRow({
         {formatPnlDisplay(displayPnl, pnlDisplayMode)}
       </td>
       <td className={cn("px-3 py-1.5 text-right font-mono tabular-nums", roe >= 0 ? "text-tv-green" : "text-tv-red")}>
-        {roe >= 0 ? "+" : ""}
-        {roe.toFixed(2)}%
+        {formatPct(roe)}
       </td>
       <td className="px-3 py-1.5">
         <div className="flex items-center gap-1">
@@ -602,13 +612,21 @@ export function PositionRowMenu({
   onDismiss: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Held in a ref so the listener effect can key on `[]`. Callers pass a fresh
+  // arrow every render, and their renders are tick-rate — keyed on `onDismiss`
+  // this effect swapped two `document` listeners (one capture-phase) on every
+  // price tick for as long as the menu stayed open.
+  const dismiss = useRef(onDismiss);
+  useEffect(() => {
+    dismiss.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) onDismiss();
+      if (!ref.current?.contains(e.target as Node)) dismiss.current();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onDismiss();
+      if (e.key === "Escape") dismiss.current();
     }
     document.addEventListener("mousedown", onPointerDown, true);
     document.addEventListener("keydown", onKey);
@@ -616,7 +634,7 @@ export function PositionRowMenu({
       document.removeEventListener("mousedown", onPointerDown, true);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onDismiss]);
+  }, []);
 
   if (typeof document === "undefined") return null;
 
@@ -649,7 +667,7 @@ export function ClosePositionDialog({
   position, initialQty, onOpenChange,
 }: { position: PaperPosition; initialQty: number; onOpenChange: (open: boolean) => void }) {
   const closePosition = usePaperTradingStore((s) => s.closePosition);
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const [qtyStr, setQtyStr] = useState(String(initialQty));
 
   const qty = parseFloat(qtyStr);
@@ -662,7 +680,7 @@ export function ClosePositionDialog({
     if (!valid) return;
     // Read the mark fresh rather than a render-time prop, which can lag
     // behind the store between renders and book the close at a stale price.
-    const liveMark = usePaperTradingStore.getState().marks[position.symbol] ?? position.entryPrice;
+    const liveMark = markOf(usePaperTradingStore.getState().marks, position);
     closePosition(position.symbol, liveMark, qty);
     onOpenChange(false);
   }
@@ -733,11 +751,11 @@ export function ReversePositionDialog({
   position, onOpenChange,
 }: { position: PaperPosition; onOpenChange: (open: boolean) => void }) {
   const reversePosition = usePaperTradingStore((s) => s.reversePosition);
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const opposite = position.side === "LONG" ? "Short" : "Long";
 
   function confirm() {
-    const liveMark = usePaperTradingStore.getState().marks[position.symbol] ?? position.entryPrice;
+    const liveMark = markOf(usePaperTradingStore.getState().marks, position);
     reversePosition(position.symbol, liveMark);
     onOpenChange(false);
   }
@@ -777,9 +795,11 @@ export function EditPositionDialog({
   position, onOpenChange,
 }: { position: PaperPosition; onOpenChange: (open: boolean) => void }) {
   const setBrackets = usePaperTradingStore((s) => s.setBrackets);
-  const marks = usePaperTradingStore((s) => s.marks);
-  const mark = marks[position.symbol] ?? position.entryPrice;
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  // Just this symbol's mark, not the whole record — `withMark` hands out a
+  // fresh identity whenever *any* exposed symbol ticks, which re-rendered the
+  // open dialog (and re-ran its validation) for symbols it doesn't show.
+  const mark = usePaperTradingStore((s) => s.marks[position.symbol]) ?? position.entryPrice;
+  const displaySymbol = paperDisplaySymbol(position);
   const [tp, setTp] = useState(position.tp !== null ? String(position.tp) : "");
   const [sl, setSl] = useState(position.sl !== null ? String(position.sl) : "");
 
@@ -799,12 +819,11 @@ export function EditPositionDialog({
     // Re-validate against the live mark rather than the render-time value —
     // the engine does the same inside `setBrackets`, and a stale prop could
     // let a submit through that the engine would then silently re-clamp.
-    const liveMark = usePaperTradingStore.getState().marks[position.symbol] ?? position.entryPrice;
+    const liveMark = markOf(usePaperTradingStore.getState().marks, position);
+    // Past the guard above, `warningAt` has already rejected any unparseable
+    // input, so both values are a real price or `null` (= remove the bracket).
     if (warningAt(liveMark)) return;
-    setBrackets(position.symbol, {
-      tp: tpValid ? tpNum : undefined,
-      sl: slValid ? slNum : undefined,
-    });
+    setBrackets(position.symbol, { tp: tpNum, sl: slNum });
     onOpenChange(false);
   }
 
@@ -870,11 +889,7 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
   const cancelOrder = usePaperTradingStore((s) => s.cancelOrder);
 
   if (orders.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No resting orders
-      </div>
-    );
+    return <Stub message="No resting orders" />;
   }
 
   return (
@@ -894,7 +909,7 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
       <tbody>
         {orders.map((o) => (
           <tr key={o.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
-            <td className="px-3 py-1.5 font-semibold">{o.feedSymbol ?? o.symbol}</td>
+            <td className="px-3 py-1.5 font-semibold">{paperDisplaySymbol(o)}</td>
             <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red")}>
               {o.side === "BUY" ? "Buy" : "Sell"}
             </td>
@@ -934,11 +949,7 @@ const REASON_CLASS: Record<PaperTrade["reason"], string> = {
 
 function HistoryTable({ trades }: { trades: PaperTrade[] }) {
   if (trades.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No closed trades yet
-      </div>
-    );
+    return <Stub message="No closed trades yet" />;
   }
 
   // Most recent first; `history` is appended in close order, but sorting by
@@ -980,8 +991,7 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
                 {t.realizedPnl.toFixed(2)} USDT
               </td>
               <td className={cn("px-3 py-1.5 text-right font-mono tabular-nums", pnlColor)}>
-                {roi >= 0 ? "+" : ""}
-                {roi.toFixed(2)}%
+                {formatPct(roi)}
               </td>
               <td className={cn("px-3 py-1.5 font-semibold", REASON_CLASS[t.reason])}>
                 {reasonLabel(t.reason)}
@@ -1001,23 +1011,14 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
 
 function NotificationsTable({ events }: { events: PaperEvent[] }) {
   if (events.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No notifications yet
-      </div>
-    );
+    return <Stub message="No notifications yet" />;
   }
 
   return (
     <ul className="divide-y divide-tv-border">
       {events.map((e, i) => (
         <li key={i} className="flex items-center gap-2 px-3 py-2 text-[11px]">
-          <Bell
-            className={cn(
-              "h-3 w-3 shrink-0",
-              e.type === "reject" ? "text-tv-red" : e.type === "close" ? "text-tv-green" : "text-tv-blue-text",
-            )}
-          />
+          <Bell className={cn("h-3 w-3 shrink-0", PAPER_EVENT_TONE[e.type])} />
           <span className="text-tv-text">{describePaperEvent(e)}</span>
         </li>
       ))}

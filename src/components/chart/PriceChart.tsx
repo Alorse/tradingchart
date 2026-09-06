@@ -111,6 +111,19 @@ interface Props {
 // canvas stays in sync with the CSS/Tailwind theme. See src/lib/chart/theme.ts.
 const TV_COLORS = getTvColors();
 
+// Volume bars and the MACD histogram tint by direction at a fixed alpha. Both
+// arms are constant, so they are built once here rather than re-concatenated
+// per bar inside the `setData` maps below (a few thousand bars per load, replay
+// scrub, timeframe switch and symbol switch).
+const VOL_UP = `${TV_COLORS.green}66`;
+const VOL_DOWN = `${TV_COLORS.red}66`;
+const MACD_HIST_UP = `${TV_COLORS.green}80`;
+const MACD_HIST_DOWN = `${TV_COLORS.red}80`;
+
+/** Volume bar tint for one bar, by whether it closed up. */
+const volumeColor = (bar: { open: number; close: number }) =>
+  bar.close >= bar.open ? VOL_UP : VOL_DOWN;
+
 // Tools whose second point snaps to a horizontal/vertical axis while Shift is held.
 const AXIS_CONSTRAIN_TOOLS = new Set<string>(["trendline", "ray", "arrow"]);
 
@@ -238,14 +251,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const prevSubPanesHiddenRef = useRef(false);
   const firstPointRef = useRef<{ time: number; price: number } | null>(null);
   const placementPointsRef = useRef<Array<{ time: number; price: number }>>([]);
-  /** In-flight long/short placement gesture — mousedown sets the entry,
-   *  a horizontal drag before mouseup sets the right edge (timeB) live. */
-  const positionDragRef = useRef<{
-    kind: "long" | "short";
-    entry: { time: number; price: number };
-    startClientX: number;
-    moved: boolean;
-  } | null>(null);
   // Last unconstrained cursor (time/price) — lets Shift snap the preview the
   // instant it's pressed, without needing a mouse move.
   const lastCursorRef = useRef<{ time: number; price: number } | null>(null);
@@ -359,16 +364,13 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // mounted once in providers.tsx for every symbol the account has exposure
   // to — not just this chart's — so a position stays live while a different
   // symbol is charted.
-  // Live credentials can still be configured while the Trade tab is toggled
-  // to Paper — OrderLinesLayer draws/drags/right-click-modifies the LIVE
-  // account's orders and positions, so it's unmounted outright rather than
-  // just hidden, since its price lines are created imperatively in an effect
-  // (a JSX-level `return null` inside it wouldn't stop those). The paper
-  // layer is gated symmetrically on the opposite mode: it used to mount
-  // unconditionally, so a live-mode chart carried dashed "(paper)" lines from
-  // a simulated position over the real orders (holistic review finding 6),
-  // and — being effect-driven the same way — it has to be unmounted, not
-  // hidden, for those lines to actually go away.
+  // Selects which of the two order-line layers is mounted below. Live
+  // credentials can still be configured while the Trade tab is toggled to
+  // Paper, so each layer is gated on its own mode — otherwise a chart carries
+  // the other account's lines on top of its own. Both create their price
+  // lines imperatively in an effect, so each has to be *unmounted* rather
+  // than hidden: a JSX-level `return null` inside them wouldn't tear those
+  // lines down.
   const tradingMode = useTradingModeStore((s) => s.mode);
   const isMobile = useIsMobile();
 
@@ -1340,7 +1342,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       const data = candlesRef.current.map((k) => ({
         time: k.time as UTCTimestamp,
         value: k.volume,
-        color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+        color: volumeColor(k),
       }));
       v.setData(data);
     } else if (!indicators.volume && volumeSeriesRef.current && chartRef.current) {
@@ -2478,7 +2480,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       m.map((p) => ({
         time: p.time as UTCTimestamp,
         value: p.histogram,
-        color: p.histogram >= 0 ? `${TV_COLORS.green}80` : `${TV_COLORS.red}80`,
+        color: p.histogram >= 0 ? MACD_HIST_UP : MACD_HIST_DOWN,
       })),
     );
     const last = m.at(-1);
@@ -2752,7 +2754,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             klines.map((k) => ({
               time: k.time as UTCTimestamp,
               value: k.volume,
-              color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+              color: volumeColor(k),
             })),
           );
         }
@@ -2839,7 +2841,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                   fresh.map((k) => ({
                     time: k.time as UTCTimestamp,
                     value: k.volume,
-                    color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+                    color: volumeColor(k),
                   })),
                 );
               }
@@ -2928,10 +2930,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                   volumeSeriesRef.current.update({
                     time: synth.time as UTCTimestamp,
                     value: synth.volume,
-                    color:
-                      synth.close >= synth.open
-                        ? `${TV_COLORS.green}66`
-                        : `${TV_COLORS.red}66`,
+                    color: volumeColor(synth),
                   });
                 }
                 updateEMAs();
@@ -2989,7 +2988,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               volumeSeriesRef.current.update({
                 time: k.time as UTCTimestamp,
                 value: k.volume,
-                color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+                color: volumeColor(k),
               });
             }
             updateEMAs();
@@ -3043,7 +3042,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         arr.map((k) => ({
           time: k.time as UTCTimestamp,
           value: k.volume,
-          color: k.close >= k.open ? `${TV_COLORS.green}66` : `${TV_COLORS.red}66`,
+          color: volumeColor(k),
         })),
       );
     }
@@ -3418,6 +3417,14 @@ export function PriceChart({ symbol, timeframe }: Props) {
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
+    // Hoisted function declarations below don't inherit the null-narrowing
+    // above, so re-bind it once with a non-null type instead of casting at
+    // each use.
+    const outerEl: HTMLElement = outer;
+
+    /** Set while a placement gesture is in flight, so the effect's own
+     *  cleanup can tear its document listeners down on unmount. */
+    let endGesture: (() => void) | null = null;
 
     function computePoint(e: PointerEvent): { time: number; price: number } | null {
       if (!containerRef.current || !chartRef.current || !candleSeriesRef.current) return null;
@@ -3499,46 +3506,61 @@ export function PriceChart({ symbol, timeframe }: Props) {
       const plotW = chartRef.current.timeScale().width();
       const mainPaneH = paneOffsetsRef.current[0]?.height ?? 400;
       if (x < 0 || x > plotW || y < 0 || y > mainPaneH) return;
-      const entryPoint = computePoint(e);
-      if (!entryPoint) return;
-      const entry = entryPoint;
+      const entry = computePoint(e);
+      if (!entry) return;
       e.preventDefault();
       e.stopPropagation();
       const kind = toolRef.current;
       const { stop, target } = defaultLevels(kind, entry.price);
-      positionDragRef.current = { kind, entry, startClientX: e.clientX, moved: false };
+      // `kind`/`entry`/`stop`/`target` are closed over by the two handlers
+      // below, so the gesture needs no component-scoped ref — only the two
+      // values that change during it, which are plain locals.
+      const startClientX = e.clientX;
+      let moved = false;
       setPreviewState({ first: entry, extra: [], cursor: entry });
-      (outer as HTMLElement).setPointerCapture(e.pointerId);
+      outerEl.setPointerCapture(e.pointerId);
 
       function onMove(ev: PointerEvent) {
-        const drag = positionDragRef.current;
-        if (!drag) return;
-        if (Math.abs(ev.clientX - drag.startClientX) > 4) drag.moved = true;
+        if (Math.abs(ev.clientX - startClientX) > 4) moved = true;
         const cursor = computePoint(ev);
         // Synthesize the preview's cursor price as the precomputed target so
         // PlacementPreview draws the box at its real stop/target distance —
         // only the time (width) tracks the actual drag.
         if (cursor) setPreviewState({ first: entry, extra: [], cursor: { time: cursor.time, price: target } });
       }
-      function onUp(ev: PointerEvent) {
+      function detach() {
         document.removeEventListener("pointermove", onMove);
         document.removeEventListener("pointerup", onUp);
-        const drag = positionDragRef.current;
-        positionDragRef.current = null;
-        if (!drag) return;
-        let timeB = defaultTimeB(entry.time);
-        if (drag.moved) {
-          const release = computePoint(ev);
-          if (release && release.time > entry.time) timeB = release.time;
-        }
-        finishPlacement(kind, entry, stop, target, timeB);
+        document.removeEventListener("pointercancel", onCancel);
+        endGesture = null;
       }
+      function onUp(ev: PointerEvent) {
+        detach();
+        let timeB = defaultTimeB(entry!.time);
+        if (moved) {
+          const release = computePoint(ev);
+          if (release && release.time > entry!.time) timeB = release.time;
+        }
+        finishPlacement(kind, entry!, stop, target, timeB);
+      }
+      // A touch gesture the browser takes over (or an unmount mid-drag) ends
+      // without a pointerup, which would otherwise leave both document
+      // listeners — and the closure they pin — alive for the page's lifetime.
+      function onCancel() {
+        detach();
+        setPreviewState(null);
+      }
+      endGesture = detach;
       document.addEventListener("pointermove", onMove);
       document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onCancel);
     }
 
     outer.addEventListener("pointerdown", onPointerDown, { capture: true });
-    return () => outer.removeEventListener("pointerdown", onPointerDown, { capture: true });
+    return () => {
+      endGesture?.();
+      outer.removeEventListener("pointerdown", onPointerDown, { capture: true });
+    };
   }, []);
 
   // OHLC/Vol legend + native crosshair fallback: chart.subscribeCrosshairMove
@@ -3712,7 +3734,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
         <PaperOrderLinesLayer
           chart={chartRef.current}
           candleSeries={candleSeriesRef.current}
-          container={containerRef.current}
           width={containerSize.width}
           mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
           renderTick={renderTick}

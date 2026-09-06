@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
-import { useBookTicker } from "@/lib/binance/use-book-ticker";
-import { getBybitWS } from "@/lib/bybit/ws";
+import { useQuote } from "@/lib/trading/quote";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
-import { qtyToSizings, sizingToQty, modeRequiresSl, type SizingCtx } from "@/lib/trading/sizing";
-import { cleanSym, isPerp } from "@/lib/binance/rest";
-import { paperFeedSource } from "@/lib/trading/paper-feed";
+import { isPerp } from "@/lib/binance/rest";
 import { getBaseAsset } from "@/components/watchlist/CoinIcon";
 import {
   defaultPaperOrderForm,
@@ -23,44 +20,17 @@ import {
   ExitsSection,
   LeverageSlider,
   OrderTypeTabs,
-  PriceInput,
   SizingControl,
   SubmitButton,
-  nextSizingInput,
+  TicketPriceInput,
+  orderSummaryLabel,
+  useOrderTicket,
 } from "./shared";
 
 const PAPER_ORDER_TYPE_TABS: Array<{ key: "MARKET" | "LIMIT"; label: string }> = [
   { key: "MARKET", label: "Market" },
   { key: "LIMIT", label: "Limit" },
 ];
-
-/**
- * Venue-aware quote for the paper ticket: `useBookTicker` only ever carries
- * Binance data (and now skips subscribing at all for anything else, see its
- * own header comment), so a Bybit-charted or feedless symbol used to leave
- * bid/ask permanently null with no explanation — `submit()` would then just
- * silently no-op on a MARKET order (adversarial review finding 6). Bybit has
- * no separate book-ticker stream (same reasoning as `BuySellOverlay`'s quote),
- * so its last price stands in for both sides.
- */
-function usePaperQuote(symbol: string): { bid: number | null; ask: number | null } {
-  const [bybitTick, setBybitTick] = useState<{ symbol: string; price: number } | null>(null);
-  const source = paperFeedSource(symbol);
-
-  useEffect(() => {
-    if (source !== "bybit") return;
-    return getBybitWS().subscribeMiniTickers([symbol], (t) => setBybitTick({ symbol, price: t.close }));
-  }, [symbol, source]);
-
-  const binanceBook = useBookTicker(symbol);
-
-  if (source === "bybit") {
-    if (bybitTick?.symbol !== symbol) return { bid: null, ask: null };
-    return { bid: bybitTick.price, ask: bybitTick.price };
-  }
-  if (source === "binance") return binanceBook;
-  return { bid: null, ask: null };
-}
 
 /**
  * Paper-mode order panel — same layout as the live `OrderPanel` (built from
@@ -82,101 +52,74 @@ function usePaperQuote(symbol: string): { bid: number | null; ask: number | null
  */
 export function PaperOrderPanel() {
   const symbol = useChartStore((s) => s.symbol);
-  const account = usePaperTradingStore((s) => s.account);
+  // Only the free balance is rendered/sized off here, so subscribing the whole
+  // account would re-render the ticket on every fill, cancel and bracket edit.
+  const balance = usePaperTradingStore((s) => s.account.balance);
   const placeOrder = usePaperTradingStore((s) => s.placeOrder);
   const placeLimitOrder = usePaperTradingStore((s) => s.placeLimitOrder);
   const lastEvents = usePaperTradingStore((s) => s.lastEvents);
 
   const symInfo = useSymbolInfo(symbol);
-  const { bid, ask } = usePaperQuote(symbol);
+  const { bid, ask, source: feedSource } = useQuote(symbol);
   const perp = isPerp(symbol);
   const baseAsset = getBaseAsset(symbol);
-  const feedSource = paperFeedSource(symbol);
 
   const [form, setForm] = useState<PaperOrderForm>(() =>
-    defaultPaperOrderForm(account.settings.defaultLeverage),
+    defaultPaperOrderForm(usePaperTradingStore.getState().account.settings.defaultLeverage),
   );
-  const patchForm = (patch: Partial<PaperOrderForm>) => setForm((f) => ({ ...f, ...patch }));
-
-  const referencePrice = useMemo(() => {
-    if (form.type === "MARKET") return form.side === "BUY" ? ask : bid;
-    return parseFloat(form.price) || ask || bid || 0;
-  }, [form.type, form.price, form.side, bid, ask]);
-
-  const sl = form.slEnabled && form.sl ? parseFloat(form.sl) : null;
-
-  const ctx: SizingCtx = useMemo(
-    () => ({
-      entry: referencePrice ?? 0,
-      sl,
-      // Mirrors `paperFormToMarketRequest`'s leverage cap: the slider is
-      // hidden for a non-perp symbol, so the sizing preview shouldn't act
-      // like a leverage the actual submission will never apply.
-      leverage: perp ? form.leverage : 1,
-      balanceUsd: account.balance,
-      tickSize: symInfo.tickSize,
-      stepSize: symInfo.stepSize,
-    }),
-    [referencePrice, sl, perp, form.leverage, account.balance, symInfo.tickSize, symInfo.stepSize],
+  // Stable so `useOrderTicket`'s risk effect can depend on it.
+  const patchForm = useCallback(
+    (patch: Partial<PaperOrderForm>) => setForm((f) => ({ ...f, ...patch })),
+    [],
   );
 
-  const qtyNum = parseFloat(form.qty) || 0;
-  const derived = useMemo(() => qtyToSizings(qtyNum, ctx), [qtyNum, ctx]);
-
-  // In the risk modes the typed risk is the fixed side, so moving the stop
-  // re-sizes the position instead of changing what's at stake — same effect
-  // as the live OrderPanel's, so a RISK_USD/RISK_PCT ticket isn't stuck at
-  // whatever qty it had when the mode was picked.
-  useEffect(() => {
-    if (!modeRequiresSl(form.sizingMode) || sl === null) return;
-    const risk = parseFloat(form.sizingInput);
-    if (!isFinite(risk) || risk <= 0) return;
-    const newQty = sizingToQty(form.sizingMode, risk, ctx);
-    const formatted = newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "";
-    // OrderPanel's identical effect writes `qty` back through a Zustand
-    // store action, which this lint rule doesn't recognize as setState; this
-    // panel's form is local useState, so the same reactive write trips it.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (formatted !== form.qty) patchForm({ qty: formatted });
-  }, [form.sizingMode, form.sizingInput, form.qty, sl, ctx, symInfo.quantityPrecision]);
+  const { referencePrice, qtyNum, derived, sizingHandlers } = useOrderTicket({
+    form,
+    patch: patchForm,
+    bid,
+    ask,
+    balanceUsd: balance,
+    // Mirrors `paperFormToMarketRequest`'s leverage cap: the slider is hidden
+    // for a non-perp symbol, so the sizing preview shouldn't act like a
+    // leverage the actual submission will never apply.
+    leverage: perp ? form.leverage : 1,
+    symInfo,
+  });
 
   const lastReject = lastEvents.find((e) => e.type === "reject");
 
-  // Blocks submission (and explains why) instead of leaving `submit()` to
-  // silently no-op on a feedless symbol (finding 6) or leaving a wrong-side
-  // TP/SL to be dropped by the engine with no feedback (finding 7).
+  // Blocks submission and says why, instead of leaving `submit()` to silently
+  // no-op: on a feedless symbol, on a wrong-side TP/SL the engine would drop,
+  // or — for a MARKET order, which fills at the live quote — while the symbol
+  // has a feed but the socket hasn't delivered its first tick yet. A LIMIT
+  // order carries its own price and needs no quote.
   //
-  // A MARKET order fills at the live quote, so it also has to wait for the
-  // socket to deliver one: the symbol *has* a feed, but until the first tick
-  // arrives `submit()` would return without placing anything and without
-  // saying why (holistic review finding 8). A LIMIT order carries its own
-  // price and needs no quote.
-  const marketQuote = form.side === "BUY" ? ask : bid;
-  const blockedReason =
-    feedSource === null
-      ? "No live feed for this symbol in paper mode"
-      : form.type === "MARKET" && !marketQuote
-        ? "Waiting for a live quote…"
-        : invalidBracketReason(form, referencePrice ?? 0);
+  // `referencePrice` is the quote a MARKET order fills at: `useOrderTicket`
+  // already derives it as `side === "BUY" ? ask : bid` for that form type, and
+  // re-deriving it here would be a second expression that has to agree with
+  // the one driving the sizing preview and bracket validation.
+  function blockedReasonFor(): string | null {
+    if (feedSource === null) return "No live feed for this symbol in paper mode";
+    if (form.type === "MARKET" && !referencePrice) return "Waiting for a live quote…";
+    return invalidBracketReason(form, referencePrice ?? 0);
+  }
+  const blockedReason = blockedReasonFor();
 
   function submit() {
     if (!isPaperOrderReady(form) || blockedReason !== null) return;
     if (form.type === "MARKET") {
-      if (!marketQuote) return;
-      placeOrder(paperFormToMarketRequest(form, symbol), marketQuote);
+      // Non-null whenever `blockedReason` is null, per the guard above.
+      if (referencePrice) placeOrder(paperFormToMarketRequest(form, symbol), referencePrice);
     } else {
       placeLimitOrder(paperFormToLimitRequest(form, symbol));
     }
   }
 
-  // `cleanSym`, not a bare `.P` strip: a Bybit-charted ticker also carries a
-  // `BYBIT:` prefix, which would otherwise read "0.5 BYBIT:SOLUSDT MARKET".
-  const cleanSymForSummary = cleanSym(symbol);
-  const priceLabel = `${form.qty || "0"} ${cleanSymForSummary} ${form.type === "LIMIT" ? `@ ${form.price || "—"} LIMIT` : form.type}`;
+  const priceLabel = orderSummaryLabel(form, symbol);
 
   return (
     <div className="flex h-full flex-col overflow-hidden text-tv-text">
-      <PaperPanelHeader symbol={symbol} freeBalance={account.balance} />
+      <PaperPanelHeader symbol={symbol} freeBalance={balance} />
 
       <BidAskBar
         bid={bid}
@@ -193,47 +136,23 @@ export function PaperOrderPanel() {
 
       <div className="flex-1 overflow-y-auto px-3 py-2.5 space-y-3">
         {form.type === "LIMIT" && (
-          <PriceInput
+          <TicketPriceInput
             value={form.price}
+            side={form.side}
+            bid={bid}
+            ask={ask}
+            referencePrice={referencePrice}
+            pricePrecision={symInfo.pricePrecision}
             onChange={(v) => patchForm({ price: v })}
-            placeholder={referencePrice ? referencePrice.toFixed(symInfo.pricePrecision) : "0.0"}
-            onSnapToBidAsk={() => {
-              const target = form.side === "BUY" ? bid : ask;
-              if (target) patchForm({ price: target.toFixed(symInfo.pricePrecision) });
-            }}
-            label="Price"
-            ticksLabel={ask ? `${form.side === "BUY" ? "Bid" : "Ask"} ${(form.side === "BUY" ? bid : ask)?.toFixed(symInfo.pricePrecision) ?? "—"}` : null}
           />
         )}
 
         <SizingControl
           mode={form.sizingMode}
           input={form.sizingInput}
-          qtyNum={qtyNum}
           derived={derived}
-          ctx={ctx}
           baseAsset={baseAsset}
-          onChangeMode={(mode) => {
-            patchForm({
-              sizingMode: mode,
-              sizingInput: nextSizingInput(qtyNum, mode, ctx),
-            });
-            if (modeRequiresSl(mode) && !form.slEnabled) {
-              patchForm({ slEnabled: true });
-            }
-          }}
-          onChangeInput={(raw) => {
-            const value = parseFloat(raw);
-            if (isFinite(value) && value > 0) {
-              const newQty = sizingToQty(form.sizingMode, value, ctx);
-              patchForm({
-                sizingInput: raw,
-                qty: newQty > 0 ? newQty.toFixed(symInfo.quantityPrecision) : "",
-              });
-            } else {
-              patchForm({ sizingInput: raw, qty: "" });
-            }
-          }}
+          {...sizingHandlers}
         />
 
         <ExitsSection

@@ -27,25 +27,24 @@ export async function middleware(request: NextRequest) {
   );
 
   // The app is guest-accessible (see LoginDialog / Header), so *page* routes
-  // are no longer gated — an anonymous visitor gets the chart. This call still
-  // runs on every matched request for two reasons: it refreshes an expiring
-  // session cookie through `setAll` above, and its result is the auth gate for
-  // the signed `/api/trade/*` routes below.
+  // aren't gated. This call still runs on every matched request for two
+  // reasons: it rotates an expiring session and writes the refreshed cookies
+  // out through `setAll` above, and its result is the auth gate for the signed
+  // `/api/trade/*` routes below.
   //
   // `getClaims()` verifies the session JWT locally (falling back to a network
   // call only when it genuinely can't, e.g. an expired token that needs a
   // refresh), whereas `getUser()` always round-trips to Supabase's auth
   // server; at one middleware run per request that round trip dominated the
   // wall-clock — and therefore the billed compute — of every request.
+  //
+  // Any error counts as unauthenticated: a failure must close the door on the
+  // trade routes, not open it.
   let authenticated = false;
   try {
     const { data } = await supabase.auth.getClaims();
     authenticated = !!data?.claims?.sub;
-  } catch {
-    // Treat any error/exception as unauthenticated: a failure must close the
-    // door on the trade routes, not open it.
-    authenticated = false;
-  }
+  } catch {}
 
   // `/api/trade/*` (minus exchange-info) signs requests with the caller's
   // exchange API key and forwards them to Binance/Bybit. This is the only
@@ -75,8 +74,9 @@ export async function middleware(request: NextRequest) {
  * since the data they return is public.
  *
  * `/api/trade/*` (minus exchange-info) deliberately stays matched: those
- * routes sign requests against a real exchange, and the session check keeps
- * the deployment from being used as an open proxy by a stranger.
+ * routes sign requests against a real exchange, and the 401 above is the only
+ * session check they get — no handler under `/api/trade/` checks one itself.
+ * Unmatching one of them silently reopens the request-signing relay.
  */
 export const config = {
   matcher: [

@@ -18,15 +18,14 @@ import { useChartStore } from "@/lib/store/chart-store";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import { TV_PINE } from "@/lib/chart/theme";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
+import { rrRatio } from "@/lib/trading/sizing";
+import { lineDash } from "@/lib/drawings/line-style";
 import {
   positionQty,
   pnlAtLevel,
-  balanceAfter,
   signedPct,
   signedTicks,
-  rewardRiskRatio,
   openPnl,
-  openPnlCurrency,
   deriveQuoteCurrency,
 } from "@/lib/drawings/position-math";
 
@@ -45,10 +44,6 @@ interface Props {
   chart: IChartApi | null;
   candleSeries: ISeriesApi<"Candlestick"> | null;
   container: HTMLElement | null;
-}
-
-function lineDash(style: 0 | 1 | 2 | undefined): string | undefined {
-  return style === 1 ? "6 4" : style === 2 ? "2 4" : undefined;
 }
 
 function fmtMoney(n: number, quote: string): string {
@@ -145,18 +140,24 @@ export function PositionDraw({
   // Live mark price for Open P&L, polled off the shared candles array (WS
   // ticks mutate it in place) rather than plumbed through props — same
   // 1s cadence as BarCountdown, and never persisted (derived-only).
-  const [markPrice, setMarkPrice] = useState<number | null>(null);
-  const [markTime, setMarkTime] = useState<number | null>(null);
+  const [mark, setMark] = useState<{ price: number; time: number } | null>(null);
   useEffect(() => {
     const id = setInterval(() => {
       const last = globalCandlesRef.current[globalCandlesRef.current.length - 1];
-      if (last) {
-        setMarkPrice(last.close);
-        setMarkTime(last.time);
-      }
+      if (!last) return;
+      // Bail when the bar hasn't moved: this ticks once a second per position
+      // drawing, and an unconditional setState re-renders every one of them
+      // (and the whole stats pipeline below) whether or not price changed.
+      setMark((prev) =>
+        prev && prev.price === last.close && prev.time === last.time
+          ? prev
+          : { price: last.close, time: last.time },
+      );
     }, 1000);
     return () => clearInterval(id);
   }, []);
+  const markPrice = mark?.price ?? null;
+  const markTime = mark?.time ?? null;
 
   function snap() {
     const current = useDrawingsStore.getState().drawings.find((d) => d.id === drawing.id);
@@ -282,7 +283,7 @@ export function PositionDraw({
   const lossY2 = Math.max(yEntry, yStop);
 
   const risk = Math.abs(drawing.entry - drawing.stop);
-  const rr = rewardRiskRatio(drawing.entry, drawing.stop, drawing.target);
+  const rr = rrRatio(drawing.entry, drawing.stop, drawing.target);
 
   // Sign convention: profit % / ticks / $ are always positive, loss values
   // always negative, regardless of long/short (movement axis) — see
@@ -307,14 +308,14 @@ export function PositionDraw({
 
   const targetPnl = hasMoneyStats ? pnlAtLevel(drawing.entry, drawing.target, qty!, side, pointValue) : 0;
   const stopPnl = hasMoneyStats ? pnlAtLevel(drawing.entry, drawing.stop, qty!, side, pointValue) : 0;
-  const balanceAfterTP = hasMoneyStats ? balanceAfter(drawing.accountSize!, targetPnl) : 0;
-  const balanceAfterSL = hasMoneyStats ? balanceAfter(drawing.accountSize!, stopPnl) : 0;
+  const balanceAfterTP = hasMoneyStats ? drawing.accountSize! + targetPnl : 0;
+  const balanceAfterSL = hasMoneyStats ? drawing.accountSize! + stopPnl : 0;
 
   const openPnlMove = markPrice !== null ? openPnl(drawing.entry, markPrice, side) : 0;
   const openPnlIsProfit = openPnlMove >= 0;
   const openPnlCurrencyVal =
     markPrice !== null && hasMoneyStats
-      ? openPnlCurrency(drawing.entry, markPrice, qty!, side, pointValue)
+      ? pnlAtLevel(drawing.entry, markPrice, qty!, side, pointValue)
       : null;
 
   // Open-P&L connector — entry point to the live mark price, gated the same
@@ -415,7 +416,7 @@ export function PositionDraw({
     const txt =
       openPnlCurrencyVal !== null
         ? fmtMoney(openPnlCurrencyVal, quoteCurrency)
-        : fmtSignedPct(openPnlMove !== 0 ? (openPnlMove / drawing.entry) * 100 : 0);
+        : fmtSignedPct((openPnlMove / drawing.entry) * 100);
     entryRowSegments.push({ text: `P&L ${txt}`, color: openPnlIsProfit ? TV_PINE.green : TV_PINE.red });
   }
   if (statVisible("qty") && hasMoneyStats) {
@@ -539,11 +540,11 @@ export function PositionDraw({
       {(hovered || selected) && (
         <>
           <OuterPill
-            cx={left + zoneWidth / 2} y={topY}
+            cx={textX} y={topY}
             text={topTagText} color={topTagColor} textColor={textColor} above
           />
           <OuterPill
-            cx={left + zoneWidth / 2} y={bottomY}
+            cx={textX} y={bottomY}
             text={bottomTagText} color={bottomTagColor} textColor={textColor} above={false}
           />
         </>
@@ -598,7 +599,7 @@ export function PositionDraw({
         <DrawHandle x={left} y={yTarget} color={profitColor} selected={selected} shape="square" onPointerDown={makeYDrag("target")} />
         <DrawHandle
           x={xB}
-          y={(Math.min(profitY1, lossY1) + Math.max(profitY2, lossY2)) / 2}
+          y={(topY + bottomY) / 2}
           color={entryColor}
           selected={selected}
           shape="square"

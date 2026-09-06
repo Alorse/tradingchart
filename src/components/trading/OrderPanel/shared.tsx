@@ -9,12 +9,14 @@
  * forking it into two copies.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import {
+  modeRequiresSl,
   qtyToSizings,
   rrRatio,
+  sizingToQty,
   ticksBetween,
   pnlAtExit,
   slInputToPrice,
@@ -25,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/format";
 import type { OrderSide, SizingMode, SlMode } from "@/lib/binance/trading-types";
+import { cleanSym } from "@/lib/binance/rest";
 
 export const SIZING_LABELS: Record<SizingMode, string> = {
   AMOUNT: "Amount",
@@ -33,6 +36,20 @@ export const SIZING_LABELS: Record<SizingMode, string> = {
   RISK_USD: "Risk, USD",
   RISK_PCT: "Risk, % balance",
 };
+
+/** Unit shown inside the sizing input; `null` means "the symbol's base asset". */
+const SIZING_UNITS: Record<SizingMode, string | null> = {
+  AMOUNT: null,
+  MARGIN_USD: "USD",
+  PCT_BALANCE: "%",
+  RISK_USD: "USD",
+  RISK_PCT: "%",
+};
+
+/** `SIZING_LABELS`, with the Amount row naming the symbol it is denominated in. */
+function sizingLabel(mode: SizingMode, baseAsset: string): string {
+  return mode === "AMOUNT" ? `Amount (${baseAsset})` : SIZING_LABELS[mode];
+}
 
 export const SL_MODE_LABELS: Record<SlMode, string> = {
   PRICE: "price",
@@ -54,11 +71,9 @@ export function trimNum(n: number, decimals: number): string {
   return String(parseFloat(n.toFixed(decimals)));
 }
 
-export function formatForMode(n: number, mode: SizingMode): string {
+function formatForMode(n: number, mode: SizingMode): string {
   if (!isFinite(n) || n <= 0) return "";
-  if (mode === "AMOUNT") return n.toFixed(6).replace(/\.?0+$/, "");
-  if (mode === "PCT_BALANCE" || mode === "RISK_PCT") return n.toFixed(2);
-  return n.toFixed(2);
+  return mode === "AMOUNT" ? n.toFixed(6).replace(/\.?0+$/, "") : n.toFixed(2);
 }
 
 /**
@@ -244,13 +259,11 @@ export function PriceInput({
 }
 
 export function SizingControl({
-  mode, input, qtyNum, derived, ctx, baseAsset, onChangeMode, onChangeInput,
+  mode, input, derived, baseAsset, onChangeMode, onChangeInput,
 }: {
   mode: SizingMode;
   input: string;
-  qtyNum: number;
   derived: Record<SizingMode, number>;
-  ctx: SizingCtx;
   /** Base asset of the current symbol, shown as the Amount unit. */
   baseAsset: string;
   onChangeMode: (m: SizingMode) => void;
@@ -258,15 +271,6 @@ export function SizingControl({
 }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
-  void qtyNum;
-  void ctx;
-
-  function suffix(m: SizingMode): string {
-    if (m === "AMOUNT") return baseAsset;
-    if (m === "MARGIN_USD") return "USD";
-    if (m === "RISK_USD") return "USD";
-    return "%";
-  }
 
   return (
     <div ref={anchorRef} className="space-y-1">
@@ -275,7 +279,7 @@ export function SizingControl({
           onClick={() => setOpen((o) => !o)}
           className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-tv-text-muted hover:text-tv-text"
         >
-          {mode === "AMOUNT" ? `Amount (${baseAsset})` : SIZING_LABELS[mode]}
+          {sizingLabel(mode, baseAsset)}
           {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
       </div>
@@ -289,7 +293,7 @@ export function SizingControl({
           className="w-full rounded border border-tv-border bg-tv-bg px-2 py-1.5 pr-10 font-mono text-xs text-tv-text tabular-nums outline-none focus:border-tv-blue"
         />
         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-tv-text-muted">
-          {suffix(mode)}
+          {SIZING_UNITS[mode] ?? baseAsset}
         </span>
       </div>
       <FloatingMenu open={open} onClose={() => setOpen(false)} anchorRef={anchorRef}>
@@ -305,7 +309,7 @@ export function SizingControl({
             )}
           >
             <span className="whitespace-nowrap">
-              {m === "AMOUNT" ? `Amount (${baseAsset})` : SIZING_LABELS[m]}
+              {sizingLabel(m, baseAsset)}
             </span>
             <span className="font-mono tabular-nums">
               {derived[m] > 0 ? derived[m].toFixed(m === "AMOUNT" ? 6 : 2) : "—"}
@@ -563,6 +567,154 @@ export function SubmitButton({
 /** Recomputes the visible sizing-mode input from canonical qty, used both on
  *  a mode switch (so the new unit shows the equivalent value) and is shared
  *  so both panels format it identically. */
+/**
+ * The order-ticket fields both panels' derivations read. `PaperOrderForm` and
+ * the live `OrderForm` are structurally compatible here; `type` stays a bare
+ * string because only the live form carries the STOP variants.
+ */
+export interface TicketFields {
+  side: OrderSide;
+  type: string;
+  price: string;
+  qty: string;
+  sizingMode: SizingMode;
+  sizingInput: string;
+  slEnabled: boolean;
+  sl: string;
+}
+
+/** The subset of a ticket the shared derivations ever write back. */
+export type TicketPatch = Partial<
+  Pick<TicketFields, "qty" | "sizingMode" | "sizingInput" | "slEnabled">
+>;
+
+/**
+ * Everything both order tickets derive from their form — the reference price,
+ * the `SizingCtx`, the sizing previews, and the `SizingControl` handlers —
+ * plus the risk-mode re-sizing effect.
+ *
+ * This was written out twice, once per panel, differing only in the name of
+ * the patch function. That is the same drift risk `shared.tsx`'s header
+ * comment warns about for the markup, so the logic lives here too.
+ *
+ * `patch` must be referentially stable (a store action, or `useCallback`) —
+ * the risk effect depends on it.
+ */
+export function useOrderTicket({
+  form, patch, bid, ask, balanceUsd, leverage, symInfo,
+}: {
+  form: TicketFields;
+  patch: (p: TicketPatch) => void;
+  bid: number | null;
+  ask: number | null;
+  balanceUsd: number;
+  /** Leverage the submission will actually apply — panels cap this themselves. */
+  leverage: number;
+  symInfo: { tickSize: number; stepSize: number; quantityPrecision: number };
+}) {
+  // Best price for the active form type.
+  const referencePrice = useMemo(() => {
+    if (form.type === "MARKET") return form.side === "BUY" ? ask : bid;
+    return parseFloat(form.price) || ask || bid || 0;
+  }, [form.type, form.price, form.side, bid, ask]);
+
+  const sl = form.slEnabled && form.sl ? parseFloat(form.sl) : null;
+
+  const ctx: SizingCtx = useMemo(
+    () => ({
+      entry: referencePrice ?? 0,
+      sl,
+      leverage,
+      balanceUsd,
+      tickSize: symInfo.tickSize,
+      stepSize: symInfo.stepSize,
+    }),
+    [referencePrice, sl, leverage, balanceUsd, symInfo.tickSize, symInfo.stepSize],
+  );
+
+  // Derived sizing previews from canonical qty.
+  const qtyNum = parseFloat(form.qty) || 0;
+  const derived = useMemo(() => qtyToSizings(qtyNum, ctx), [qtyNum, ctx]);
+
+  const quantityPrecision = symInfo.quantityPrecision;
+  const formatQty = (n: number) => (n > 0 ? n.toFixed(quantityPrecision) : "");
+
+  // In the risk modes the typed risk is the fixed side, so moving the stop (or
+  // the entry) re-sizes the position instead of changing what's at stake.
+  // `ctx` carries the stop, so this reacts to chart drags too; writing only on
+  // a real change keeps it from looping.
+  useEffect(() => {
+    if (!modeRequiresSl(form.sizingMode) || sl === null) return;
+    const risk = parseFloat(form.sizingInput);
+    if (!isFinite(risk) || risk <= 0) return;
+    const newQty = sizingToQty(form.sizingMode, risk, ctx);
+    const formatted = newQty > 0 ? newQty.toFixed(quantityPrecision) : "";
+    if (formatted !== form.qty) patch({ qty: formatted });
+  }, [form.sizingMode, form.sizingInput, form.qty, sl, ctx, quantityPrecision, patch]);
+
+  /** Ready to spread onto `<SizingControl>`. */
+  const sizingHandlers = {
+    onChangeMode(mode: SizingMode) {
+      // Recompute the visible input from canonical qty so it stays consistent.
+      patch({ sizingMode: mode, sizingInput: nextSizingInput(qtyNum, mode, ctx) });
+      // Force SL on if the mode requires one to size at all.
+      if (modeRequiresSl(mode) && !form.slEnabled) patch({ slEnabled: true });
+    },
+    onChangeInput(raw: string) {
+      const value = parseFloat(raw);
+      if (!isFinite(value) || value <= 0) {
+        patch({ sizingInput: raw, qty: "" });
+        return;
+      }
+      patch({ sizingInput: raw, qty: formatQty(sizingToQty(form.sizingMode, value, ctx)) });
+    },
+  };
+
+  return { referencePrice, ctx, qtyNum, derived, sizingHandlers };
+}
+
+/**
+ * The one-line order summary under the submit button.
+ *
+ * `cleanSym`, not a bare `.P` strip: a Bybit-charted ticker also carries a
+ * `BYBIT:` prefix, which would otherwise read "0.5 BYBIT:SOLUSDT MARKET".
+ */
+export function orderSummaryLabel(form: TicketFields, symbol: string): string {
+  const suffix = form.type === "LIMIT" ? `@ ${form.price || "—"} LIMIT` : form.type;
+  return `${form.qty || "0"} ${cleanSym(symbol)} ${suffix}`;
+}
+
+/**
+ * The limit-price row, with its bid/ask snap button and the opposite-side
+ * quote as a hint. Identical in both panels; only the condition that shows it
+ * differs (the live panel also renders it for the STOP variants).
+ */
+export function TicketPriceInput({
+  value, side, bid, ask, referencePrice, pricePrecision, onChange,
+}: {
+  value: string;
+  side: OrderSide;
+  bid: number | null;
+  ask: number | null;
+  referencePrice: number | null;
+  pricePrecision: number;
+  onChange: (v: string) => void;
+}) {
+  const target = side === "BUY" ? bid : ask;
+  return (
+    <PriceInput
+      value={value}
+      onChange={onChange}
+      placeholder={referencePrice ? referencePrice.toFixed(pricePrecision) : "0.0"}
+      onSnapToBidAsk={() => {
+        if (target) onChange(target.toFixed(pricePrecision));
+      }}
+      label="Price"
+      ticksLabel={ask ? `${side === "BUY" ? "Bid" : "Ask"} ${target?.toFixed(pricePrecision) ?? "—"}` : null}
+    />
+  );
+}
+
 export function nextSizingInput(qtyNum: number, mode: SizingMode, ctx: SizingCtx): string {
   const next = qtyToSizings(qtyNum, ctx);
   return formatForMode(next[mode], mode);

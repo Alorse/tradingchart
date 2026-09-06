@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Bell, LogOut, Redo2, Rewind, Settings2, Undo2 } from "lucide-react";
 import { SymbolSelector } from "@/components/chart/SymbolSelector";
 import { TimeframeSelector } from "@/components/chart/TimeframeSelector";
@@ -13,11 +12,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useReplayStore } from "@/lib/replay/replay-store";
-import { LoginDialog } from "@/components/auth/LoginDialog";
 
 export function Header() {
-  const { user, loading, signOut } = useAuth();
-  const [loginOpen, setLoginOpen] = useState(false);
+  const { user, loading, signOut, promptLogin } = useAuth();
   const { undo, redo } = useDrawings();
   const setChartSettingsOpen = useChartStore((s) => s.setChartSettingsOpen);
   const openAlertDialog = useChartStore((s) => s.openAlertDialog);
@@ -117,41 +114,40 @@ export function Header() {
             Chart settings
           </TooltipContent>
         </Tooltip>
+        {/* Both arms below are empty while the session is still resolving —
+            showing Login first would flash it away for a signed-in user — so
+            the separator waits with them rather than dangling on its own. */}
+        {(user || !loading) && (
+          <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
+        )}
         {user ? (
-          <>
-            <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
-            <div className="flex items-center gap-2">
-              <span className="max-w-[140px] truncate text-xs text-tv-text-muted">
-                {user.email}
-              </span>
-              <Tooltip>
-                <TooltipTrigger
-                  onClick={signOut}
-                  className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-red"
-                >
-                  <LogOut className="size-5" />
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  Sign out
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </>
+          <div className="flex items-center gap-2">
+            <span className="max-w-[140px] truncate text-xs text-tv-text-muted">
+              {user.email}
+            </span>
+            <Tooltip>
+              <TooltipTrigger
+                onClick={signOut}
+                className="flex h-7 w-7 items-center justify-center rounded text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-red"
+              >
+                <LogOut className="size-5" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Sign out
+              </TooltipContent>
+            </Tooltip>
+          </div>
         ) : (
           !loading && (
-            <>
-              <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
-              <button
-                onClick={() => setLoginOpen(true)}
-                className="rounded px-2 py-1 text-xs font-medium text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
-              >
-                Login
-              </button>
-            </>
+            <button
+              onClick={promptLogin}
+              className="rounded px-2 py-1 text-xs font-medium text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
+            >
+              Login
+            </button>
           )
         )}
       </div>
-      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
     </header>
   );
 }

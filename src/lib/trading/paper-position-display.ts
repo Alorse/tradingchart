@@ -11,6 +11,20 @@ export type PnlDisplayMode = "MONEY" | "TICKS" | "PERCENT";
 
 export const PNL_DISPLAY_MODES: PnlDisplayMode[] = ["MONEY", "TICKS", "PERCENT"];
 
+/** Button labels for the panel's uPnL unit toggle, exhaustive over the union
+ *  so a new mode can't silently render as "%". */
+export const PNL_MODE_LABEL: Record<PnlDisplayMode, string> = {
+  MONEY: "Money",
+  TICKS: "Ticks",
+  PERCENT: "%",
+};
+
+/** Narrows a value off a persisted blob to a known mode, so a stale or
+ *  hand-edited one falls back to the default instead of rendering blank. */
+export function isPnlDisplayMode(v: unknown): v is PnlDisplayMode {
+  return PNL_DISPLAY_MODES.includes(v as PnlDisplayMode);
+}
+
 /**
  * The floating P&L in whichever unit `mode` asks for. Signed by direction in
  * every mode — a short profits from a falling mark, so `TICKS`/`PERCENT` flip
@@ -64,6 +78,26 @@ export function isLiquidationUrgent(position: PaperPosition, mark: number): bool
   return remaining < fullDistance * 0.1;
 }
 
+/**
+ * How a position or order is labelled on screen: the decorated symbol it was
+ * opened from (`BYBIT:SOLUSDT.P`) when there is one, else the plain key the
+ * engine stores it under. Rows fall back rather than showing nothing for a
+ * position persisted before `feedSymbol` existed.
+ */
+export function paperDisplaySymbol(row: { feedSymbol: string | null; symbol: string }): string {
+  return row.feedSymbol ?? row.symbol;
+}
+
+/**
+ * The price to value `position` at right now. A symbol missing from `marks`
+ * has never ticked, and a position that has never ticked is worth what it
+ * cost — the same fallback `equity` and `totalUnrealizedPnl` apply, kept here
+ * so the panels and dialogs can't spell it differently.
+ */
+export function markOf(marks: Record<string, number>, position: PaperPosition): number {
+  return marks[position.symbol] ?? position.entryPrice;
+}
+
 /** Everything a position row needs to render, computed once per (position, mark, mode). */
 export interface PaperPositionFigures {
   mark: number;
@@ -74,19 +108,29 @@ export interface PaperPositionFigures {
   liquidationUrgent: boolean;
 }
 
-export function computePositionFigures(
+/**
+ * Everything a row renders for one position, valued at `mark`. `undefined`
+ * means the symbol hasn't ticked yet and falls back to the entry price via
+ * `markOf`'s rule, so no call site repeats it.
+ *
+ * Takes the single mark rather than the whole `marks` map so a consumer of one
+ * position (the chart's order-line layer) can subscribe to just its own price,
+ * which changes identity far less often than the map does.
+ */
+export function positionFiguresAt(
   position: PaperPosition,
-  marks: Record<string, number>,
+  mark: number | undefined,
   mode: PnlDisplayMode,
   tickSize: number,
 ): PaperPositionFigures {
-  const mark = marks[position.symbol] ?? position.entryPrice;
+  const at = mark ?? position.entryPrice;
   return {
-    mark,
-    pnl: unrealizedPnl(position, mark),
-    displayPnl: pnlDisplayValue(position, mark, mode, tickSize),
-    roe: positionRoi(position, mark) * 100,
-    displaySymbol: position.feedSymbol ?? position.symbol,
-    liquidationUrgent: isLiquidationUrgent(position, mark),
+    mark: at,
+    pnl: unrealizedPnl(position, at),
+    displayPnl: pnlDisplayValue(position, at, mode, tickSize),
+    roe: positionRoi(position, at) * 100,
+    displaySymbol: paperDisplaySymbol(position),
+    liquidationUrgent: isLiquidationUrgent(position, at),
   };
 }
+

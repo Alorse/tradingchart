@@ -28,15 +28,11 @@ export function useCloudSync() {
   /** Load *attempted* — guards the one-shot init effect against re-running. */
   const initializedRef = useRef(false);
   /**
-   * Load *succeeded* — guards both debounced saves below.
-   *
-   * These used to share `initializedRef`, which flips synchronously at the
-   * top of the init effect: the save effects then ran on the very same
-   * sign-in render, saw it already set, and scheduled an upsert of this
-   * device's local state 1.5s later. A load slower than that debounce (or one
-   * that failed outright) therefore overwrote the cloud row with whatever
-   * localStorage happened to hold, before ever seeing what was up there. Same
-   * split, and same reasoning, as `usePaperAccountSync`.
+   * Load *succeeded* — gates both debounced saves below. Separate from
+   * `initializedRef` because that one flips synchronously at the top of the
+   * init effect: sharing it would let a load slower than `DEBOUNCE_MS` (or one
+   * that fails outright) upsert this device's localStorage state over a cloud
+   * row it never read. Same split, and same reasoning, as `usePaperAccountSync`.
    */
   const loadedRef = useRef(false);
   /**
@@ -97,7 +93,10 @@ export function useCloudSync() {
      *  fresh load for the current user. */
     const isStale = () => prevUserIdRef.current !== userId;
 
-    async function init() {
+    // `userId` is passed in rather than closed over: it is narrowed to a
+    // string by the early return above, but a hoisted function declaration
+    // doesn't inherit that narrowing.
+    async function init(uid: string) {
       const [settings, wl] = await Promise.all([
         loadChartSettings(),
         loadWatchlists(),
@@ -142,7 +141,7 @@ export function useCloudSync() {
       if (wl) {
         useChartStore.setState({
           watchlists: wl.lists,
-          ...(wl.activeId && { activeWatchlistId: wl.activeId }),
+          activeWatchlistId: wl.activeId,
         });
       } else {
         // No watchlist data in the cloud at all (first sign-in on this
@@ -154,11 +153,11 @@ export function useCloudSync() {
         // `.catch` below while `loadedRef` flipped `true` anyway, so the
         // session carried on debounce-saving against a row that was never
         // created. Letting it reject leaves the flag matching reality.
-        await saveWatchlists(local, localActive);
+        await saveWatchlists(uid, local, localActive);
       }
     }
 
-    init()
+    init(userId)
       .then(() => {
         if (isStale()) return;
         loadedRef.current = true;
@@ -166,24 +165,25 @@ export function useCloudSync() {
       .catch((err) => {
         // Leave `loadedRef` false so the debounced saves stay gated off for
         // the rest of this sign-in: better to sync nothing than to upsert
-        // local state over a cloud row the load never actually read. An
-        // unapplied migration 06 lands here — `loadWatchlists` selects
-        // columns that don't exist yet.
+        // local state over a cloud row the load never actually read. Which
+        // load failed, and why, is the loader's to say — `loadWatchlists`
+        // names its own migration dependency (an unapplied migration 06 lands
+        // here, since it selects columns that don't exist yet).
         console.error(
-          "Failed to load settings/watchlists from Supabase; skipping cloud sync this session " +
-            "(is supabase/migrations/06_watchlists.sql applied?)",
+          "Failed to load settings/watchlists from Supabase; skipping cloud sync this session",
           err,
         );
       });
   }, [user, setSymbol, setTimeframe]);
 
   // ── Debounced settings sync (indicators + visual) ────────────────────────
-  const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // No timer ref: React runs an effect's cleanup before the next run of that
+  // same effect, so the pending timeout is always cleared by the line below
+  // and a local handle is enough.
   useEffect(() => {
     if (!user || !loadedRef.current) return;
-    if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
-    settingsTimerRef.current = setTimeout(() => {
-      saveChartSettings({
+    const timer = setTimeout(() => {
+      saveChartSettings(user.id, {
         symbol,
         timeframe,
         indicators,
@@ -202,9 +202,7 @@ export function useCloudSync() {
         },
       }).catch(logSaveFailure);
     }, DEBOUNCE_MS);
-    return () => {
-      if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [
     user,
     symbol, timeframe, indicators, hidden, config,
@@ -213,15 +211,11 @@ export function useCloudSync() {
   ]);
 
   // ── Debounced watchlist sync (every named list, not just the active one) ──
-  const wlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!user || !loadedRef.current) return;
-    if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
-    wlTimerRef.current = setTimeout(() => {
-      saveWatchlists(watchlists, activeWatchlistId).catch(logSaveFailure);
+    const timer = setTimeout(() => {
+      saveWatchlists(user.id, watchlists, activeWatchlistId).catch(logSaveFailure);
     }, DEBOUNCE_MS);
-    return () => {
-      if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [user, watchlists, activeWatchlistId]);
 }

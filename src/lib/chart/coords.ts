@@ -8,25 +8,29 @@
 import type { IChartApi, UTCTimestamp } from "lightweight-charts";
 import type { Candle, Timeframe } from "@/lib/binance/types";
 
+// Module scope, not rebuilt per call: `timeframeToSeconds` runs inside
+// pointermove handlers and per-drawing render loops, where allocating a
+// 15-key object per call is pure garbage.
+const TF_SECONDS: Record<Timeframe, number> = {
+  "1m": 60,
+  "3m": 180,
+  "5m": 300,
+  "15m": 900,
+  "30m": 1800,
+  "1h": 3600,
+  "2h": 7200,
+  "4h": 14400,
+  "6h": 21600,
+  "8h": 28800,
+  "12h": 43200,
+  "1d": 86400,
+  "3d": 259200,
+  "1w": 604800,
+  "1M": 2592000,
+};
+
 export function timeframeToSeconds(tf: Timeframe): number {
-  const map: Record<Timeframe, number> = {
-    "1m": 60,
-    "3m": 180,
-    "5m": 300,
-    "15m": 900,
-    "30m": 1800,
-    "1h": 3600,
-    "2h": 7200,
-    "4h": 14400,
-    "6h": 21600,
-    "8h": 28800,
-    "12h": 43200,
-    "1d": 86400,
-    "3d": 259200,
-    "1w": 604800,
-    "1M": 2592000,
-  };
-  return map[tf] ?? 60;
+  return TF_SECONDS[tf] ?? 60;
 }
 
 /**

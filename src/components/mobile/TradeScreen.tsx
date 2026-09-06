@@ -22,12 +22,15 @@ import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
-import { computePositionFigures, formatPnlDisplay } from "@/lib/trading/paper-position-display";
+import {
+  formatPnlDisplay,
+  paperDisplaySymbol,
+  positionFiguresAt,
+} from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
-import { totalUnrealizedPnl } from "@/lib/trading/paper-engine";
+import { totalUnrealizedPnl, usedMargin } from "@/lib/trading/paper-engine";
 import type { PaperPosition } from "@/lib/trading/paper-engine";
 import type { Order } from "@/lib/binance/trading-types";
-import type { TradingMode } from "@/lib/store/trading-mode-store";
 
 /**
  * Mobile Trade tab — combined view with the order form on top and the user's
@@ -40,20 +43,17 @@ import type { TradingMode } from "@/lib/store/trading-mode-store";
  * gate when not connected.
  *
  * Gated on `trading-mode-store` the same way desktop's `TradePanel` is: the
- * live order form/positions/orders (and the live-only position-edit panel)
- * are unreachable whenever `mode !== "live"` — this used to render the live
- * `OrderPanel` and live close/cancel buttons unconditionally, so a mobile
- * user who had switched to Paper could still fire real orders (finding 1).
- * The paper branch reuses `PaperOrderPanel` and `PaperPositionsPanel` as-is:
- * neither has hover-only affordances, so both work on touch unmodified (see
- * CLAUDE.md's "Responsive shell" reuse checklist).
+ * live order form, live positions/orders and the live-only position-edit
+ * panel are all unreachable whenever `mode !== "live"`, so the Paper toggle
+ * is what decides whether this screen can place a real order at all. The
+ * paper branch reuses `PaperOrderPanel` as-is (no hover-only affordances, so
+ * it works on touch unmodified) but renders its own `PaperTradeSection`:
+ * desktop's positions *table* doesn't reflow onto a phone width.
  */
 export function TradeScreen() {
   const mode = useTradingModeStore((s) => s.mode);
-  const setMode = useTradingModeStore((s) => s.setMode);
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);
-  const setKeyDialogOpen = useTradingStore((s) => s.setApiKeyDialogOpen);
   const symbol = useChartStore((s) => s.symbol);
   // Account-wide, not scoped to the chart's current symbol — otherwise an
   // open position on a different symbol than the one charted would never
@@ -87,20 +87,13 @@ export function TradeScreen() {
   const totalEquity = balance.reduce((acc, b) => acc + b.free + b.locked, 0);
   const unrealizedPnL = activePositions.reduce((acc, p) => acc + p.unrealizedProfit, 0);
 
-  function handleModeChange(next: TradingMode) {
-    setMode(next);
-    if (next === "live" && (!apiKey || !apiSecret)) {
-      setKeyDialogOpen(true);
-    }
-  }
-
-  // Paper mode: the live order form, live positions/orders and the live-only
-  // position-edit panel are all unreachable — only the paper equivalents
-  // render, matching desktop's `TradePanel` gate (finding 1).
+  // Inverted on purpose (checks "live", not "paper"), matching `TradePanel`:
+  // any unrecognized mode must fail closed to the paper branch, never to the
+  // one that can place real orders.
   if (mode !== "live") {
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        <TradeModeToggle mode={mode} onChange={handleModeChange} />
+        <TradeModeToggle />
         <div className="flex-1 overflow-y-auto">
           <div className="shrink-0 border-b border-tv-border">
             <PaperOrderPanel key={symbol} />
@@ -124,7 +117,7 @@ export function TradeScreen() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <TradeModeToggle mode={mode} onChange={handleModeChange} />
+      <TradeModeToggle />
       {/* Stats */}
       {connected && (
         <div className="grid shrink-0 grid-cols-3 gap-2 border-b border-tv-border bg-tv-panel px-3 py-2 text-[11px]">
@@ -315,7 +308,6 @@ function Section({
 function PaperTradeSection() {
   const account = usePaperTradingStore((s) => s.account);
   const marks = usePaperTradingStore((s) => s.marks);
-  const equity = usePaperTradingStore((s) => s.equity());
   const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
   const cancelOrder = usePaperTradingStore((s) => s.cancelOrder);
 
@@ -323,10 +315,11 @@ function PaperTradeSection() {
     () => account.orders.filter((o) => o.status === "NEW"),
     [account.orders],
   );
-  const unrealized = useMemo(
-    () => totalUnrealizedPnl(account.positions, marks),
-    [account.positions, marks],
-  );
+  const unrealized = totalUnrealizedPnl(account.positions, marks);
+  // `equity()` is defined as exactly this sum, so calling it would walk the
+  // positions twice more per tick — and as a selector it ran on every store
+  // `set`, not just on render. Same shape as desktop's `AccountSummaryRow`.
+  const equity = account.balance + usedMargin(account) + unrealized;
 
   return (
     <>
@@ -359,7 +352,7 @@ function PaperTradeSection() {
           >
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-semibold">
-                {o.feedSymbol ?? o.symbol}{" "}
+                {paperDisplaySymbol(o)}{" "}
                 <span className={cn(
                   "rounded px-1 text-[9px]",
                   o.side === "BUY" ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
@@ -388,9 +381,9 @@ function PaperTradeSection() {
 function PaperPositionCard({
   position, mark, pnlDisplayMode,
 }: { position: PaperPosition; mark: number; pnlDisplayMode: PnlDisplayMode }) {
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
-  const figures = computePositionFigures(position, { [position.symbol]: mark }, pnlDisplayMode, tickSize);
+  const figures = positionFiguresAt(position, mark, pnlDisplayMode, tickSize);
 
   const [editing, setEditing] = useState(false);
   const [closingQty, setClosingQty] = useState<number | null>(null);

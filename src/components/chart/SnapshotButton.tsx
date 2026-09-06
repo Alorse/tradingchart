@@ -14,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LoginDialog } from "@/components/auth/LoginDialog";
 import { cn } from "@/lib/utils";
 
 type Busy = "link" | "image" | "file" | null;
@@ -24,13 +23,12 @@ type Busy = "link" | "image" | "file" | null;
  * copy the PNG straight to the clipboard, or save it to disk.
  */
 export function SnapshotButton() {
-  const { user } = useAuth();
+  const { user, promptLogin } = useAuth();
   const symbol = useChartStore((s) => s.symbol);
   const timeframe = useChartStore((s) => s.timeframe);
   const pushToast = useToastStore((s) => s.push);
   const [busy, setBusy] = useState<Busy>(null);
   const [copied, setCopied] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
 
   function flashCopied() {
     setCopied(true);
@@ -45,7 +43,7 @@ export function SnapshotButton() {
     // Uploading needs an owner-prefixed Supabase Storage path — prompt sign-in
     // instead of letting the upload fail with an RLS error.
     if (!user) {
-      setLoginOpen(true);
+      promptLogin();
       return;
     }
     setBusy("link");
@@ -112,41 +110,38 @@ export function SnapshotButton() {
   }
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="Snapshot"
-          title="Chart snapshot"
-          className={cn(
-            "flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
-            copied ? "text-tv-green" : "text-tv-text-muted hover:text-tv-text",
-          )}
-        >
-          {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : copied ? (
-            <Check className="h-3.5 w-3.5" />
-          ) : (
-            <Camera className="h-3.5 w-3.5" />
-          )}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-52 bg-tv-panel">
-          <DropdownMenuItem onClick={copyLink} className="text-xs">
-            <Link2 className="h-3.5 w-3.5" />
-            <span>Copy image link</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={copyImage} className="text-xs">
-            <Copy className="h-3.5 w-3.5" />
-            <span>Copy image</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={download} className="text-xs">
-            <Download className="h-3.5 w-3.5" />
-            <span>Download PNG</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
-    </>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Snapshot"
+        title="Chart snapshot"
+        className={cn(
+          "flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-tv-panel-hover",
+          copied ? "text-tv-green" : "text-tv-text-muted hover:text-tv-text",
+        )}
+      >
+        {busy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : copied ? (
+          <Check className="h-3.5 w-3.5" />
+        ) : (
+          <Camera className="h-3.5 w-3.5" />
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-52 bg-tv-panel">
+        <DropdownMenuItem onClick={copyLink} className="text-xs">
+          <Link2 className="h-3.5 w-3.5" />
+          <span>Copy image link</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={copyImage} className="text-xs">
+          <Copy className="h-3.5 w-3.5" />
+          <span>Copy image</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={download} className="text-xs">
+          <Download className="h-3.5 w-3.5" />
+          <span>Download PNG</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

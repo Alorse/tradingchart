@@ -1,6 +1,7 @@
 import type { SizingMode, SlMode } from "@/lib/binance/trading-types";
 import { isPerp } from "@/lib/binance/rest";
-import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { paperSymbolKey } from "@/lib/trading/paper-symbol";
+import { bracketSideReason } from "@/lib/trading/paper-brackets";
 import type {
   LimitOrderRequest,
   MarketOrderRequest,
@@ -80,8 +81,8 @@ function bracket(enabled: boolean, value: string): number | null {
  * `cleanSym` here (which also drops `.P`) collapsed spot and perp into a
  * single netted position, so a `BTCUSDT` spot long and a `BTCUSDT.P` perp
  * short — different instruments with different prices and no netting
- * relationship on any real venue — silently closed each other out (holistic
- * review finding 4). `BYBIT:SOLUSDT.P` and `SOLUSDT.P` do still share a key:
+ * relationship on any real venue — silently closed each other out.
+ * `BYBIT:SOLUSDT.P` and `SOLUSDT.P` do still share a key:
  * that's one instrument charted from two venues, which should net.
  *
  * `isPerp` needs the undecorated symbol (the suffix is what it reads), so it
@@ -89,7 +90,7 @@ function bracket(enabled: boolean, value: string): number | null {
  *
  * Leverage only means anything for a perp — `LeverageSlider` is hidden for
  * spot symbols, so a spot order forces 1x rather than silently inheriting
- * whatever `form.leverage` was left at (adversarial review finding 8).
+ * whatever `form.leverage` was left at.
  */
 export function paperFormToMarketRequest(
   form: PaperOrderForm,
@@ -97,7 +98,7 @@ export function paperFormToMarketRequest(
 ): MarketOrderRequest {
   const perp = isPerp(symbol);
   return {
-    symbol: stripExchangePrefix(symbol),
+    symbol: paperSymbolKey(symbol),
     side: form.side,
     qty: parseFloat(form.qty) || 0,
     leverage: perp ? form.leverage : 1,
@@ -121,22 +122,18 @@ export function paperFormToLimitRequest(
 }
 
 /**
- * Mirrors the engine's own bracket-side rule (`normalizeBrackets` in
- * paper-engine.ts: long TP > price > SL, short the other way) so the panel
- * can block a submission the engine would otherwise silently drop instead of
- * leaving the user to notice a missing TP/SL only after the fill (adversarial
- * review finding 7). `null` means the brackets (if any) are fine to submit.
+ * The shared bracket-side rule (`paper-brackets.ts`, which the engine's
+ * `normalizeBrackets` enforces) phrased against the order ticket, so the
+ * panel can block a submission the engine would otherwise silently drop
+ * instead of leaving the user to notice a missing TP/SL only after the fill
+ * itself. `null` means the brackets (if any) are fine to submit.
  */
 export function invalidBracketReason(form: PaperOrderForm, referencePrice: number): string | null {
-  if (!isFinite(referencePrice) || referencePrice <= 0) return null;
-  const long = form.side === "BUY";
-  const tp = bracket(form.tpEnabled, form.tp);
-  const sl = bracket(form.slEnabled, form.sl);
-  if (tp !== null && (long ? tp <= referencePrice : tp >= referencePrice)) {
-    return `Take-profit must be ${long ? "above" : "below"} the current price`;
-  }
-  if (sl !== null && (long ? sl >= referencePrice : sl <= referencePrice)) {
-    return `Stop-loss must be ${long ? "below" : "above"} the current price`;
-  }
-  return null;
+  return bracketSideReason(
+    form.side === "BUY" ? "LONG" : "SHORT",
+    referencePrice,
+    bracket(form.tpEnabled, form.tp),
+    bracket(form.slEnabled, form.sl),
+    "price",
+  );
 }

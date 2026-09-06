@@ -1,5 +1,16 @@
-// Main-thread polyfills for the node test environment. Zustand `persist` stores
-// read localStorage at creation; provide an in-memory stand-in.
+// Main-thread polyfills for the node test environment.
+//
+// Zustand `persist` stores read localStorage at creation, so the suite needs a
+// stand-in — an in-memory one specifically: `--test-isolation=none` runs every
+// test file in one process, so a file-backed store (Node's own built-in, which
+// needs `--localstorage-file`) would leak state between runs as well as
+// between files. Node 24 defines a `localStorage` global regardless, and it
+// throws on every operation unless that flag was passed, so this overwrites it
+// rather than filling a gap.
+//
+// Only stores whose `storage:` resolves through `globalThis` see this — see
+// `src/lib/store/persist-storage.ts`. Zustand's `window.localStorage` default
+// finds nothing here and silently disables itself.
 class MemStorage {
   #m = new Map();
   getItem(k) {
@@ -22,26 +33,8 @@ class MemStorage {
   }
 }
 
-// Node 24 ships a built-in `localStorage` global, but it throws (and zustand's
-// persist middleware then disables itself) unless the process was started with
-// `--localstorage-file`. Probing it is the only way to tell the two apart, so
-// install the in-memory stand-in whenever the real one can't be written to.
-function localStorageWorks() {
-  try {
-    const ls = globalThis.localStorage;
-    if (!ls) return false;
-    ls.setItem("__probe__", "1");
-    ls.removeItem("__probe__");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-if (!localStorageWorks()) {
-  Object.defineProperty(globalThis, "localStorage", {
-    value: new MemStorage(),
-    configurable: true,
-    writable: true,
-  });
-}
+Object.defineProperty(globalThis, "localStorage", {
+  value: new MemStorage(),
+  configurable: true,
+  writable: true,
+});

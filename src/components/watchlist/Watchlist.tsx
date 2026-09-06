@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 import { fetchTickers24h, cleanSym } from "@/lib/binance/rest";
 import { fetchBybitTickers24h } from "@/lib/bybit/public";
-import { sortWatchlistItems, cycleSort } from "@/lib/watchlist/sort";
-import { getDailyOpens } from "@/lib/watchlist/daily-open";
+import { sortWatchlistItems, cycleSort, type WatchRow } from "@/lib/watchlist/sort";
+import { dailyChange } from "@/lib/watchlist/daily-open";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { resolveSource } from "@/lib/symbols/source";
@@ -39,6 +39,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatPrice, formatPct, formatChangeAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBatchedTicks } from "@/hooks/useBatchedTicks";
+import { useDailyOpens } from "@/hooks/useDailyOpens";
 import { CoinIcon, getBaseAsset } from "./CoinIcon";
 import { FlagPennant } from "./FlagPennant";
 import { FLAG_COLORS } from "@/lib/watchlist/flags";
@@ -99,10 +100,7 @@ export function Watchlist() {
   const [rows, setRows] = useState<Record<string, Row>>({});
   const [flash, setFlash] = useState<Record<string, "up" | "down" | null>>({});
   const applyTick = useBatchedTicks(setRows, setFlash);
-  // UTC-midnight open per symbol — the baseline for the daily "Chg" column.
-  // Kept separate from `rows` (live price/flash) since it only changes once a
-  // day; see src/lib/watchlist/daily-open.ts for the caching strategy.
-  const [dailyOpens, setDailyOpens] = useState<Record<string, number>>({});
+  const dailyOpens = useDailyOpens(symbols);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -181,25 +179,6 @@ export function Watchlist() {
     return () => {
       cancelled = true;
       unsubs.forEach((u) => u());
-    };
-  }, [symbols.join(",")]);
-
-  // Daily open per symbol. `getDailyOpens` caches by UTC date internally, so
-  // this periodic re-invoke costs nothing until the date actually rolls over
-  // — no N-call fan-out on every tick, just a once-a-day refetch.
-  useEffect(() => {
-    if (symbols.length === 0) return;
-    let cancelled = false;
-    function load() {
-      getDailyOpens(symbols).then((opens) => {
-        if (!cancelled) setDailyOpens((prev) => ({ ...prev, ...opens }));
-      });
-    }
-    load();
-    const interval = setInterval(load, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
     };
   }, [symbols.join(",")]);
 
@@ -304,15 +283,14 @@ export function Watchlist() {
     });
   }, [items, collapsed]);
 
-  // Sort input: price straight from `rows`, but "change" is the daily pct
-  // (price vs UTC-midnight open) rather than `rows`' own field, so a symbol
-  // whose daily open hasn't loaded yet is treated as missing (sorted last)
-  // instead of by a rolling-24h number it no longer displays.
+  // Sort input: "change" sorts on the daily pct (price vs UTC-midnight open),
+  // not `rows`' own rolling-24h field, which is no longer displayed. A symbol
+  // whose open hasn't loaded leaves pct undefined so the sorter ranks it as
+  // unknown, while its price still sorts normally.
   const sortRows = useMemo(() => {
-    const out: Record<string, { price: number; pct: number }> = {};
+    const out: Record<string, WatchRow> = {};
     for (const [sym, r] of Object.entries(rows)) {
-      const open = dailyOpens[sym];
-      out[sym] = { price: r.price, pct: open ? ((r.price - open) / open) * 100 : NaN };
+      out[sym] = { price: r.price, pct: dailyChange(r.price, dailyOpens[sym])?.pct };
     }
     return out;
   }, [rows, dailyOpens]);
@@ -380,6 +358,11 @@ export function Watchlist() {
     draggedId.current = null;
     setDragOverId(null);
   }
+
+  // The item the context menu was opened on — resolved once for the three
+  // entries that branch on it.
+  const ctxItemId = contextMenu?.itemId ?? null;
+  const ctxItem = ctxItemId === null ? undefined : items.find((i) => i.id === ctxItemId);
 
   return (
     <div className="flex h-full flex-col">
@@ -635,6 +618,7 @@ export function Watchlist() {
               ? openPosition.side
               : null;
             const row = rows[s];
+            const daily = dailyChange(row?.price, dailyOpens[s]);
             const isActive = s === symbol;
             const isMultiSelected = multiSelected.has(item.id);
             const f = flash[s];
@@ -747,27 +731,21 @@ export function Watchlist() {
                 >
                   {row ? formatPrice(row.price) : "—"}
                 </span>
-                {(() => {
-                  const open = dailyOpens[s];
-                  const price = row?.price;
-                  const daily = price !== undefined && open ? { amount: price - open, pct: ((price - open) / open) * 100 } : null;
-                  return (
-                    <div className="flex items-center justify-end gap-1">
-                      {daily ? (
-                        <>
-                          <span className={cn("tabular-nums", daily.amount >= 0 ? "text-tv-green" : "text-tv-red")}>
-                            {formatChangeAmount(daily.amount, price!)}
-                          </span>
-                          <span className={cn("tabular-nums", daily.amount >= 0 ? "text-tv-green" : "text-tv-red")}>
-                            {formatPct(daily.pct)}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="tabular-nums text-tv-text-muted">—</span>
-                      )}
-                    </div>
-                  );
-                })()}
+                <div
+                  className={cn(
+                    "flex items-center justify-end gap-1 tabular-nums",
+                    daily ? (daily.amount >= 0 ? "text-tv-green" : "text-tv-red") : "text-tv-text-muted",
+                  )}
+                >
+                  {daily ? (
+                    <>
+                      <span>{formatChangeAmount(daily.amount, daily.price)}</span>
+                      <span>{formatPct(daily.pct)}</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </div>
               </div>
             );
           })}
@@ -786,61 +764,47 @@ export function Watchlist() {
           style={{ top: contextMenu.y, left: contextMenu.x, maxHeight: "80vh" }}
           className="fixed z-50 min-w-44 overflow-y-auto rounded-md bg-tv-popup py-1 shadow-xl ring-1 ring-tv-border-strong"
         >
-          {contextMenu.itemId !== null && (
+          {ctxItemId !== null && (
             <>
-              {(() => {
-                const item = items.find((i) => i.id === contextMenu.itemId);
-                if (item?.type === "label") {
-                  return (
-                    <ContextItem
-                      icon={Pencil}
-                      label="Rename label…"
-                      onClick={() => startRename(item.id, item.value)}
-                    />
-                  );
-                }
-                return null;
-              })()}
+              {ctxItem?.type === "label" && (
+                <ContextItem
+                  icon={Pencil}
+                  label="Rename label…"
+                  onClick={() => startRename(ctxItem.id, ctxItem.value)}
+                />
+              )}
               <ContextItem
                 icon={Type}
                 label="Add label above"
-                onClick={() => addLabelHere(contextMenu.itemId!)}
+                onClick={() => addLabelHere(ctxItemId)}
               />
-              {(() => {
-                const item = items.find((i) => i.id === contextMenu.itemId);
-                if (item?.type !== "symbol" || watchlists.length <= 1) return null;
-                return (
-                  <>
-                    <div className="my-1 h-px bg-tv-border" />
-                    {watchlists.filter((w) => w.id !== active.id).map((w) => (
-                      <ContextItem
-                        key={w.id}
-                        icon={FolderInput}
-                        label={`Move to "${w.name}"`}
-                        onClick={() => {
-                          moveWatchlistItemToList(active.id, w.id, contextMenu.itemId!);
-                          setContextMenu(null);
-                        }}
-                      />
-                    ))}
-                  </>
-                );
-              })()}
-              {(() => {
-                const item = items.find((i) => i.id === contextMenu.itemId);
-                if (item?.type !== "symbol") return null;
-                return (
-                  <ContextItem
-                    icon={Trash2}
-                    label="Remove from watchlist"
-                    danger
-                    onClick={() => {
-                      removeWatchlistItem(active.id, contextMenu.itemId!);
-                      setContextMenu(null);
-                    }}
-                  />
-                );
-              })()}
+              {ctxItem?.type === "symbol" && watchlists.length > 1 && (
+                <>
+                  <div className="my-1 h-px bg-tv-border" />
+                  {watchlists.filter((w) => w.id !== active.id).map((w) => (
+                    <ContextItem
+                      key={w.id}
+                      icon={FolderInput}
+                      label={`Move to "${w.name}"`}
+                      onClick={() => {
+                        moveWatchlistItemToList(active.id, w.id, ctxItemId);
+                        setContextMenu(null);
+                      }}
+                    />
+                  ))}
+                </>
+              )}
+              {ctxItem?.type === "symbol" && (
+                <ContextItem
+                  icon={Trash2}
+                  label="Remove from watchlist"
+                  danger
+                  onClick={() => {
+                    removeWatchlistItem(active.id, ctxItemId);
+                    setContextMenu(null);
+                  }}
+                />
+              )}
               <div className="my-1 h-px bg-tv-border" />
             </>
           )}

@@ -8,6 +8,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
 import { TV_PINE } from "@/lib/chart/theme";
+import { lineDash } from "@/lib/drawings/line-style";
 
 interface Props {
   drawing: HLineDrawing;
@@ -35,7 +36,7 @@ export function HLineDraw({
   const color = drawing.color ?? TV_PINE.blue;
   const stroke = color;
   const strokeWidth = drawing.lineWidth ?? 1;
-  const strokeDasharray = drawing.lineStyle === 1 ? "6 4" : drawing.lineStyle === 2 ? "2 4" : "none";
+  const strokeDasharray = lineDash(drawing.lineStyle);
   const { updateLive, commit } = useDrawings();
   const snapshotRef = useRef<HLineDrawing | null>(null);
 

@@ -60,9 +60,9 @@ export function usePaperAccountSync() {
   // to the next person who opens the app on this device before signing in,
   // and liable to bleed into a *different* user's account on their own
   // sign-in via the "no cloud row yet, push local up" branch below, if that
-  // runs before their own load lands. Runs before the load-on-sign-in effect
-  // clears `initializedRef` (both fire off the same `user` change), so a
-  // fresh sign-in always starts from a clean local slate.
+  // runs before their own load lands. Declared first so it runs before the
+  // two effects below on the same `user` change, leaving a fresh sign-in a
+  // clean local slate.
   useEffect(() => {
     const currentId = user?.id ?? null;
     // A *change* of signed-in id, not merely "signed out": covers a sign-out
@@ -75,7 +75,8 @@ export function usePaperAccountSync() {
       // `localStorage.removeItem`: the storage handle keeps a write-skip cache
       // that a hand-rolled removal would leave stale (see
       // `clearPersistedPaperAccount`), which makes the wipe depend on the
-      // `resetAccount()` above happening first.
+      // `resetAccount()` above happening first. Going through the store also
+      // keeps the storage key and backend declared in one place.
       clearPersistedPaperAccount();
     }
     prevUserIdRef.current = currentId;
@@ -85,13 +86,16 @@ export function usePaperAccountSync() {
   useEffect(() => {
     if (!user || initializedRef.current) return;
     initializedRef.current = true;
+    const userId = user.id;
 
     loadPaperAccount()
       .then((cloud) => {
         if (cloud) {
           usePaperTradingStore.getState().setAccount(cloud);
         } else {
-          savePaperAccount(usePaperTradingStore.getState().account, user.id).catch(logSaveFailure);
+          savePaperAccount(userId, usePaperTradingStore.getState().account).catch(
+            logSaveFailure,
+          );
         }
         loadedRef.current = true;
       })
@@ -112,15 +116,14 @@ export function usePaperAccountSync() {
   }, [user]);
 
   // ── Debounced save on subsequent mutations ─────────────────────────────
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // No timer ref: React runs an effect's cleanup before the next run of that
+  // same effect, so the pending timeout is always cleared by the line below
+  // and a local handle is enough (same as `useCloudSync`).
   useEffect(() => {
     if (!user || !loadedRef.current) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      savePaperAccount(account, user.id).catch(logSaveFailure);
+    const timer = setTimeout(() => {
+      savePaperAccount(user.id, account).catch(logSaveFailure);
     }, DEBOUNCE_MS);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [user, account]);
 }

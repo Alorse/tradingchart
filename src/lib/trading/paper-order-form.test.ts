@@ -83,7 +83,7 @@ describe("paperFormToMarketRequest / paperFormToLimitRequest", () => {
     expect(marketReq.price).toBe(undefined);
   });
 
-  it("canonicalizes a decorated symbol by stripping the venue prefix only, keeping .P (holistic review finding 4)", () => {
+  it("canonicalizes a decorated symbol by stripping the venue prefix only, keeping .P", () => {
     const form = { ...defaultPaperOrderForm(10), qty: "1" };
     expect(paperFormToMarketRequest(form, "BTCUSDT").symbol).toBe("BTCUSDT");
     expect(paperFormToMarketRequest(form, "BTCUSDT.P").symbol).toBe("BTCUSDT.P");
@@ -93,7 +93,7 @@ describe("paperFormToMarketRequest / paperFormToLimitRequest", () => {
     );
   });
 
-  it("gives spot and perp of one ticker distinct keys, so the engine can't net them (holistic review finding 4)", () => {
+  it("gives spot and perp of one ticker distinct keys, so the engine can't net them", () => {
     // Sized to fit the seed balance: the spot leg is forced to 1x, so its
     // margin is the full notional.
     const form = { ...defaultPaperOrderForm(10), qty: "0.1" };
@@ -109,7 +109,7 @@ describe("paperFormToMarketRequest / paperFormToLimitRequest", () => {
     expect(account.history).toHaveLength(0);
   });
 
-  it("forces leverage to 1 for a non-perp (spot) symbol regardless of the form's leverage (adversarial review finding 8)", () => {
+  it("forces leverage to 1 for a non-perp (spot) symbol regardless of the form's leverage", () => {
     const form = { ...defaultPaperOrderForm(25), qty: "1" };
     expect(paperFormToMarketRequest(form, "BTCUSDT").leverage).toBe(1);
     expect(paperFormToMarketRequest(form, "BYBIT:SOLUSDT").leverage).toBe(1);

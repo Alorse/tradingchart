@@ -37,10 +37,17 @@ export function ticksBetween(a: number, b: number, tickSize: number): number {
   return Math.round((b - a) / tickSize);
 }
 
+/** Margin (USD) locked to hold `qty` at `price` on `leverage`x. The context-free
+ *  primitive, so the paper engine can size a fill without fabricating a
+ *  `SizingCtx` out of four fields it has no use for. */
+export function marginFor(qty: number, price: number, leverage: number): number {
+  if (leverage <= 0) return 0;
+  return (qty * price) / leverage;
+}
+
 /** Margin (USD) required to open `qty` at `entry` at `leverage` x. */
 export function marginUsdFromQty(qty: number, ctx: SizingCtx): number {
-  if (ctx.leverage <= 0) return 0;
-  return (qty * ctx.entry) / ctx.leverage;
+  return marginFor(qty, ctx.entry, ctx.leverage);
 }
 
 export function qtyFromMarginUsd(marginUsd: number, ctx: SizingCtx): number {

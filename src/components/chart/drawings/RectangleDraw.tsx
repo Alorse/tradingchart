@@ -9,6 +9,7 @@ import { useDragPoint } from "./use-drag-point";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { TV_PINE } from "@/lib/chart/theme";
+import { lineDash } from "@/lib/drawings/line-style";
 
 interface Props {
   drawing: RectangleDrawing;
@@ -73,7 +74,7 @@ export function RectangleDraw({
   const borderColor = drawing.color ?? TV_PINE.blue;
   const stroke = borderColor;
   const strokeWidth = drawing.lineWidth ?? 1;
-  const strokeDasharray = drawing.lineStyle === 1 ? "6 4" : drawing.lineStyle === 2 ? "2 4" : "none";
+  const strokeDasharray = lineDash(drawing.lineStyle);
   const fillBase = drawing.fillColor ?? borderColor;
   const fillOpacity = drawing.fillOpacity ?? 0.1;
 

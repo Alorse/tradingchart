@@ -29,6 +29,28 @@ const VALID_TRADE = {
   reason: "MANUAL", openedAt: 0, closedAt: 1, durationMs: 1,
 };
 
+/** The order every action test opens with. */
+function openBtc(price = 20_000) {
+  st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, price);
+}
+
+function restBtcLimit(price = 19_000) {
+  st().placeLimitOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, price, leverage: 10 });
+}
+
+/** Put a blob in storage the way a page reload would find it, then rehydrate
+ *  from it — the path a persisted account actually takes on load. */
+async function rehydrateWith(state: Record<string, unknown>) {
+  localStorage.setItem(PAPER_STORAGE_KEY, JSON.stringify({ state, version: 1 }));
+  await usePaperTradingStore.persist.rehydrate();
+}
+
+/** A minimally valid persisted account, with `patch` corrupting exactly the
+ *  field the test is about. */
+function accountBlob(patch: Record<string, unknown>) {
+  return { positions: [], orders: [], history: [], balance: 1_000, ...patch };
+}
+
 beforeEach(() => {
   localStorage.removeItem(PAPER_STORAGE_KEY);
   st().resetAccount();
@@ -42,7 +64,7 @@ describe("paper-trading-store actions", () => {
   });
 
   it("placeOrder opens a position at the given quote price", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     expect(st().account.positions).toHaveLength(1);
     expect(st().account.balance).toBeCloseTo(7_990, 6);
     // The fill price seeds the mark, so equity is immediately meaningful.
@@ -51,13 +73,7 @@ describe("paper-trading-store actions", () => {
   });
 
   it("placeLimitOrder rests an order that evaluateTick fills on a cross", () => {
-    st().placeLimitOrder({
-      symbol: "BTCUSDT",
-      side: "BUY",
-      qty: 1,
-      price: 19_000,
-      leverage: 10,
-    });
+    restBtcLimit();
     expect(st().account.orders).toHaveLength(1);
 
     st().evaluateTick("BTCUSDT", 19_500);
@@ -70,20 +86,14 @@ describe("paper-trading-store actions", () => {
   });
 
   it("cancelOrder drops the order and refunds its reserve", () => {
-    st().placeLimitOrder({
-      symbol: "BTCUSDT",
-      side: "BUY",
-      qty: 1,
-      price: 19_000,
-      leverage: 10,
-    });
+    restBtcLimit();
     st().cancelOrder(st().account.orders[0].id);
     expect(st().account.orders).toHaveLength(0);
     expect(st().account.balance).toBeCloseTo(DEFAULT_PAPER_SETTINGS.seedBalance, 6);
   });
 
   it("closePosition settles at the last known mark", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     st().evaluateTick("BTCUSDT", 21_000);
     st().closePosition("BTCUSDT");
     expect(st().account.positions).toHaveLength(0);
@@ -93,7 +103,7 @@ describe("paper-trading-store actions", () => {
   });
 
   it("reversePosition flips the position at the last known mark", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     st().evaluateTick("BTCUSDT", 21_000);
     st().reversePosition("BTCUSDT");
     expect(st().account.positions).toHaveLength(1);
@@ -103,7 +113,7 @@ describe("paper-trading-store actions", () => {
   });
 
   it("reversePosition is a no-op with no mark and no explicit price", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     usePaperTradingStore.setState({ marks: {} });
     const before = st().account;
     st().reversePosition("BTCUSDT");
@@ -117,7 +127,7 @@ describe("paper-trading-store actions", () => {
   });
 
   it("setBrackets attaches TP/SL that later ticks trigger", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     st().setBrackets("BTCUSDT", { tp: 21_000, sl: 19_500 });
     expect(st().account.positions[0].tp).toBe(21_000);
 
@@ -126,8 +136,8 @@ describe("paper-trading-store actions", () => {
     expect(st().account.history[0].reason).toBe("TP");
   });
 
-  it("setBrackets drops a wrong-side stop using the symbol's last mark as reference (adversarial re-audit finding 2)", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+  it("setBrackets drops a wrong-side stop using the symbol's last mark as reference", () => {
+    openBtc();
     // The mark has since fallen to 19_500 (a live tick, still above the
     // 18_100 liquidation price so nothing else fires). A stop at 19_700 is
     // valid relative to the *entry* (20_000) but is already stale relative
@@ -147,7 +157,7 @@ describe("paper-trading-store actions", () => {
   });
 
   it("evaluateTick is idempotent at a repeated price", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     st().evaluateTick("BTCUSDT", 20_400);
     const account = st().account;
     const marks = st().marks;
@@ -157,7 +167,7 @@ describe("paper-trading-store actions", () => {
   });
 
   it("resetAccount wipes back to the seed", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     st().evaluateTick("BTCUSDT", 21_000);
     st().closePosition("BTCUSDT");
     st().resetAccount();
@@ -166,12 +176,12 @@ describe("paper-trading-store actions", () => {
     expect(st().marks).toEqual({});
   });
 
-  it("placing an order built from a decorated symbol records the canonical key (adversarial review finding 3)", () => {
+  it("placing an order built from a decorated symbol records the canonical key", () => {
     const form = { ...defaultPaperOrderForm(10), qty: "1" };
     const req = paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P");
     st().placeOrder(req, 100);
     expect(st().account.positions).toHaveLength(1);
-    // Venue prefix stripped, `.P` kept — see holistic review finding 4.
+    // Venue prefix stripped, `.P` kept: spot and perp must not net together.
     expect(st().account.positions[0].symbol).toBe("SOLUSDT.P");
     expect(st().marks["SOLUSDT.P"]).toBe(100);
 
@@ -182,7 +192,7 @@ describe("paper-trading-store actions", () => {
     expect(st().marks["SOLUSDT.P"]).toBe(110);
   });
 
-  it("keeps a spot position and a perp position on the same ticker separate (holistic review finding 4)", () => {
+  it("keeps a spot position and a perp position on the same ticker separate", () => {
     // Sized to fit the seed balance: the spot leg is forced to 1x, so its
     // margin is the full notional.
     const form = { ...defaultPaperOrderForm(10), qty: "0.1" };
@@ -218,7 +228,7 @@ describe("paper-trading-store actions", () => {
     st().updateSettings({ seedBalance: 50_000 });
     expect(st().account.balance).toBe(50_000);
 
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     const balance = st().account.balance;
     st().updateSettings({ seedBalance: 1_000 });
     expect(st().account.balance).toBe(balance);
@@ -228,7 +238,7 @@ describe("paper-trading-store actions", () => {
 
 describe("paper-trading-store persistence", () => {
   it("writes the account to localStorage and rehydrates it", async () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     st().evaluateTick("BTCUSDT", 21_000);
 
     const raw = localStorage.getItem(PAPER_STORAGE_KEY);
@@ -273,149 +283,70 @@ describe("paper-trading-store persistence", () => {
   });
 
   it("rehydrating a legacy blob without an account falls back to the seed", async () => {
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({ state: {}, version: 1 }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+    await rehydrateWith({});
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
     expect(st().account.positions).toHaveLength(0);
   });
 
-  it("rehydrating orders:null or a non-array history falls back to defaults instead of corrupting the account (adversarial review finding 8)", async () => {
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: { account: { positions: [], orders: null, history: [], balance: 1_000 } },
-        version: 1,
-      }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+  it("rehydrating orders:null or a non-array history falls back to defaults instead of corrupting the account", async () => {
+    await rehydrateWith({ account: accountBlob({ orders: null }) });
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
     expect(st().account.positions).toHaveLength(0);
     // Previously `usedMargin` (via `equity`) would crash reducing over `orders: null`.
     expect(typeof st().equity()).toBe("number");
 
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: {
-          account: { positions: [], orders: [], history: "not-an-array", balance: 1_000 },
-        },
-        version: 1,
-      }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+    await rehydrateWith({ account: accountBlob({ history: "not-an-array" }) });
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
 
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: { account: { positions: [], orders: [], history: [], balance: "1000" } },
-        version: 1,
-      }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+    await rehydrateWith({ account: accountBlob({ balance: "1000" }) });
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
   });
 });
 
-describe("persist merge validation (adversarial re-audit finding 4)", () => {
+/**
+ * The wiring, not the rules: that `merge` runs a rehydrated blob through
+ * `sanitizePaperAccount` at all, and that a rejected one leaves a usable
+ * account behind. Which values the sanitizer rejects is covered field by
+ * field against the function itself, below.
+ */
+describe("persist merge validation", () => {
   it("rejects a NaN balance instead of accepting it (typeof NaN === 'number', so a naive check passes it)", async () => {
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: { account: { positions: [], orders: [], history: [], balance: Number.NaN } },
-        version: 1,
-      }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+    await rehydrateWith({ account: accountBlob({ balance: Number.NaN }) });
     expect(st().account.balance).toBe(DEFAULT_PAPER_SETTINGS.seedBalance);
     // The rejected blob's account never applies, so a normal order still works.
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     expect(st().account.positions).toHaveLength(1);
     expect(Number.isFinite(st().account.balance)).toBe(true);
   });
 
   it("drops a null entry inside a persisted positions array instead of letting it crash equity()", async () => {
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: { account: { positions: [null], orders: [], history: [], balance: 1_000 } },
-        version: 1,
-      }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+    await rehydrateWith({ account: accountBlob({ positions: [null] }) });
     expect(st().account.positions).toHaveLength(0);
     expect(typeof st().equity()).toBe("number");
   });
 
-  it("drops a position whose numeric fields are missing or non-finite", async () => {
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: {
-          account: {
-            positions: [
-              { ...VALID_POSITION, id: "p1", symbol: "BTCUSDT", qty: Number.NaN },
-              { ...VALID_POSITION, id: "p2", symbol: "ETHUSDT" },
-            ],
-            orders: [],
-            history: [],
-            balance: 1_000,
-          },
-        },
-        version: 1,
+  it("keeps a valid entry alongside a rejected one", async () => {
+    await rehydrateWith({
+      account: accountBlob({
+        positions: [
+          { ...VALID_POSITION, id: "p1", symbol: "BTCUSDT", qty: Number.NaN },
+          { ...VALID_POSITION, id: "p2", symbol: "ETHUSDT" },
+        ],
+        orders: [{ ...VALID_ORDER, id: "o1", symbol: "BTCUSDT", price: "abc" }],
       }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+    });
     expect(st().account.positions).toHaveLength(1);
     expect(st().account.positions[0].symbol).toBe("ETHUSDT");
-  });
-
-  it("drops an order whose price or qty is missing or non-finite", async () => {
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: {
-          account: {
-            positions: [],
-            orders: [
-              { ...VALID_ORDER, id: "o1", symbol: "BTCUSDT", price: "abc" },
-              { ...VALID_ORDER, id: "o2", symbol: "ETHUSDT" },
-            ],
-            history: [],
-            balance: 1_000,
-          },
-        },
-        version: 1,
-      }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
-    expect(st().account.orders).toHaveLength(1);
-    expect(st().account.orders[0].symbol).toBe("ETHUSDT");
+    expect(st().account.orders).toHaveLength(0);
   });
 
   it("ignores a non-finite persisted settings value instead of rehydrating a NaN fee rate", async () => {
-    localStorage.setItem(
-      PAPER_STORAGE_KEY,
-      JSON.stringify({
-        state: {
-          account: {
-            positions: [],
-            orders: [],
-            history: [],
-            balance: 10_000,
-            settings: { takerFeeRate: "abc" },
-          },
-        },
-        version: 1,
-      }),
-    );
-    await usePaperTradingStore.persist.rehydrate();
+    await rehydrateWith({
+      account: accountBlob({ balance: 10_000, settings: { takerFeeRate: "abc" } }),
+    });
     expect(st().account.settings.takerFeeRate).toBe(DEFAULT_PAPER_SETTINGS.takerFeeRate);
     // A normal fill's fee is a real number, not NaN.
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     expect(Number.isFinite(st().account.balance)).toBe(true);
   });
 });
@@ -450,12 +381,8 @@ describe("sanitizePaperAccount (shared by localStorage merge and cloud sync)", (
   });
 });
 
-describe("sanitizePaperAccount rejection classes (holistic review finding 3)", () => {
-  function sanitized(patch: Record<string, unknown>) {
-    return sanitizePaperAccount({
-      positions: [], orders: [], history: [], balance: 1_000, ...patch,
-    });
-  }
+describe("sanitizePaperAccount rejection classes", () => {
+  const sanitized = (patch: Record<string, unknown>) => sanitizePaperAccount(accountBlob(patch));
 
   it("rejects the whole blob for a NaN or negative balance", () => {
     expect(sanitized({ balance: Number.NaN })).toBe(null);
@@ -533,9 +460,9 @@ describe("setAccount (cloud-adoption path)", () => {
   });
 });
 
-describe("persist write skipping (adversarial review finding 7)", () => {
+describe("persist write skipping", () => {
   it("does not re-write localStorage on a tick that only moves the mark", () => {
-    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    openBtc();
     const rawAfterOpen = localStorage.getItem(PAPER_STORAGE_KEY);
 
     // No bracket set, so this tick fills and triggers nothing: only `marks`

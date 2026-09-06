@@ -30,6 +30,7 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import type { Drawing, PositionStatKey } from "@/lib/drawings/types";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { deriveQuoteCurrency } from "@/lib/drawings/position-math";
+import { pickStyle, SETTINGS_STYLE_FIELDS } from "@/lib/drawings/style";
 import { cn } from "@/lib/utils";
 import { TV_PINE } from "@/lib/chart/theme";
 
@@ -73,29 +74,11 @@ export function DrawingSettingsDialog() {
             drawing={drawing}
             onApply={(patch) => {
               void update(drawing.id, patch);
-              // Persist style as default so next drawing of this kind reuses it
-              const stylePatch: Record<string, unknown> = {};
-              if (patch.color !== undefined) stylePatch.color = patch.color;
-              if (patch.lineWidth !== undefined) stylePatch.lineWidth = patch.lineWidth;
-              if ((patch as Record<string, unknown>).lineStyle !== undefined) stylePatch.lineStyle = (patch as Record<string, unknown>).lineStyle;
-              // Position-specific fields
-              const p = patch as Record<string, unknown>;
-              if (p.stopColor !== undefined) stylePatch.stopColor = p.stopColor;
-              if (p.targetColor !== undefined) stylePatch.targetColor = p.targetColor;
-              if (p.textColor !== undefined) stylePatch.textColor = p.textColor;
-              if (p.textSize !== undefined) stylePatch.textSize = p.textSize;
-              if (p.showLabels !== undefined) stylePatch.showLabels = p.showLabels;
-              if (p.stopLineWidth !== undefined) stylePatch.stopLineWidth = p.stopLineWidth;
-              if (p.stopLineStyle !== undefined) stylePatch.stopLineStyle = p.stopLineStyle;
-              if (p.targetLineWidth !== undefined) stylePatch.targetLineWidth = p.targetLineWidth;
-              if (p.targetLineStyle !== undefined) stylePatch.targetLineStyle = p.targetLineStyle;
-              if (p.priceLabels !== undefined) stylePatch.priceLabels = p.priceLabels;
-              if (p.alwaysShowStats !== undefined) stylePatch.alwaysShowStats = p.alwaysShowStats;
-              if (p.compactStats !== undefined) stylePatch.compactStats = p.compactStats;
-              if (p.statsOverrides !== undefined) stylePatch.statsOverrides = p.statsOverrides;
-              // Rectangle-specific fields
-              if (p.fillColor !== undefined) stylePatch.fillColor = p.fillColor;
-              if (p.fillOpacity !== undefined) stylePatch.fillOpacity = p.fillOpacity;
+              // Persist style as default so next drawing of this kind reuses
+              // it. The field list lives in `lib/drawings/style.ts` next to
+              // the toolbar's, rather than as an if-chain that has to be
+              // extended by hand for every new style field.
+              const stylePatch = pickStyle(patch, SETTINGS_STYLE_FIELDS);
               if (Object.keys(stylePatch).length > 0) {
                 setToolDefault(drawing.kind, stylePatch as Parameters<typeof setToolDefault>[1]);
               }
@@ -124,80 +107,85 @@ function Form({
   onDelete: () => void;
   onCancel: () => void;
 }) {
-  const isPosition = drawing.kind === "long" || drawing.kind === "short";
-  const isRect = drawing.kind === "rectangle";
+  // Narrowed once so the per-field initializers below can read the union's
+  // position/rectangle members directly, instead of each casting its own
+  // `drawing as { field?: T }` shape back out of the union.
+  const pos = drawing.kind === "long" || drawing.kind === "short" ? drawing : null;
+  const rect = drawing.kind === "rectangle" ? drawing : null;
+  const isPosition = pos !== null;
+  const isRect = rect !== null;
   const tabs: Tab[] = isPosition ? ["inputs", "style"] : ["style", "coordinates"];
   const [tab, setTab] = useState<Tab>(() => (isPosition ? "inputs" : "style"));
   const [color, setColor] = useState<string>(drawing.color ?? TV_PINE.neutral);
   const [lineWidth, setLineWidth] = useState<number>(drawing.lineWidth ?? 1);
   const [lineStyle, setLineStyle] = useState<0 | 1 | 2>(drawing.lineStyle ?? 0);
   const [stopColor, setStopColor] = useState<string>(
-    isPosition ? ((drawing as { stopColor?: string }).stopColor ?? TV_PINE.red) : TV_PINE.red,
+    pos?.stopColor ?? TV_PINE.red,
   );
   const [targetColor, setTargetColor] = useState<string>(
-    isPosition ? ((drawing as { targetColor?: string }).targetColor ?? TV_PINE.green) : TV_PINE.green,
+    pos?.targetColor ?? TV_PINE.green,
   );
   const [textColor, setTextColor] = useState<string>(
-    isPosition ? ((drawing as { textColor?: string }).textColor ?? TV_PINE.neutral) : TV_PINE.neutral,
+    pos?.textColor ?? TV_PINE.neutral,
   );
   const [textSize, setTextSize] = useState<number>(
-    isPosition ? ((drawing as { textSize?: number }).textSize ?? 11) : 11,
+    pos?.textSize ?? 11,
   );
   const [showLabels, setShowLabels] = useState<boolean>(
-    isPosition ? ((drawing as { showLabels?: boolean }).showLabels ?? false) : false,
+    pos?.showLabels ?? false,
   );
   const [stopLineWidth, setStopLineWidth] = useState<number>(
-    isPosition ? ((drawing as { stopLineWidth?: number }).stopLineWidth ?? 1.5) : 1.5,
+    pos?.stopLineWidth ?? 1.5,
   );
   const [stopLineStyle, setStopLineStyle] = useState<0 | 1 | 2>(
-    isPosition ? ((drawing as { stopLineStyle?: 0 | 1 | 2 }).stopLineStyle ?? 0) : 0,
+    pos?.stopLineStyle ?? 0,
   );
   const [targetLineWidth, setTargetLineWidth] = useState<number>(
-    isPosition ? ((drawing as { targetLineWidth?: number }).targetLineWidth ?? 1.5) : 1.5,
+    pos?.targetLineWidth ?? 1.5,
   );
   const [targetLineStyle, setTargetLineStyle] = useState<0 | 1 | 2>(
-    isPosition ? ((drawing as { targetLineStyle?: 0 | 1 | 2 }).targetLineStyle ?? 0) : 0,
+    pos?.targetLineStyle ?? 0,
   );
   const [priceLabels, setPriceLabels] = useState<boolean>(
-    isPosition ? ((drawing as { priceLabels?: boolean }).priceLabels ?? false) : false,
+    pos?.priceLabels ?? false,
   );
   const [alwaysShowStats, setAlwaysShowStats] = useState<boolean>(
-    isPosition ? ((drawing as { alwaysShowStats?: boolean }).alwaysShowStats ?? false) : false,
+    pos?.alwaysShowStats ?? false,
   );
   const [compactStats, setCompactStats] = useState<boolean>(
-    isPosition ? ((drawing as { compactStats?: boolean }).compactStats ?? false) : false,
+    pos?.compactStats ?? false,
   );
   const [statsOverrides, setStatsOverrides] = useState<Partial<Record<PositionStatKey, boolean>>>(
-    isPosition ? ((drawing as { statsOverrides?: Partial<Record<PositionStatKey, boolean>> }).statsOverrides ?? {}) : {},
+    pos?.statsOverrides ?? {},
   );
   const [fillColor, setFillColor] = useState<string>(
-    isRect ? ((drawing as { fillColor?: string }).fillColor ?? TV_PINE.blue) : TV_PINE.blue,
+    rect?.fillColor ?? TV_PINE.blue,
   );
   const [fillOpacity, setFillOpacity] = useState<number>(
-    isRect ? ((drawing as { fillOpacity?: number }).fillOpacity ?? 0.1) : 0.1,
+    rect?.fillOpacity ?? 0.1,
   );
 
   // Inputs tab state (positions only)
-  const [entry, setEntry] = useState<number>(isPosition ? (drawing as { entry: number }).entry : 0);
-  const [target, setTarget] = useState<number>(isPosition ? (drawing as { target: number }).target : 0);
-  const [stop, setStop] = useState<number>(isPosition ? (drawing as { stop: number }).stop : 0);
+  const [entry, setEntry] = useState<number>(pos?.entry ?? 0);
+  const [target, setTarget] = useState<number>(pos?.target ?? 0);
+  const [stop, setStop] = useState<number>(pos?.stop ?? 0);
   const [accountSize, setAccountSize] = useState<number | undefined>(
-    isPosition ? (drawing as { accountSize?: number }).accountSize : undefined,
+    pos?.accountSize,
   );
   const [risk, setRisk] = useState<number | undefined>(
-    isPosition ? (drawing as { risk?: number }).risk : undefined,
+    pos?.risk,
   );
   const [riskIsPercent, setRiskIsPercent] = useState<boolean>(
-    isPosition ? ((drawing as { riskIsPercent?: boolean }).riskIsPercent ?? false) : false,
+    pos?.riskIsPercent ?? false,
   );
   const [leverage, setLeverage] = useState<number | undefined>(
-    isPosition ? (drawing as { leverage?: number }).leverage : undefined,
+    pos?.leverage,
   );
   const [lotSize, setLotSize] = useState<number>(
-    isPosition ? ((drawing as { lotSize?: number }).lotSize ?? 1) : 1,
+    pos?.lotSize ?? 1,
   );
   const [qtyPrecision, setQtyPrecision] = useState<number | undefined>(
-    isPosition ? (drawing as { qtyPrecision?: number }).qtyPrecision : undefined,
+    pos?.qtyPrecision,
   );
   // Applies to future drawings of this tool, not this one — read from/written
   // to `toolDefaults`, never to the drawing's own persisted fields.
@@ -313,28 +301,16 @@ function Form({
         <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1 max-sm:max-h-none">
           {isPosition ? (
             <>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-tv-text">Entry line</span>
-                <ColorPicker value={color} onChange={setColor} />
-              </div>
+              <ColorRow label="Entry line" value={color} onChange={setColor} />
               <LineStyleRow compact width={lineWidth} style={lineStyle} onWidth={setLineWidth} onStyle={setLineStyle} />
 
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-tv-text">Target line</span>
-                <ColorPicker value={targetColor} onChange={setTargetColor} />
-              </div>
+              <ColorRow label="Target line" value={targetColor} onChange={setTargetColor} />
               <LineStyleRow compact width={targetLineWidth} style={targetLineStyle} onWidth={setTargetLineWidth} onStyle={setTargetLineStyle} />
 
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-tv-text">Stop line</span>
-                <ColorPicker value={stopColor} onChange={setStopColor} />
-              </div>
+              <ColorRow label="Stop line" value={stopColor} onChange={setStopColor} />
               <LineStyleRow compact width={stopLineWidth} style={stopLineStyle} onWidth={setStopLineWidth} onStyle={setStopLineStyle} />
 
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-tv-text">Text color</span>
-                <ColorPicker value={textColor} onChange={setTextColor} />
-              </div>
+              <ColorRow label="Text color" value={textColor} onChange={setTextColor} />
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-tv-text">Text size</span>
                 <Input
@@ -987,10 +963,7 @@ function PriceField({
   value: number;
   onChange: (n: number) => void;
 }) {
-  const [draft, setDraft] = useState(value.toString());
-  useEffect(() => {
-    setDraft(value.toString());
-  }, [value]);
+  const [draft, setDraft] = useSyncedDraft(value, (v) => v.toString());
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs text-tv-text">{label}</span>

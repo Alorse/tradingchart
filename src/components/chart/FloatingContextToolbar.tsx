@@ -15,7 +15,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { Drawing } from "@/lib/drawings/types";
+import type { Drawing, PositionExtraFields } from "@/lib/drawings/types";
+import { styleOf } from "@/lib/drawings/style";
 import type { DrawingTemplate } from "@/lib/store/chart-store";
 import { TV_PINE } from "@/lib/chart/theme";
 
@@ -258,35 +259,6 @@ function SwatchPicker({ value, onChange }: { value: string; onChange: (v: string
 }
 
 /**
- * The subset of fields worth saving/restoring as a template or a tool default:
- * everything that describes how the drawing *looks*, and nothing that
- * describes where it sits. Fib ratios count as style here — copying a
- * customized ladder onto the next fib is the whole point of saving it.
- */
-const STYLE_FIELDS = [
-  "color",
-  "lineWidth",
-  "lineStyle",
-  "stopColor",
-  "targetColor",
-  "textColor",
-  "showLabels",
-  "fillColor",
-  "fillOpacity",
-  "fontSize",
-  "levels",
-] as const;
-
-function styleOf(d: Drawing): Record<string, unknown> {
-  const src = d as unknown as Record<string, unknown>;
-  const style: Record<string, unknown> = {};
-  for (const f of STYLE_FIELDS) {
-    if (src[f] !== undefined) style[f] = src[f];
-  }
-  return style;
-}
-
-/**
  * One-click "make this the default for the tool".
  *
  * Editing a style from this toolbar already writes `toolDefaults` field by
@@ -408,15 +380,16 @@ function TemplatesButton({
   );
 }
 
-/**
- * Pre-fills the OrderPanel with the long/short drawing's entry / stop /
- * target and opens the right sidebar so the user can confirm the qty + submit.
- *
- * If no API credentials are set we disable the button and prompt to connect.
- */
 type PositionLine = "entry" | "stop" | "target";
 
-const LINE_FIELD: Record<PositionLine, { width: string; style: string }> = {
+/** Width/style field names per line. Typed against the drawing's own fields
+ *  so a typo here is a compile error rather than a patch that silently
+ *  writes a key nothing reads. Entry has no dedicated pair — it reuses the
+ *  shared `lineWidth`/`lineStyle` every drawing kind carries. */
+type LineWidthField = "lineWidth" | Extract<keyof PositionExtraFields, `${string}LineWidth`>;
+type LineStyleField = "lineStyle" | Extract<keyof PositionExtraFields, `${string}LineStyle`>;
+
+const LINE_FIELD: Record<PositionLine, { width: LineWidthField; style: LineStyleField }> = {
   entry: { width: "lineWidth", style: "lineStyle" },
   stop: { width: "stopLineWidth", style: "stopLineStyle" },
   target: { width: "targetLineWidth", style: "targetLineStyle" },
@@ -424,9 +397,9 @@ const LINE_FIELD: Record<PositionLine, { width: string; style: string }> = {
 
 /**
  * Compact width+style editor for the position tool's three lines, picked
- * one at a time (Entry/Stop/Target) — the E/S/T color swatches next to this
- * button already cover color, so this only needs to add the two fields
- * they don't: line width and dash style, per line.
+ * one at a time (Entry/Stop/Target). Color is edited from the settings
+ * dialog, so this compact bar only carries the two fields that benefit from
+ * being one click away: line width and dash style, per line.
  */
 function PositionLineStyleMenu({
   drawing,
@@ -512,6 +485,12 @@ function PositionLineStyleMenu({
   );
 }
 
+/**
+ * Pre-fills the OrderPanel with the long/short drawing's entry / stop /
+ * target and opens the right sidebar so the user can confirm the qty + submit.
+ *
+ * If no API credentials are set we disable the button and prompt to connect.
+ */
 function LimitOrderButton({ drawing }: { drawing: Drawing }) {
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);

@@ -1,4 +1,5 @@
 import type { Watchlist, WatchlistItem } from "@/lib/store/chart-store";
+import { randomId } from "@/lib/id";
 
 /**
  * Pure parsing of a `user_watchlists` row into the store's `Watchlist[]`.
@@ -18,8 +19,6 @@ import type { Watchlist, WatchlistItem } from "@/lib/store/chart-store";
 /** Injected so tests get deterministic ids; production uses `randomId`. */
 export type IdFactory = () => string;
 
-const randomId: IdFactory = () => Math.random().toString(36).slice(2, 10);
-
 /** A raw `user_watchlists` row, straight off the wire and wholly untrusted. */
 export interface RawWatchlistRow {
   lists?: unknown;
@@ -30,7 +29,8 @@ export interface RawWatchlistRow {
 
 export interface CloudWatchlists {
   lists: Watchlist[];
-  activeId: string | null;
+  /** Always names a list in `lists`, which `rowToWatchlists` never leaves empty. */
+  activeId: string;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -106,14 +106,14 @@ export function legacyToWatchlists(
 }
 
 /**
- * Resolves which list is active. A stored `active_id` naming a list that no
- * longer exists (deleted on another device between that device's write and
- * this one's read) falls back to the first list rather than leaving the store
- * pointing at nothing — with no match, every watchlist action becomes a
+ * Resolves which list is active, given a non-empty `lists` (the only caller
+ * has already returned for the empty case). A stored `active_id` naming a list
+ * that no longer exists (deleted on another device between that device's write
+ * and this one's read) falls back to the first list rather than leaving the
+ * store pointing at nothing — with no match, every watchlist action becomes a
  * silent no-op and the panel renders empty.
  */
-export function resolveActiveId(lists: Watchlist[], activeId: unknown): string | null {
-  if (lists.length === 0) return null;
+function resolveActiveId(lists: Watchlist[], activeId: unknown): string {
   if (typeof activeId === "string" && lists.some((l) => l.id === activeId)) return activeId;
   return lists[0].id;
 }

@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
-import { describePaperEvent } from "@/lib/trading/paper-format";
-import { cn } from "@/lib/utils";
+import { describePaperEvent, PAPER_EVENT_TONE } from "@/lib/trading/paper-format";
 
 interface PaperToast {
   id: string;
@@ -43,14 +42,22 @@ export function PaperTradeToasts() {
     setToasts((prev) => [...prev, ...next]);
   }, [lastEvents]);
 
+  // Keyed on "is anything showing", not on the array: `filter` always returns a
+  // new array, so depending on `toasts` tore down and rebuilt the interval
+  // twice a second for the whole TTL. Returning `prev` when nothing expired
+  // keeps that from re-rendering the list too.
+  const hasToasts = toasts.length > 0;
   useEffect(() => {
-    if (toasts.length === 0) return;
+    if (!hasToasts) return;
     const interval = setInterval(() => {
       const now = Date.now();
-      setToasts((prev) => prev.filter((t) => t.expiresAt > now));
+      setToasts((prev) => {
+        const next = prev.filter((t) => t.expiresAt > now);
+        return next.length === prev.length ? prev : next;
+      });
     }, 500);
     return () => clearInterval(interval);
-  }, [toasts]);
+  }, [hasToasts]);
 
   if (toasts.length === 0) return null;
 
@@ -61,13 +68,7 @@ export function PaperTradeToasts() {
           key={t.id}
           className="pointer-events-auto flex w-80 items-start gap-3 rounded-lg border border-tv-border bg-tv-panel p-3 shadow-lg"
         >
-          <div
-            className={cn(
-              t.variant === "reject" && "text-tv-red",
-              t.variant === "close" && "text-tv-green",
-              (t.variant === "fill" || t.variant === "cancel") && "text-tv-blue-text",
-            )}
-          >
+          <div className={PAPER_EVENT_TONE[t.variant]}>
             <Bell className="h-4 w-4" />
           </div>
           <div className="flex-1 text-sm text-tv-text">{t.text}</div>

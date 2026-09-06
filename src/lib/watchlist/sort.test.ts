@@ -37,6 +37,21 @@ describe("sortWatchlistItems", () => {
     expect(out.map((i) => i.value)).toEqual(["BTCUSDT", "ETHUSDT", "SOLUSDT"]);
   });
 
+  it("treats an unloaded change baseline as unknown, without affecting price sort", () => {
+    // NEWUSDT has a price but no daily-change baseline yet (pct undefined).
+    const partial: Record<string, WatchRow> = { ...rows, NEWUSDT: { price: 500 } };
+    const items = [sym("BTCUSDT"), sym("NEWUSDT"), sym("SOLUSDT")];
+
+    const desc = sortWatchlistItems(items, partial, { key: "change", dir: "desc" });
+    expect(desc.map((i) => i.value)).toEqual(["SOLUSDT", "BTCUSDT", "NEWUSDT"]);
+    const asc = sortWatchlistItems(items, partial, { key: "change", dir: "asc" });
+    expect(asc.map((i) => i.value)).toEqual(["BTCUSDT", "SOLUSDT", "NEWUSDT"]);
+
+    // Its price is known, so the price column still ranks it normally.
+    const byPrice = sortWatchlistItems(items, partial, { key: "price", dir: "desc" });
+    expect(byPrice.map((i) => i.value)).toEqual(["BTCUSDT", "NEWUSDT", "SOLUSDT"]);
+  });
+
   it("pushes symbols without a live row to the end (both directions)", () => {
     const items = [sym("BTCUSDT"), sym("NEWUSDT"), sym("SOLUSDT")];
     const desc = sortWatchlistItems(items, rows, { key: "price", dir: "desc" });

@@ -2,7 +2,8 @@ import { describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
 import { fillMarketOrder, createAccount } from "@/lib/trading/paper-engine";
 import {
-  computePositionFigures,
+  markOf,
+  positionFiguresAt,
   formatPnlDisplay,
   isLiquidationUrgent,
   pnlDisplayValue,
@@ -103,10 +104,10 @@ describe("isLiquidationUrgent", () => {
   });
 });
 
-describe("computePositionFigures", () => {
+describe("positionFiguresAt", () => {
   it("falls back to entry price when the symbol hasn't ticked yet", () => {
     const p = longAt(20_000);
-    const figures = computePositionFigures(p, {}, "MONEY", 0.1);
+    const figures = positionFiguresAt(p, undefined, "MONEY", 0.1);
     expect(figures.mark).toBe(20_000);
     expect(figures.pnl).toBe(0);
     expect(figures.displaySymbol).toBe("BTCUSDT");
@@ -114,8 +115,16 @@ describe("computePositionFigures", () => {
 
   it("prefers feedSymbol for display when present", () => {
     const p = { ...longAt(20_000), feedSymbol: "BYBIT:BTCUSDT.P" };
-    const figures = computePositionFigures(p, { BTCUSDT: 21_000 }, "MONEY", 0.1);
+    const figures = positionFiguresAt(p, 21_000, "MONEY", 0.1);
     expect(figures.displaySymbol).toBe("BYBIT:BTCUSDT.P");
     expect(figures.mark).toBe(21_000);
+  });
+});
+
+describe("markOf", () => {
+  it("prices a position that has never ticked at its entry", () => {
+    const p = longAt(20_000);
+    expect(markOf({}, p)).toBe(20_000);
+    expect(markOf({ BTCUSDT: 21_000 }, p)).toBe(21_000);
   });
 });

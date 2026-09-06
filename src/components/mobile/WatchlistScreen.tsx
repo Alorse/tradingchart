@@ -20,8 +20,8 @@ import {
 } from "lucide-react";
 import { fetchTickers24h, cleanSym } from "@/lib/binance/rest";
 import { fetchBybitTickers24h } from "@/lib/bybit/public";
-import { sortWatchlistItems, cycleSort } from "@/lib/watchlist/sort";
-import { getDailyOpens } from "@/lib/watchlist/daily-open";
+import { sortWatchlistItems, cycleSort, type WatchRow } from "@/lib/watchlist/sort";
+import { dailyChange } from "@/lib/watchlist/daily-open";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { resolveSource } from "@/lib/symbols/source";
@@ -33,6 +33,7 @@ import type { Position } from "@/lib/binance/trading-types";
 import { formatPrice, formatPct, formatChangeAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBatchedTicks } from "@/hooks/useBatchedTicks";
+import { useDailyOpens } from "@/hooks/useDailyOpens";
 import { CoinIcon, getBaseAsset } from "@/components/watchlist/CoinIcon";
 import { FlagPennant } from "@/components/watchlist/FlagPennant";
 import { FLAG_COLORS } from "@/lib/watchlist/flags";
@@ -106,10 +107,7 @@ export function WatchlistScreen() {
   const [rows, setRows] = useState<Record<string, Row>>({});
   const [flash, setFlash] = useState<Record<string, "up" | "down" | null>>({});
   const applyTick = useBatchedTicks(setRows, setFlash);
-  // UTC-midnight open per symbol — the baseline for the daily "Chg" column.
-  // Kept separate from `rows` (live price/flash) since it only changes once a
-  // day; see src/lib/watchlist/daily-open.ts for the caching strategy.
-  const [dailyOpens, setDailyOpens] = useState<Record<string, number>>({});
+  const dailyOpens = useDailyOpens(symbols);
   const [manageOpen, setManageOpen] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -153,25 +151,6 @@ export function WatchlistScreen() {
     };
   }, [symbols.join(",")]);
 
-  // Daily open per symbol. `getDailyOpens` caches by UTC date internally, so
-  // this periodic re-invoke costs nothing until the date actually rolls over
-  // — no N-call fan-out on every tick, just a once-a-day refetch.
-  useEffect(() => {
-    if (symbols.length === 0) return;
-    let cancelled = false;
-    function load() {
-      getDailyOpens(symbols).then((opens) => {
-        if (!cancelled) setDailyOpens((prev) => ({ ...prev, ...opens }));
-      });
-    }
-    load();
-    const interval = setInterval(load, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [symbols.join(",")]);
-
   const visibleItems = useMemo(() => {
     let hidingUnder: string | null = null;
     return items.filter((item) => {
@@ -183,15 +162,14 @@ export function WatchlistScreen() {
     });
   }, [items, collapsed]);
 
-  // Sort input: price straight from `rows`, but "change" is the daily pct
-  // (price vs UTC-midnight open) rather than `rows`' own field, so a symbol
-  // whose daily open hasn't loaded yet is treated as missing (sorted last)
-  // instead of by a rolling-24h number it no longer displays.
+  // Sort input: "change" sorts on the daily pct (price vs UTC-midnight open),
+  // not `rows`' own rolling-24h field, which is no longer displayed. A symbol
+  // whose open hasn't loaded leaves pct undefined so the sorter ranks it as
+  // unknown, while its price still sorts normally.
   const sortRows = useMemo(() => {
-    const out: Record<string, { price: number; pct: number }> = {};
+    const out: Record<string, WatchRow> = {};
     for (const [sym, r] of Object.entries(rows)) {
-      const open = dailyOpens[sym];
-      out[sym] = { price: r.price, pct: open ? ((r.price - open) / open) * 100 : NaN };
+      out[sym] = { price: r.price, pct: dailyChange(r.price, dailyOpens[sym])?.pct };
     }
     return out;
   }, [rows, dailyOpens]);
@@ -682,6 +660,7 @@ function SymbolRow({
 }) {
   const s = item.value;
   const displaySymbol = stripExchangePrefix(s);
+  const daily = dailyChange(row?.price, dailyOpen);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
@@ -780,28 +759,21 @@ function SymbolRow({
         >
           {row ? formatPrice(row.price) : "—"}
         </span>
-        {(() => {
-          const daily = row && dailyOpen
-            ? { amount: row.price - dailyOpen, pct: ((row.price - dailyOpen) / dailyOpen) * 100 }
-            : null;
-          return (
-            <span
-              className={cn(
-                "flex items-center gap-1 rounded px-1.5 py-px font-mono text-[10px] tabular-nums",
-                daily ? (daily.amount >= 0 ? "bg-tv-green/15 text-tv-green" : "bg-tv-red/15 text-tv-red") : "text-tv-text-muted",
-              )}
-            >
-              {daily ? (
-                <>
-                  <span>{formatChangeAmount(daily.amount, row!.price)}</span>
-                  <span>{formatPct(daily.pct)}</span>
-                </>
-              ) : (
-                "—"
-              )}
-            </span>
-          );
-        })()}
+        <span
+          className={cn(
+            "flex items-center gap-1 rounded px-1.5 py-px font-mono text-[10px] tabular-nums",
+            daily ? (daily.amount >= 0 ? "bg-tv-green/15 text-tv-green" : "bg-tv-red/15 text-tv-red") : "text-tv-text-muted",
+          )}
+        >
+          {daily ? (
+            <>
+              <span>{formatChangeAmount(daily.amount, daily.price)}</span>
+              <span>{formatPct(daily.pct)}</span>
+            </>
+          ) : (
+            "—"
+          )}
+        </span>
       </div>
 
       {!selectMode && (

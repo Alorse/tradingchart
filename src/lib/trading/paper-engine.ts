@@ -1,4 +1,5 @@
-import { pnlAtExit } from "@/lib/trading/sizing";
+import { bracketSidesValid } from "@/lib/trading/paper-brackets";
+import { marginFor, pnlAtExit } from "@/lib/trading/sizing";
 
 /**
  * Paper-trading fills engine.
@@ -42,7 +43,7 @@ export const MIN_LEVERAGE = 1;
 export const MAX_LEVERAGE = 125;
 
 export interface PaperSettings {
-  /** Virtual USDT handed out on first use and restored by `resetAccount`. */
+  /** Virtual USDT handed out on first use, and again on an account reset. */
   seedBalance: number;
   /** Fee rate on a market fill (0.0005 = 0.05%). */
   takerFeeRate: number;
@@ -202,7 +203,10 @@ function clampLeverage(leverage: number | undefined, fallback: number): number {
   return Math.min(MAX_LEVERAGE, Math.max(MIN_LEVERAGE, Math.round(n)));
 }
 
-function isPositive(n: number): boolean {
+/** The engine's own accept gate for a price or a quantity. Exported so the
+ *  store's "is this a usable quote" bail-out can't drift from the rule the
+ *  engine will actually apply to the same number. */
+export function isPositive(n: number): boolean {
   return isFinite(n) && n > 0;
 }
 
@@ -210,45 +214,43 @@ function directionOf(side: PaperSide): PaperDirection {
   return side === "BUY" ? "LONG" : "SHORT";
 }
 
+/** The order side that *opened* a position pointing this way — what
+ *  `pnlAtExit` signs its result by. Inverse of `directionOf`. */
+function entrySide(dir: PaperDirection): PaperSide {
+  return dir === "LONG" ? "BUY" : "SELL";
+}
+
 /** The order side that closes a position pointing this way. */
 function closingSide(dir: PaperDirection): PaperSide {
   return dir === "LONG" ? "SELL" : "BUY";
 }
 
-/** Margin locked to hold `qty` at `price` on `leverage`x. */
-export function marginFor(qty: number, price: number, leverage: number): number {
-  if (leverage <= 0) return 0;
-  return (qty * price) / leverage;
+/** Re-exported so the engine's own callers (and its tests) read the margin
+ *  formula off the engine, while `sizing.ts` stays its single definition. */
+export { marginFor };
+
+/** The fee a fill of `qty` at `price` pays at `rate` — the same expression on
+ *  a market open, a close and a resting limit order's reserve. */
+function feeFor(qty: number, price: number, rate: number): number {
+  return qty * price * rate;
 }
 
 /**
  * Isolated-margin liquidation price: the mark at which the loss has eaten the
- * initial margin down to the maintenance requirement. Higher leverage puts it
- * closer to the entry, which is the whole point of showing it. The buffer is
- * clamped to zero — a maintenance rate at or above `1/leverage` would
- * otherwise put liquidation on the wrong side of entry, liquidating the
- * position on its very first tick.
- */
-export function liquidationPrice(
-  side: PaperDirection,
-  entry: number,
-  leverage: number,
-  maintMarginRate: number,
-): number {
-  if (!isPositive(entry) || leverage <= 0) return 0;
-  const buffer = Math.max(0, 1 / leverage - maintMarginRate);
-  const price = side === "LONG" ? entry * (1 - buffer) : entry * (1 + buffer);
-  return price > 0 ? price : 0;
-}
-
-/**
- * Liquidation price derived straight from the margin actually locked, rather
- * than from a single leverage figure. A same-side merge blends slices opened
- * at different leverages: summing their margins is correct, but a leverage
- * recomputed from the blended entry (or simply overwritten by the latest
- * fill's) does not describe what is actually backing the position, and can
- * put liquidation absurdly close to — or absurdly far from — entry. Buffer is
- * clamped to zero for the same reason as `liquidationPrice`.
+ * margin actually locked down to the maintenance requirement. More leverage
+ * means less margin behind the same quantity, which puts liquidation closer
+ * to the entry — the whole point of showing it.
+ *
+ * Derived from the margin rather than from a single leverage figure, because
+ * a same-side merge blends slices opened at different leverages: summing
+ * their margins is correct, but a leverage recomputed from the blended entry
+ * (or simply overwritten by the latest fill's) does not describe what is
+ * actually backing the position, and can put liquidation absurdly close to —
+ * or absurdly far from — entry.
+ *
+ * The buffer is clamped to zero: a maintenance rate at or above the position's
+ * margin ratio would otherwise put liquidation on the wrong side of entry,
+ * liquidating the position on its very first tick.
  */
 export function liquidationPriceFromMargin(
   side: PaperDirection,
@@ -267,12 +269,7 @@ export function liquidationPriceFromMargin(
 /** Signed P&L (USDT) if the position exits at `price`. */
 export function unrealizedPnl(position: PaperPosition, price: number): number {
   if (!isPositive(price)) return 0;
-  return pnlAtExit(position.entryPrice, price, position.qty, closingSideEntry(position.side));
-}
-
-/** The *entry* side of a direction — what `pnlAtExit` signs its result by. */
-function closingSideEntry(dir: PaperDirection): PaperSide {
-  return dir === "LONG" ? "BUY" : "SELL";
+  return pnlAtExit(position.entryPrice, price, position.qty, entrySide(position.side));
 }
 
 /** Unrealized P&L over the position's initial margin (true ROI, not a
@@ -308,11 +305,7 @@ export function usedMargin(account: PaperAccount): number {
  * ticked is worth what it cost).
  */
 export function equity(account: PaperAccount, marks: Record<string, number>): number {
-  const open = account.positions.reduce(
-    (s, p) => s + unrealizedPnl(p, marks[p.symbol] ?? p.entryPrice),
-    0,
-  );
-  return account.balance + usedMargin(account) + open;
+  return account.balance + usedMargin(account) + totalUnrealizedPnl(account.positions, marks);
 }
 
 /* ── account lifecycle ───────────────────────────────────────────────────── */
@@ -328,17 +321,66 @@ export function createAccount(settings?: Partial<PaperSettings>): PaperAccount {
   };
 }
 
-/** Back to the seed, keeping whatever settings the user configured. */
-export function resetAccount(account: PaperAccount): PaperAccount {
-  return createAccount(account.settings);
-}
-
 /** A fee rate above 1% is not a real venue's, and a negative one pays the trader to trade. */
 const MAX_FEE_RATE = 0.01;
 
-/** Inclusive on both ends. */
-function isFiniteInRange(n: unknown, min: number, max: number): n is number {
-  return typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+/** Inclusive on both ends unless the range marks a bound exclusive. */
+function isFiniteInRange(
+  n: unknown,
+  { min, max, exclusiveMin, exclusiveMax }: SettingRange,
+): n is number {
+  if (typeof n !== "number" || !Number.isFinite(n)) return false;
+  if (exclusiveMin ? n <= min : n < min) return false;
+  return exclusiveMax ? n < max : n <= max;
+}
+
+interface SettingRange {
+  min: number;
+  max: number;
+  exclusiveMin?: true;
+  exclusiveMax?: true;
+}
+
+/**
+ * The range each numeric setting has to land in to be accepted. `maintMarginRate`
+ * is capped *strictly* under 1/MAX_LEVERAGE: at exactly that value,
+ * `liquidationPriceFromMargin`'s buffer clamps to zero for a position at that
+ * same leverage, liquidating it on its very first tick.
+ *
+ * `defaultLeverage` isn't here — it clamps rather than drops (see below).
+ */
+const SETTING_RANGES: Record<
+  "takerFeeRate" | "makerFeeRate" | "maintMarginRate" | "seedBalance",
+  SettingRange
+> = {
+  takerFeeRate: { min: 0, max: MAX_FEE_RATE },
+  makerFeeRate: { min: 0, max: MAX_FEE_RATE },
+  maintMarginRate: { min: 0, max: 1 / MAX_LEVERAGE, exclusiveMax: true },
+  seedBalance: { min: 0, max: Infinity, exclusiveMin: true },
+};
+
+/**
+ * Keep a persisted settings key only when it survives as a finite number — a
+ * string or NaN left in place would rehydrate straight into every fee and
+ * margin calculation that reads `settings`.
+ *
+ * Deliberately a weaker rule than `SETTING_RANGES` above, and it lives here so
+ * the difference is visible instead of split across two files: a value typed
+ * into the settings form is held to what a real venue could plausibly charge,
+ * while one already written to localStorage (or synced from the cloud) is only
+ * required to be a number. Tightening this to the ranges would silently
+ * rewrite existing accounts' settings, so it belongs in its own change with a
+ * persist version bump, not in a sanitizer.
+ */
+export function sanitizePersistedSettings(raw: unknown): Partial<PaperSettings> {
+  if (typeof raw !== "object" || raw === null) return {};
+  const settings = raw as Record<string, unknown>;
+  const out: Partial<PaperSettings> = {};
+  for (const key of Object.keys(DEFAULT_PAPER_SETTINGS) as (keyof PaperSettings)[]) {
+    const value = settings[key];
+    if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+  }
+  return out;
 }
 
 /**
@@ -348,32 +390,16 @@ function isFiniteInRange(n: unknown, min: number, max: number): n is number {
  * `merge`) — a key that fails validation is silently dropped rather than
  * thrown: this runs off a live settings form, and one bad field (a stray
  * "-" mid-edit, a paste gone wrong) shouldn't discard the rest of an
- * otherwise-valid patch or blow up the form (adversarial re-audit finding 5).
+ * otherwise-valid patch or blow up the form.
  */
 export function updateSettings(
   account: PaperAccount,
   patch: Partial<PaperSettings>,
 ): PaperAccount {
   const settings = { ...account.settings };
-  if (isFiniteInRange(patch.takerFeeRate, 0, MAX_FEE_RATE)) {
-    settings.takerFeeRate = patch.takerFeeRate;
-  }
-  if (isFiniteInRange(patch.makerFeeRate, 0, MAX_FEE_RATE)) {
-    settings.makerFeeRate = patch.makerFeeRate;
-  }
-  // Strictly under 1/MAX_LEVERAGE, not inclusive: at exactly 1/MAX_LEVERAGE,
-  // `liquidationPrice`'s buffer clamps to zero for a position at that same
-  // leverage, liquidating it on its very first tick.
-  if (
-    typeof patch.maintMarginRate === "number" &&
-    Number.isFinite(patch.maintMarginRate) &&
-    patch.maintMarginRate >= 0 &&
-    patch.maintMarginRate < 1 / MAX_LEVERAGE
-  ) {
-    settings.maintMarginRate = patch.maintMarginRate;
-  }
-  if (typeof patch.seedBalance === "number" && Number.isFinite(patch.seedBalance) && patch.seedBalance > 0) {
-    settings.seedBalance = patch.seedBalance;
+  for (const key of Object.keys(SETTING_RANGES) as Array<keyof typeof SETTING_RANGES>) {
+    const value = patch[key];
+    if (isFiniteInRange(value, SETTING_RANGES[key])) settings[key] = value;
   }
   if (patch.defaultLeverage !== undefined) {
     // Reuses the same clamp a per-order leverage gets; a non-finite value
@@ -428,12 +454,12 @@ function closeSlice(
   const fraction = isDust ? 1 : closedQty / position.qty;
   const releasedMargin = position.margin * fraction;
   const entryFeeShare = position.feesPaid * fraction;
-  const exitFee = closedQty * exitPrice * feeRate;
+  const exitFee = feeFor(closedQty, exitPrice, feeRate);
   const grossPnl = pnlAtExit(
     position.entryPrice,
     exitPrice,
     closedQty,
-    closingSideEntry(position.side),
+    entrySide(position.side),
   );
   const realizedPnl = grossPnl - entryFeeShare - exitFee;
 
@@ -472,10 +498,9 @@ function closeSlice(
 }
 
 /**
- * Drop a bracket that sits on the wrong side of `price` — an SL above entry
- * on a LONG (or below entry on a SHORT) doesn't protect against a loss, it
- * just books a gain the moment price moves at all and mislabels it as a
- * stop-out; TP mirrors it the other way. Called on every fill that can carry
+ * Drop a bracket that sits on the wrong side of `price`, per the shared rule
+ * in `paper-brackets.ts` (which the order ticket and the position editor use
+ * to *explain* the same constraint). Called on every fill that can carry
  * brackets: a fresh open/flip (checked against the fill price, which *is*
  * entry there) and a same-side merge (checked against the fill price again,
  * not the blended entry, since a merge's incoming `args.tp`/`args.sl` — or
@@ -489,10 +514,8 @@ function normalizeBrackets(
   tp: number | null,
   sl: number | null,
 ): { tp: number | null; sl: number | null } {
-  const long = dir === "LONG";
-  const validSl = sl === null || (long ? sl < price : sl > price);
-  const validTp = tp === null || (long ? tp > price : tp < price);
-  return { tp: validTp ? tp : null, sl: validSl ? sl : null };
+  const valid = bracketSidesValid(dir, price, tp, sl);
+  return { tp: valid.tp ? tp : null, sl: valid.sl ? sl : null };
 }
 
 /**
@@ -525,16 +548,17 @@ function applyFill(
   let positions = account.positions;
   let history = account.history;
   // Set once the reducing leg below computes a trade; pushed to `events`
-  // *after* the fill event that caused it (see the two returns below), not
-  // as soon as it's known, so a close is always reported as a consequence of
-  // a fill rather than the other way around.
+  // *after* the fill event that caused it, not as soon as it's known, so a
+  // close is always reported as a consequence of a fill rather than the
+  // other way around.
   let closeEvent: PaperEvent | null = null;
 
   const existing = positions.find((p) => p.symbol === symbol) ?? null;
+  const opposite = existing !== null && side === closingSide(existing.side);
   let openQty = qty;
 
   // Opposite side: reduce, close, or flip before opening anything new.
-  if (existing && side === closingSide(existing.side)) {
+  if (existing && opposite) {
     const reduceQty = Math.min(qty, existing.qty);
     const slice = closeSlice(existing, reduceQty, price, feeRate, "MANUAL", now);
     const tentativeBalance = balance + slice.balanceDelta;
@@ -560,103 +584,103 @@ function applyFill(
     openQty = qty - reduceQty;
   }
 
+  // Only the opening leg's fee, per the `PaperEvent["fee"]` doc: a pure
+  // reduce leaves this at zero because its exit fee is already inside the
+  // close event's `trade.fees`.
+  let fee = 0;
+
   // A remainder too small to represent a real position (see
-  // `DUST_QTY_TOLERANCE`): the reduce above already absorbed the whole
+  // `DUST_QTY_TOLERANCE`) means the reduce above already absorbed the whole
   // request in every way that matters, so don't flip into a dust-sized
   // position over it.
-  if (openQty <= qty * DUST_QTY_TOLERANCE) {
-    // Pure reduce: the exit fee is already inside the close event's
-    // `trade.fees`, so the fill event reports zero rather than double-billing it.
-    const events: PaperEvent[] = [{ type: "fill", orderId, symbol, side, qty, price, fee: 0 }];
-    if (closeEvent) events.push(closeEvent);
-    return { account: { ...account, balance, positions, history }, events };
-  }
+  if (openQty > qty * DUST_QTY_TOLERANCE) {
+    const margin = marginFor(openQty, price, leverage);
+    fee = feeFor(openQty, price, feeRate);
+    if (balance + 1e-9 < margin + fee) {
+      // Nothing is applied: an order the account cannot margin is refused whole,
+      // including any reducing leg it came bundled with.
+      return reject(account, symbol, "Insufficient paper balance");
+    }
+    balance -= margin + fee;
 
-  const margin = marginFor(openQty, price, leverage);
-  const fee = openQty * price * feeRate;
-  if (balance + 1e-9 < margin + fee) {
-    // Nothing is applied: an order the account cannot margin is refused whole,
-    // including any reducing leg it came bundled with.
-    return reject(account, symbol, "Insufficient paper balance");
-  }
-  balance -= margin + fee;
-
-  const sameSide = positions.find((p) => p.symbol === symbol) ?? null;
-  if (sameSide) {
-    const totalQty = sameSide.qty + openQty;
-    const totalMargin = sameSide.margin + margin;
-    const entryPrice =
-      (sameSide.entryPrice * sameSide.qty + price * openQty) / totalQty;
-    // Re-validated against *this* fill's price, same as a fresh open below —
-    // an incoming or carried-over bracket that no longer protects anything
-    // relative to the current market is dropped rather than left to fire a
-    // phantom gain (adversarial re-audit finding 2).
-    const { tp, sl } = normalizeBrackets(
-      sameSide.side,
-      price,
-      args.tp ?? sameSide.tp,
-      args.sl ?? sameSide.sl,
-    );
-    const merged: PaperPosition = {
-      ...sameSide,
-      qty: totalQty,
-      entryPrice,
-      // Informational only: a blended figure so the position still shows
-      // *a* leverage, but liquidation below is derived from the margin
-      // actually locked, not from this number.
-      leverage: totalMargin > 0 ? (totalQty * entryPrice) / totalMargin : leverage,
-      margin: totalMargin,
-      feesPaid: sameSide.feesPaid + fee,
-      tp,
-      sl,
-      // A merge keeps the position's original feed identity — it's the same
-      // symbol, and the incoming fill's own feedSymbol (if any) only fills a
-      // gap left by an earlier direct-engine open with none.
-      feedSymbol: sameSide.feedSymbol ?? args.feedSymbol,
-      liquidationPrice: liquidationPriceFromMargin(
-        sameSide.side,
+    // A position left to merge into can only be `existing` on its own side:
+    // an opposite-side `existing` either absorbed the whole request above
+    // (openQty 0, so we never got here) or was closed out and dropped from
+    // `positions` by the reduce.
+    if (existing && !opposite) {
+      const totalQty = existing.qty + openQty;
+      const totalMargin = existing.margin + margin;
+      const entryPrice = (existing.entryPrice * existing.qty + price * openQty) / totalQty;
+      // Re-validated against *this* fill's price, same as a fresh open below —
+      // an incoming or carried-over bracket that no longer protects anything
+      // relative to the current market is dropped rather than left to fire a
+      // phantom gain.
+      const { tp, sl } = normalizeBrackets(
+        existing.side,
+        price,
+        args.tp ?? existing.tp,
+        args.sl ?? existing.sl,
+      );
+      const merged: PaperPosition = {
+        ...existing,
+        qty: totalQty,
         entryPrice,
-        totalQty,
-        totalMargin,
-        account.settings.maintMarginRate,
-      ),
-    };
-    positions = positions.map((p) => (p.id === sameSide.id ? merged : p));
-  } else {
-    const dir = directionOf(side);
-    // A fresh position (a plain open, or the re-entry leg of a flip): drop
-    // any bracket that sits on the wrong side of the fill price rather than
-    // let it rest forever and eventually fire as a stop that books a gain.
-    const { tp, sl } = normalizeBrackets(dir, price, args.tp ?? null, args.sl ?? null);
-    positions = [
-      ...positions,
-      {
-        id: genId("p"),
-        symbol,
-        side: dir,
-        qty: openQty,
-        entryPrice: price,
-        leverage,
-        margin,
-        feesPaid: fee,
+        // Informational only: a blended figure so the position still shows
+        // *a* leverage, but liquidation below is derived from the margin
+        // actually locked, not from this number.
+        leverage: totalMargin > 0 ? (totalQty * entryPrice) / totalMargin : leverage,
+        margin: totalMargin,
+        feesPaid: existing.feesPaid + fee,
         tp,
         sl,
-        feedSymbol: args.feedSymbol,
-        liquidationPrice: liquidationPrice(
-          dir,
-          price,
-          leverage,
+        // A merge keeps the position's original feed identity — it's the same
+        // symbol, and the incoming fill's own feedSymbol (if any) only fills a
+        // gap left by an earlier direct-engine open with none.
+        feedSymbol: existing.feedSymbol ?? args.feedSymbol,
+        liquidationPrice: liquidationPriceFromMargin(
+          existing.side,
+          entryPrice,
+          totalQty,
+          totalMargin,
           account.settings.maintMarginRate,
         ),
-        openedAt: now,
-      },
-    ];
+      };
+      positions = positions.map((p) => (p.id === existing.id ? merged : p));
+    } else {
+      const dir = directionOf(side);
+      // A fresh position (a plain open, or the re-entry leg of a flip): drop
+      // any bracket that sits on the wrong side of the fill price rather than
+      // let it rest forever and eventually fire as a stop that books a gain.
+      const { tp, sl } = normalizeBrackets(dir, price, args.tp ?? null, args.sl ?? null);
+      positions = [
+        ...positions,
+        {
+          id: genId("p"),
+          symbol,
+          side: dir,
+          qty: openQty,
+          entryPrice: price,
+          leverage,
+          margin,
+          feesPaid: fee,
+          tp,
+          sl,
+          feedSymbol: args.feedSymbol,
+          liquidationPrice: liquidationPriceFromMargin(
+            dir,
+            price,
+            openQty,
+            margin,
+            account.settings.maintMarginRate,
+          ),
+          openedAt: now,
+        },
+      ];
+    }
   }
 
   // `qty` (not `openQty`) so a flip's single fill event still reports the
-  // full requested size; `fee` here is only the opening leg's, per the
-  // `PaperEvent["fee"]` doc — the reducing leg's fee is already counted in
-  // `closeEvent`'s `trade.fees`.
+  // full requested size.
   const events: PaperEvent[] = [{ type: "fill", orderId, symbol, side, qty, price, fee }];
   if (closeEvent) events.push(closeEvent);
   return { account: { ...account, balance, positions, history }, events };
@@ -699,7 +723,7 @@ export function placeLimitOrder(
   const leverage = clampLeverage(req.leverage, account.settings.defaultLeverage);
   const reserved =
     marginFor(req.qty, req.price, leverage) +
-    req.qty * req.price * account.settings.makerFeeRate;
+    feeFor(req.qty, req.price, account.settings.makerFeeRate);
   if (account.balance + 1e-9 < reserved) {
     return reject(account, req.symbol, "Insufficient paper balance");
   }
@@ -730,15 +754,12 @@ export function placeLimitOrder(
   };
 }
 
-/** Cancel a resting order and hand its reserve back. Unknown ids are no-ops. */
-export function cancelOrder(
-  account: PaperAccount,
-  orderId: string,
-  now: number,
-): EngineResult {
+/** Cancel a resting order and hand its reserve back. Unknown ids are no-ops.
+ *  Takes no `now`: a cancel drops the order outright rather than stamping it
+ *  `CANCELED`, so there is nothing to timestamp. */
+export function cancelOrder(account: PaperAccount, orderId: string): EngineResult {
   const order = account.orders.find((o) => o.id === orderId && o.status === "NEW");
   if (!order) return { account, events: [] };
-  void now;
   return {
     account: {
       ...account,
@@ -837,8 +858,7 @@ export function reversePosition(
  * tick; falls back to the position's own entry price when no mark is
  * available yet, e.g. right after a reload before the socket connects) so a
  * bracket typed in on the wrong side of the market is dropped rather than
- * left to fire an instant phantom-gain stop-out (adversarial re-audit
- * finding 2).
+ * left to fire an instant phantom-gain stop-out.
  */
 export function setBrackets(
   account: PaperAccount,
@@ -850,7 +870,10 @@ export function setBrackets(
   if (!position) return account;
   const candidateTp = brackets.tp === undefined ? position.tp : brackets.tp;
   const candidateSl = brackets.sl === undefined ? position.sl : brackets.sl;
-  const ref = isPositive(referencePrice ?? NaN) ? (referencePrice as number) : position.entryPrice;
+  const ref =
+    referencePrice !== undefined && isPositive(referencePrice)
+      ? referencePrice
+      : position.entryPrice;
   const { tp, sl } = normalizeBrackets(position.side, ref, candidateTp, candidateSl);
   return {
     ...account,
@@ -909,7 +932,7 @@ export function evaluateTick(
   if (!isPositive(price)) return { account, events: [] };
 
   let acc = account;
-  let events: PaperEvent[] = [];
+  const events: PaperEvent[] = [];
 
   // The position on this symbol as it stood *before* this tick's limit
   // fills, id *and* brackets. Positions net per symbol, so there is at most
@@ -938,8 +961,7 @@ export function evaluateTick(
       // the tick is on the fill side of the limit, so filling at the tick is
       // the no-look-ahead choice — the order's own price could be wildly
       // stale (e.g. a limit resting far through the current market), and
-      // filling there books a phantom gain or loss the market never offered
-      // (adversarial re-audit finding 1).
+      // filling there books a phantom gain or loss the market never offered.
       price,
       leverage: order.leverage,
       feeRate: acc.settings.makerFeeRate,
@@ -956,11 +978,11 @@ export function evaluateTick(
       // unchanged: the reserve is already back in `balance` and the order
       // already dropped from `orders`.
       acc = res.account;
-      events = [...events, ...res.events, { type: "cancel", orderId: order.id, symbol: order.symbol }];
+      events.push(...res.events, { type: "cancel", orderId: order.id, symbol: order.symbol });
       continue;
     }
     acc = res.account;
-    events = [...events, ...res.events];
+    events.push(...res.events);
   }
 
   // Then brackets and liquidation, at most one trigger per position — but
@@ -971,7 +993,7 @@ export function evaluateTick(
   // same-side merge just changed on this tick (the id survives a merge,
   // unlike an open/flip) — that bracket was only just set, relative to this
   // same tick's price, so it must wait for the next tick too, exactly like a
-  // fresh position's (adversarial re-audit finding 3).
+  // fresh position's.
   const position = acc.positions.find((p) => p.symbol === symbol);
   const bracketsUnchangedThisTick =
     position !== undefined &&
@@ -984,7 +1006,7 @@ export function evaluateTick(
     if (exit) {
       const res = closePosition(acc, symbol, exit.price, now, undefined, exit.reason);
       acc = res.account;
-      events = [...events, ...res.events];
+      events.push(...res.events);
     }
   }
 
