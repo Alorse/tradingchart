@@ -317,19 +317,19 @@ function Form({
                 <span className="text-xs text-tv-text">Entry line</span>
                 <ColorPicker value={color} onChange={setColor} />
               </div>
-              <LineStyleRow width={lineWidth} style={lineStyle} onWidth={setLineWidth} onStyle={setLineStyle} />
+              <LineStyleRow compact width={lineWidth} style={lineStyle} onWidth={setLineWidth} onStyle={setLineStyle} />
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-tv-text">Target line</span>
                 <ColorPicker value={targetColor} onChange={setTargetColor} />
               </div>
-              <LineStyleRow width={targetLineWidth} style={targetLineStyle} onWidth={setTargetLineWidth} onStyle={setTargetLineStyle} />
+              <LineStyleRow compact width={targetLineWidth} style={targetLineStyle} onWidth={setTargetLineWidth} onStyle={setTargetLineStyle} />
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-tv-text">Stop line</span>
                 <ColorPicker value={stopColor} onChange={setStopColor} />
               </div>
-              <LineStyleRow width={stopLineWidth} style={stopLineStyle} onWidth={setStopLineWidth} onStyle={setStopLineStyle} />
+              <LineStyleRow compact width={stopLineWidth} style={stopLineStyle} onWidth={setStopLineWidth} onStyle={setStopLineStyle} />
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-tv-text">Text color</span>
@@ -490,59 +490,94 @@ function CheckRow({
   );
 }
 
+/**
+ * Width + line-style picker. The position tool renders it as a compact,
+ * unlabelled row indented under each of its three colour rows, and offers a
+ * 1.5 step its thin entry/target/stop rails need; every other drawing gets the
+ * generic labelled "Line width" / "Line style" rows with integer widths 1-4.
+ */
 function LineStyleRow({
   width,
   style,
   onWidth,
   onStyle,
+  compact = false,
 }: {
   width: number;
   style: 0 | 1 | 2;
   onWidth: (w: number) => void;
   onStyle: (s: 0 | 1 | 2) => void;
+  compact?: boolean;
 }) {
-  return (
-    <div className="flex items-center justify-between gap-3 pl-2">
-      <div className="flex items-center gap-1">
-        {[1, 1.5, 2, 3].map((w) => (
-          <button
-            key={w}
-            onClick={() => onWidth(w)}
-            className={cn(
-              "flex h-6 w-6 items-center justify-center rounded border text-[10px]",
-              width === w
-                ? "border-tv-blue bg-tv-blue/15 text-tv-blue-text"
-                : "border-tv-border text-tv-text-muted hover:bg-tv-panel-hover",
-            )}
-          >
-            {w}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-1">
-        {([0, 1, 2] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => onStyle(s)}
-            title={s === 0 ? "Solid" : s === 1 ? "Dashed" : "Dotted"}
-            className={cn(
-              "flex h-6 w-9 items-center justify-center rounded border",
-              style === s
-                ? "border-tv-blue bg-tv-blue/15"
-                : "border-tv-border hover:bg-tv-panel-hover",
-            )}
-          >
-            <svg width="22" height="2" viewBox="0 0 22 2">
-              <line
-                x1="0" y1="1" x2="22" y2="1"
-                stroke="currentColor" strokeWidth="2"
-                strokeDasharray={s === 1 ? "6 3" : s === 2 ? "2 3" : "none"}
-              />
-            </svg>
-          </button>
-        ))}
-      </div>
+  const widths = compact ? [1, 1.5, 2, 3] : [1, 2, 3, 4];
+
+  const widthButtons = (
+    <div className="flex items-center gap-1">
+      {widths.map((w) => (
+        <button
+          key={w}
+          onClick={() => onWidth(w)}
+          className={cn(
+            "flex items-center justify-center rounded border text-[10px]",
+            compact ? "h-6 w-6" : "h-7 w-7",
+            width === w
+              ? "border-tv-blue bg-tv-blue/15 text-tv-blue-text"
+              : "border-tv-border text-tv-text-muted hover:bg-tv-panel-hover",
+          )}
+        >
+          {w}
+        </button>
+      ))}
     </div>
+  );
+
+  const styleButtons = (
+    <div className="flex items-center gap-1">
+      {([0, 1, 2] as const).map((s) => (
+        <button
+          key={s}
+          onClick={() => onStyle(s)}
+          title={s === 0 ? "Solid" : s === 1 ? "Dashed" : "Dotted"}
+          className={cn(
+            "flex items-center justify-center rounded border",
+            compact ? "h-6 w-9" : "h-7 w-10",
+            style === s
+              ? "border-tv-blue bg-tv-blue/15"
+              : "border-tv-border hover:bg-tv-panel-hover",
+          )}
+        >
+          <svg width={compact ? 22 : 24} height="2" viewBox={compact ? "0 0 22 2" : "0 0 24 2"}>
+            <line
+              x1="0" y1="1" x2={compact ? 22 : 24} y2="1"
+              stroke="currentColor" strokeWidth="2"
+              strokeDasharray={s === 1 ? "6 3" : s === 2 ? "2 3" : "none"}
+            />
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <div className="flex items-center justify-between gap-3 pl-2">
+        {widthButtons}
+        {styleButtons}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-tv-text">Line width</span>
+        {widthButtons}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-tv-text">Line style</span>
+        {styleButtons}
+      </div>
+    </>
   );
 }
 
