@@ -359,6 +359,11 @@ export function Watchlist() {
     setDragOverId(null);
   }
 
+  // The item the context menu was opened on — resolved once for the three
+  // entries that branch on it.
+  const ctxItemId = contextMenu?.itemId ?? null;
+  const ctxItem = ctxItemId === null ? undefined : items.find((i) => i.id === ctxItemId);
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-1 border-b border-tv-border px-2 py-2">
@@ -759,61 +764,47 @@ export function Watchlist() {
           style={{ top: contextMenu.y, left: contextMenu.x, maxHeight: "80vh" }}
           className="fixed z-50 min-w-44 overflow-y-auto rounded-md bg-tv-popup py-1 shadow-xl ring-1 ring-tv-border-strong"
         >
-          {contextMenu.itemId !== null && (
+          {ctxItemId !== null && (
             <>
-              {(() => {
-                const item = items.find((i) => i.id === contextMenu.itemId);
-                if (item?.type === "label") {
-                  return (
-                    <ContextItem
-                      icon={Pencil}
-                      label="Rename label…"
-                      onClick={() => startRename(item.id, item.value)}
-                    />
-                  );
-                }
-                return null;
-              })()}
+              {ctxItem?.type === "label" && (
+                <ContextItem
+                  icon={Pencil}
+                  label="Rename label…"
+                  onClick={() => startRename(ctxItem.id, ctxItem.value)}
+                />
+              )}
               <ContextItem
                 icon={Type}
                 label="Add label above"
-                onClick={() => addLabelHere(contextMenu.itemId!)}
+                onClick={() => addLabelHere(ctxItemId)}
               />
-              {(() => {
-                const item = items.find((i) => i.id === contextMenu.itemId);
-                if (item?.type !== "symbol" || watchlists.length <= 1) return null;
-                return (
-                  <>
-                    <div className="my-1 h-px bg-tv-border" />
-                    {watchlists.filter((w) => w.id !== active.id).map((w) => (
-                      <ContextItem
-                        key={w.id}
-                        icon={FolderInput}
-                        label={`Move to "${w.name}"`}
-                        onClick={() => {
-                          moveWatchlistItemToList(active.id, w.id, contextMenu.itemId!);
-                          setContextMenu(null);
-                        }}
-                      />
-                    ))}
-                  </>
-                );
-              })()}
-              {(() => {
-                const item = items.find((i) => i.id === contextMenu.itemId);
-                if (item?.type !== "symbol") return null;
-                return (
-                  <ContextItem
-                    icon={Trash2}
-                    label="Remove from watchlist"
-                    danger
-                    onClick={() => {
-                      removeWatchlistItem(active.id, contextMenu.itemId!);
-                      setContextMenu(null);
-                    }}
-                  />
-                );
-              })()}
+              {ctxItem?.type === "symbol" && watchlists.length > 1 && (
+                <>
+                  <div className="my-1 h-px bg-tv-border" />
+                  {watchlists.filter((w) => w.id !== active.id).map((w) => (
+                    <ContextItem
+                      key={w.id}
+                      icon={FolderInput}
+                      label={`Move to "${w.name}"`}
+                      onClick={() => {
+                        moveWatchlistItemToList(active.id, w.id, ctxItemId);
+                        setContextMenu(null);
+                      }}
+                    />
+                  ))}
+                </>
+              )}
+              {ctxItem?.type === "symbol" && (
+                <ContextItem
+                  icon={Trash2}
+                  label="Remove from watchlist"
+                  danger
+                  onClick={() => {
+                    removeWatchlistItem(active.id, ctxItemId);
+                    setContextMenu(null);
+                  }}
+                />
+              )}
               <div className="my-1 h-px bg-tv-border" />
             </>
           )}
