@@ -7,6 +7,13 @@ import { loadPaperAccount, savePaperAccount } from "./paper-account-data";
 
 const DEBOUNCE_MS = 500;
 
+/** Saves are fire-and-forget, but a rejected one still has to say so — without
+ *  this the upsert's error was invisible and a failed cloud save looked
+ *  exactly like a successful one. */
+function logSaveFailure(err: unknown) {
+  console.error("Failed to save paper account to Supabase", err);
+}
+
 /**
  * Syncs the paper trading account to Supabase, mirroring `useCloudSync`'s
  * shape: load once on sign-in, debounce-save on subsequent mutations.
@@ -79,7 +86,7 @@ export function usePaperAccountSync() {
         if (cloud) {
           usePaperTradingStore.getState().setAccount(cloud);
         } else {
-          savePaperAccount(usePaperTradingStore.getState().account);
+          savePaperAccount(usePaperTradingStore.getState().account, user.id).catch(logSaveFailure);
         }
         loadedRef.current = true;
       })
@@ -105,7 +112,7 @@ export function usePaperAccountSync() {
     if (!user || !loadedRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      savePaperAccount(account);
+      savePaperAccount(account, user.id).catch(logSaveFailure);
     }, DEBOUNCE_MS);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
