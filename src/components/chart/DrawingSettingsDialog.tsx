@@ -62,7 +62,7 @@ export function DrawingSettingsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && setEditing(null)}>
-      <DialogContent className="max-w-sm bg-tv-panel">
+      <DialogContent className="max-w-sm bg-tv-panel" mobileFullScreen>
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold">
             {drawing ? KIND_TITLE[drawing.kind] ?? drawing.kind : ""}
@@ -310,7 +310,7 @@ function Form({
       </div>
 
       {tab === "style" && (
-        <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1">
+        <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1 max-sm:max-h-none">
           {isPosition ? (
             <>
               <div className="flex items-center justify-between gap-3">
@@ -671,7 +671,7 @@ function PositionInputsTab({
 }) {
   const quoteCurrency = deriveQuoteCurrency(symbol);
   return (
-    <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1">
+    <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1 max-sm:max-h-none">
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-tv-text">Account size</span>
         <div className="flex items-center gap-1.5">
