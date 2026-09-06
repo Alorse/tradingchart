@@ -123,12 +123,11 @@ export function useCloudSync() {
       .catch((err) => {
         // Leave `loadedRef` false so the debounced saves stay gated off for
         // the rest of the session: better to sync nothing than to upsert
-        // local state over a cloud row the load never actually read. An
-        // unapplied migration 06 lands here — `loadWatchlists` selects
-        // columns that don't exist yet.
+        // local state over a cloud row the load never actually read. Which
+        // load failed, and why, is the loader's to say — `loadWatchlists`
+        // names its own migration dependency in the error it throws.
         console.error(
-          "Failed to load settings/watchlists from Supabase; skipping cloud sync this session " +
-            "(is supabase/migrations/06_watchlists.sql applied?)",
+          "Failed to load settings/watchlists from Supabase; skipping cloud sync this session",
           err,
         );
       });

@@ -79,7 +79,9 @@ export async function saveChartSettings(userId: string, settings: CloudChartSett
  * would let the caller treat a transient failure as a fresh account and push
  * this device's local lists straight over a real cloud row. Migration 06 is a
  * hard dependency of that select, so an unapplied migration throws here too
- * and disables watchlist sync for the session rather than corrupting anything.
+ * and disables watchlist sync for the session rather than corrupting anything
+ * — and, since this is the only place that knows which columns the read needs,
+ * it is where that diagnosis gets attached to the error.
  *
  * All parsing lives in the pure [watchlists-migrate.ts](./watchlists-migrate.ts),
  * including the fold of a pre-migration-06 single list into a "Default" entry.
@@ -90,7 +92,12 @@ export async function loadWatchlists(): Promise<CloudWatchlists | null> {
     .from("user_watchlists")
     .select("lists, active_id, items, symbols")
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      `Failed to load watchlists (is supabase/migrations/06_watchlists.sql applied?): ${error.message}`,
+      { cause: error },
+    );
+  }
   return rowToWatchlists(data as RawWatchlistRow | null);
 }
 
