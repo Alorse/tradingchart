@@ -25,20 +25,13 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // The app is guest-accessible (see LoginDialog / Header) — this no longer
-  // gates access. `getClaims()` verifies the session JWT locally (falling
-  // back to a network call only when it genuinely can't, e.g. an expired
-  // token that needs a refresh), whereas `getUser()` always round-trips to
-  // Supabase's auth server; at one middleware run per request that round trip
-  // dominated the wall-clock — and therefore the billed compute — of every
-  // request. The call is kept (result unused) purely so an expiring session
-  // cookie still gets refreshed via `setAll` above on every request; any
-  // failure is harmless now that nothing is gated on it.
+  // The app is guest-accessible, so nothing is gated here any more. The result
+  // is deliberately discarded: this call exists only for its side effect, since
+  // `getClaims()` rotates an expiring session and writes the refreshed cookies
+  // out through `setAll` above. A failure just means no refresh happened.
   try {
     await supabase.auth.getClaims();
-  } catch {
-    // no-op — see comment above
-  }
+  } catch {}
 
   return supabaseResponse;
 }
@@ -54,9 +47,14 @@ export async function middleware(request: NextRequest) {
  * actually makes that work; gating them behind auth bought nothing anyway,
  * since the data they return is public.
  *
- * `/api/trade/*` (minus exchange-info) deliberately stays matched: those
- * routes sign requests against a real exchange, and the session check keeps
- * the deployment from being used as an open proxy by a stranger.
+ * `/api/trade/*` (minus exchange-info) stays matched, but note what that buys
+ * now: the middleware stopped gating on the session when guest access landed,
+ * so matching those routes no longer keeps a stranger from using the
+ * deployment as a request-signing relay. No handler under `/api/trade/`
+ * checks a session either. If that protection is wanted back it belongs in the
+ * handlers (or `lib/exchanges/account.ts`), not in a matcher — an edge matcher
+ * enforcing an invariant owned by eight route handlers is how it got dropped
+ * by deleting a single `if`.
  */
 export const config = {
   matcher: [
