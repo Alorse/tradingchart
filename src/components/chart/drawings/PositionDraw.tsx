@@ -82,7 +82,7 @@ function OuterPill({
       <rect
         x={cx - w / 2} y={pillY}
         width={w} height={h}
-        fill={color} rx={3}
+        fill={color} rx={6}
       />
       <text
         x={cx} y={pillY + h / 2 + 4}
@@ -119,7 +119,9 @@ export function PositionDraw({
   // TV's own long/short tool fills the zones with a fairly solid wash rather
   // than the near-transparent 0x20 (~12%) hex-alpha suffix this used before.
   const ZONE_OPACITY = 0.28;
-  const textColor = drawing.textColor ?? TV_PINE.pillText;
+  // TV's own tool renders solid, opaque label boxes with white text, not the
+  // dark pillText this used to default to (still overridable per-drawing).
+  const textColor = drawing.textColor ?? TV_PINE.white;
   const textSize = drawing.textSize ?? 11;
   const showRMultiples = drawing.showRMultiples ?? false;
 
@@ -553,7 +555,7 @@ export function PositionDraw({
           {compact ? (
             <>
               {entryRowSegments.length > 0 && (
-                <EntryRowText x={textX} y={yEntry - 4} fontSize={textSize} segments={entryRowSegments} gap="  " />
+                <EntryStatsBox x={textX} y={yEntry} fontSize={textSize} segments={entryRowSegments} gap="  " boxColor={profitColor} textColor={textColor} />
               )}
               {targetRowParts.length > 0 && profitZoneH > 14 && (
                 <text x={textX} y={profitCenterY + 4} textAnchor="middle" fill={profitColor} fontSize={textSize} fontWeight="700">
@@ -569,7 +571,7 @@ export function PositionDraw({
           ) : (
             <>
               {entryRowSegments.length > 0 && (
-                <EntryRowText x={textX} y={yEntry - 4} fontSize={textSize} segments={entryRowSegments} gap="   " />
+                <EntryStatsBox x={textX} y={yEntry} fontSize={textSize} segments={entryRowSegments} gap="   " boxColor={profitColor} textColor={textColor} />
               )}
               {targetRowParts.length > 0 && profitZoneH > 32 && (
                 <text x={textX} y={profitCenterY + (profitZoneH > 56 ? -2 : 4)} textAnchor="middle" fill={profitColor} fontSize={textSize} fontWeight="700" opacity={0.9}>
@@ -607,21 +609,34 @@ export function PositionDraw({
   );
 }
 
-/** Entry stats row: each segment keeps its own color (Open P&L is
- *  movement-colored; qty/R:R stay neutral) inside one centered text run. */
-function EntryRowText({
-  x, y, fontSize, segments, gap,
+/**
+ * Entry stats box: an opaque rounded pill straddling the entry line, matching
+ * TradingView's solid label style — white text on the profit color, rather
+ * than the per-segment movement-colored text this used to render bare (no
+ * box) directly over the chart.
+ */
+function EntryStatsBox({
+  x, y, fontSize, segments, gap, boxColor, textColor,
 }: {
   x: number; y: number; fontSize: number; segments: { text: string; color: string }[]; gap: string;
+  boxColor: string; textColor: string;
 }) {
+  const text = segments.map((s) => s.text).join(gap);
+  const charW = fontSize * 0.62;
+  const padX = 10;
+  const h = 19;
+  const w = Math.max(text.length * charW + padX * 2, 60);
   return (
-    <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fontWeight="700">
-      {segments.map((s, i) => (
-        <tspan key={i} fill={s.color}>
-          {i > 0 ? gap : ""}
-          {s.text}
-        </tspan>
-      ))}
-    </text>
+    <g>
+      <rect x={x - w / 2} y={y - h / 2} width={w} height={h} fill={boxColor} rx={6} />
+      <text
+        x={x} y={y + 4}
+        textAnchor="middle" fontSize={fontSize} fontWeight="700"
+        fill={textColor}
+        fontFamily="var(--font-mono), monospace"
+      >
+        {text}
+      </text>
+    </g>
   );
 }
