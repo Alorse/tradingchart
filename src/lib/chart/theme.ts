@@ -6,13 +6,14 @@
  * to a canvas and needs real color strings — it cannot consume `var(...)` — so
  * we read those CSS variables at runtime instead of duplicating the hex values.
  *
- * The literal `FALLBACK` documents the expected keys and is returned during SSR
+ * `TV_DARK` is the same ramp as a TypeScript literal: it is returned during SSR
  * (before a `document` exists) and for any variable the stylesheet doesn't
- * define. Keep it in sync with `globals.css` — a stale entry here paints the
- * previous palette for the first frame; if they diverge, CSS wins on the
- * client. The `--color-tv-*` properties now resolve through a `--tv-*`
- * indirection (so a theme class can swap them), which `getComputedStyle` flattens
- * to a real color string for us — nothing here has to know about it.
+ * define, and it is the source for the handful of *persisted* store defaults
+ * that are meant to track the ramp (see `chart-store`'s color migrations). It
+ * must stay in sync with `globals.css` — a stale entry paints the previous
+ * palette for the first frame, and if they diverge CSS wins on the client. That
+ * is not left to discipline: `theme.test.ts` parses the `:root` block and
+ * asserts the two agree.
  */
 export interface TvColors {
   bg: string;
@@ -34,7 +35,8 @@ export interface TvColors {
   grid: string;
 }
 
-const FALLBACK: TvColors = {
+/** The dark ramp, mirroring `:root`'s `--tv-*` block in `globals.css`. */
+export const TV_DARK: TvColors = {
   bg: "#0f0f0f",
   panel: "#171717",
   panelHover: "#2e2e2e",
@@ -76,15 +78,17 @@ const CSS_VAR: Record<keyof TvColors, string> = {
 
 /**
  * Read the TV palette from the CSS custom properties (the single source of
- * truth). Falls back to `FALLBACK` on the server or for any missing variable.
+ * truth on the client). `getComputedStyle` substitutes the `--color-tv-*` →
+ * `--tv-*` chain for us, so a plain color string comes back either way. Falls
+ * back to `TV_DARK` on the server or for any missing variable.
  */
 export function getTvColors(): TvColors {
-  if (typeof document === "undefined") return FALLBACK;
+  if (typeof document === "undefined") return TV_DARK;
   const cs = getComputedStyle(document.documentElement);
   const out = {} as TvColors;
   for (const key of Object.keys(CSS_VAR) as (keyof TvColors)[]) {
     const v = cs.getPropertyValue(CSS_VAR[key]).trim();
-    out[key] = v || FALLBACK[key];
+    out[key] = v || TV_DARK[key];
   }
   return out;
 }

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Timeframe } from "@/lib/binance/types";
+import { TV_DARK } from "@/lib/chart/theme";
 import { DEFAULT_FLAG_COLOR } from "@/lib/watchlist/flags";
 import { randomId } from "@/lib/id";
 import { unifiedHistory, isApplyingHistory, withoutHistory } from "@/lib/history";
@@ -164,9 +165,9 @@ export const DEFAULT_KEY_LEVELS: KeyLevelsConfig = {
   daily:     { open: true,  prevOpen: false, prevHL: false, prevMid: false, color: "#08bcd4" },
   monday:    { range: true,  mid: true,                                     color: "#ffffff" },
   weekly:    { open: true,  prevOpen: true,  prevHL: true,  prevMid: true,  color: "#ffeb3b" },
-  monthly:   { open: true,  prevOpen: true,  prevHL: true,  prevMid: true,  color: "#089981" },
+  monthly:   { open: true,  prevOpen: true,  prevHL: true,  prevMid: true,  color: TV_DARK.green },
   quarterly: { open: true,  prevOpen: false, prevHL: false, prevMid: false, color: "#ffa726" },
-  yearly:    { open: true,  prevOpen: false, currHL: false, currMid: false, color: "#f23645" },
+  yearly:    { open: true,  prevOpen: false, currHL: false, currMid: false, color: TV_DARK.red },
   fourHour:  { open: false,                  prevHL: false, prevMid: false, color: "#ab47bc" },
 };
 
@@ -185,9 +186,9 @@ export interface AdxStyle {
 }
 
 export const DEFAULT_ADX_STYLE: AdxStyle = {
-  adxColor: "#8c8c8c",
-  plusDiColor: "#089981",
-  minusDiColor: "#f23645",
+  adxColor: TV_DARK.textMuted,
+  plusDiColor: TV_DARK.green,
+  minusDiColor: TV_DARK.red,
   keyLevelColor: "#ffffff",
   showAdx: true,
   showPlusDi: true,
@@ -257,7 +258,7 @@ export const DEFAULT_VWAP_STYLE: VwapStyle = {
   color: "#00bcd4",
   lineWidth: 2,
   showBands: false,
-  bandColor: "#8c8c8c",
+  bandColor: TV_DARK.textMuted,
   showFill: false,
   fillOpacity: 0.06,
 };
@@ -300,10 +301,10 @@ export const DEFAULT_VOLUME_PROFILE: VolumeProfileConfig = {
   placement: "right",
   extendPocRight: true,
   showDevelopingPoc: false,
-  upColor: "#089981",
-  downColor: "#f23645",
-  valueAreaUpColor: "#089981",
-  valueAreaDownColor: "#f23645",
+  upColor: TV_DARK.green,
+  downColor: TV_DARK.red,
+  valueAreaUpColor: TV_DARK.green,
+  valueAreaDownColor: TV_DARK.red,
   totalColor: "#2962ff",
   pocColor: "#ff0000",
   pocLineWidth: 1,
@@ -348,14 +349,14 @@ export interface ChartColors {
 }
 
 export const DEFAULT_CHART_COLORS: ChartColors = {
-  bg: "#0f0f0f",
-  gridLines: "#2a2a2a",
-  bodyUp: "#089981",
-  bodyDown: "#f23645",
-  borderUp: "#089981",
-  borderDown: "#f23645",
-  wickUp: "#089981",
-  wickDown: "#f23645",
+  bg: TV_DARK.bg,
+  gridLines: TV_DARK.grid,
+  bodyUp: TV_DARK.green,
+  bodyDown: TV_DARK.red,
+  borderUp: TV_DARK.green,
+  borderDown: TV_DARK.red,
+  wickUp: TV_DARK.green,
+  wickDown: TV_DARK.red,
 };
 
 /** Per-indicator style overrides (colors, visibility) */
@@ -392,7 +393,7 @@ export const DEFAULT_SQUEEZE_STYLE: SqueezeStyle = {
   // now reads as a caution color rather than as absence — but a dot nobody can
   // see carries no semantics at all.
   squeezeOn: "#ff9800",
-  squeezeOff: "#8c8c8c",
+  squeezeOff: TV_DARK.textMuted,
   noSqueeze: "#2962ff",
   showMomentum: true,
   showSqueezeDots: true,
