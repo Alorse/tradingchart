@@ -6,14 +6,10 @@ import {
   qtyFromLeverage,
   positionQty,
   pnlAtLevel,
-  balanceAfter,
   offsetPct,
-  offsetTicks,
   signedPct,
   signedTicks,
-  rewardRiskRatio,
   openPnl,
-  openPnlCurrency,
   deriveQuoteCurrency,
 } from "./position-math";
 
@@ -99,7 +95,7 @@ describe("positionQty", () => {
   });
 });
 
-describe("pnlAtLevel / balanceAfter", () => {
+describe("pnlAtLevel", () => {
   it("is positive for a long hitting target above entry", () => {
     expect(pnlAtLevel(100, 110, 10, "long")).toBe(100);
   });
@@ -113,23 +109,18 @@ describe("pnlAtLevel / balanceAfter", () => {
   it("scales with pointValue", () => {
     expect(pnlAtLevel(100, 110, 10, "long", 2)).toBe(200);
   });
-  it("balanceAfter adds signed pnl to account size", () => {
-    expect(balanceAfter(10000, 100)).toBe(10100);
-    expect(balanceAfter(10000, -100)).toBe(9900);
+  it("scales with qty", () => {
+    expect(pnlAtLevel(100, 110, 5, "long")).toBe(50);
   });
 });
 
-describe("offsetPct / offsetTicks / rewardRiskRatio", () => {
+describe("offsetPct", () => {
   it("computes signed percent offset", () => {
     expect(offsetPct(100, 110)).toBeCloseTo(10, 5);
     expect(offsetPct(100, 90)).toBeCloseTo(-10, 5);
   });
-  it("computes signed whole-tick offset", () => {
-    expect(offsetTicks(100, 100.5, 0.1)).toBe(5);
-    expect(offsetTicks(100, 99.5, 0.1)).toBe(-5);
-  });
-  it("computes reward:risk from entry/stop/target", () => {
-    expect(rewardRiskRatio(100, 90, 120)).toBeCloseTo(2, 5);
+  it("guards a zero entry price", () => {
+    expect(offsetPct(0, 110)).toBe(0);
   });
 });
 
@@ -150,7 +141,7 @@ describe("signedPct / signedTicks", () => {
   });
 });
 
-describe("openPnl / openPnlCurrency", () => {
+describe("openPnl", () => {
   it("is positive when price moves toward a long's target", () => {
     expect(openPnl(100, 110, "long")).toBe(10);
     expect(openPnl(100, 90, "long")).toBe(-10);
@@ -158,10 +149,6 @@ describe("openPnl / openPnlCurrency", () => {
   it("mirrors for a short", () => {
     expect(openPnl(100, 90, "short")).toBe(10);
     expect(openPnl(100, 110, "short")).toBe(-10);
-  });
-  it("currency version scales by qty and pointValue", () => {
-    expect(openPnlCurrency(100, 110, 5, "long")).toBe(50);
-    expect(openPnlCurrency(100, 110, 5, "long", 2)).toBe(100);
   });
 });
 

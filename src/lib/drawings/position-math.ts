@@ -1,4 +1,5 @@
-import { pnlAtExit, rrRatio, ticksBetween } from "@/lib/trading/sizing";
+import { pnlAtExit, ticksBetween } from "@/lib/trading/sizing";
+import { stripExchangePrefix } from "@/lib/symbols/prefix";
 
 /**
  * Pure sizing/money math for the Long/Short position drawing tools, shared by
@@ -6,8 +7,9 @@ import { pnlAtExit, rrRatio, ticksBetween } from "@/lib/trading/sizing";
  * `src/lib/trading/sizing.ts` (which sizes a live order from a chosen mode)
  * because this module answers a different question — "what qty does this
  * drawing's risk+leverage inputs imply" — but reuses that module's
- * `pnlAtExit`/`rrRatio`/`ticksBetween` rather than re-deriving the same P&L,
- * reward:risk and tick math a second time.
+ * `pnlAtExit`/`ticksBetween` rather than re-deriving the same P&L and tick
+ * math a second time. Reward:risk comes straight from that module's
+ * `rrRatio` at the call site.
  */
 
 export type PositionSide = "long" | "short";
@@ -113,20 +115,10 @@ export function pnlAtLevel(
   return pnlAtExit(entry, level, qty * pointValue, sideToBuySell(side));
 }
 
-/** Account balance after the position closes at `level` for `pnl`. */
-export function balanceAfter(accountSize: number, pnl: number): number {
-  return accountSize + pnl;
-}
-
 /** Signed % price offset of `level` from `entry`. */
 export function offsetPct(entry: number, level: number): number {
   if (!isFinite(entry) || entry === 0) return 0;
   return ((level - entry) / entry) * 100;
-}
-
-/** Signed whole-tick offset of `level` from `entry`. */
-export function offsetTicks(entry: number, level: number, tickSize: number): number {
-  return ticksBetween(entry, level, tickSize);
 }
 
 /**
@@ -146,35 +138,19 @@ export function signedTicks(
   tickSize: number,
   side: PositionSide,
 ): number {
-  const t = offsetTicks(entry, level, tickSize);
+  const t = ticksBetween(entry, level, tickSize);
   return side === "long" ? t : -t;
-}
-
-/** Reward:risk for an entry/stop/target triplet. */
-export function rewardRiskRatio(entry: number, stop: number, target: number): number {
-  return rrRatio(entry, stop, target);
 }
 
 /**
  * Signed price movement in the position's favor — positive means price has
  * moved toward the target. This is the "movement" axis (see CLAUDE.md's
  * direction-vs-movement color rule), not a currency amount; multiply by
- * qty*pointValue (or use `openPnlCurrency`) for the money version.
+ * qty*pointValue (or use `pnlAtLevel`) for the money version.
  */
 export function openPnl(entry: number, markPrice: number, side: PositionSide): number {
   if (!isFinite(entry) || !isFinite(markPrice)) return 0;
   return side === "long" ? markPrice - entry : entry - markPrice;
-}
-
-/** Signed currency open P&L at the current mark price. */
-export function openPnlCurrency(
-  entry: number,
-  markPrice: number,
-  qty: number,
-  side: PositionSide,
-  pointValue = 1,
-): number {
-  return pnlAtLevel(entry, markPrice, qty, side, pointValue);
 }
 
 const KNOWN_QUOTES = ["USDT", "USDC", "FDUSD", "BUSD", "USD"];
@@ -187,7 +163,7 @@ const KNOWN_QUOTES = ["USDT", "USDC", "FDUSD", "BUSD", "USD"];
  * this app's near-universal quote asset for tradeable symbols.
  */
 export function deriveQuoteCurrency(symbol: string): string {
-  const clean = symbol.toUpperCase().replace(/^BYBIT:/, "").replace(/\.P$/, "");
+  const clean = stripExchangePrefix(symbol).replace(/\.P$/, "");
   for (const q of KNOWN_QUOTES) {
     if (clean.length > q.length && clean.endsWith(q)) return q;
   }
