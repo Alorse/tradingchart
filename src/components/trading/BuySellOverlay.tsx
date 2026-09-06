@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTradingStore } from "@/lib/store/trading-store";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
-import { getBinanceWS } from "@/lib/binance/ws";
-import { getBybitWS } from "@/lib/bybit/ws";
-import { resolveSource } from "@/lib/symbols/source";
+import { useQuote } from "@/lib/trading/quote";
 import { tradeGate } from "@/lib/trading/exchange-gate";
+import type { OrderSide } from "@/lib/binance/trading-types";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -31,25 +30,10 @@ export function BuySellOverlay() {
   // market order rather than letting it fill on the other exchange's book.
   const gate = tradeGate(symbol, exchange);
 
-  const [bid, setBid] = useState<number | null>(null);
-  const [ask, setAsk] = useState<number | null>(null);
-  const [flash, setFlash] = useState<"buy" | "sell" | null>(null);
-
-  useEffect(() => {
-    // Quote from the venue the chart is actually on — otherwise a Bybit chart
-    // would show Binance's book. Bybit has no bookTicker stream here, so its
-    // last price stands in for both sides.
-    if (resolveSource(symbol).kind === "bybit") {
-      return getBybitWS().subscribeMiniTickers([symbol], (t) => {
-        setBid(t.close);
-        setAsk(t.close);
-      });
-    }
-    return getBinanceWS().subscribeBookTicker(symbol, (data) => {
-      setBid(data.bid);
-      setAsk(data.ask);
-    });
-  }, [symbol]);
+  // Quotes from the venue the chart is actually on — otherwise a Bybit chart
+  // would show Binance's book.
+  const { bid, ask } = useQuote(symbol);
+  const [flash, setFlash] = useState<OrderSide | null>(null);
 
   function togglePanel(open: boolean) {
     setSidebarTab(open ? "trade" : "watchlist");
@@ -58,13 +42,13 @@ export function BuySellOverlay() {
   }
 
   /** Single click: bring up the order ticket pre-set to this side. */
-  function openTicket(side: "BUY" | "SELL") {
+  function openTicket(side: OrderSide) {
     updateForm({ side });
     togglePanel(true);
   }
 
   /** Double click: skip the ticket and send a market order straight away. */
-  async function quickOrder(side: "BUY" | "SELL") {
+  async function quickOrder(side: OrderSide) {
     if (!apiKey || isLoading) return;
     if (!gate.ok) {
       // Don't fire, and don't fail silently either: open the ticket, where the
@@ -72,7 +56,7 @@ export function BuySellOverlay() {
       togglePanel(true);
       return;
     }
-    setFlash(side === "BUY" ? "buy" : "sell");
+    setFlash(side);
     setTimeout(() => setFlash(null), 300);
     await placeOrder(symbol, { side, type: "MARKET" });
   }
@@ -104,7 +88,7 @@ export function BuySellOverlay() {
         }
         className={cn(
           "flex flex-col items-center rounded px-2 py-0.5 text-[9px] font-semibold text-white transition-all",
-          flash === "buy" ? "scale-95 bg-tv-blue/60" : "bg-tv-blue hover:bg-tv-blue/80",
+          flash === "BUY" ? "scale-95 bg-tv-blue/60" : "bg-tv-blue hover:bg-tv-blue/80",
         )}
       >
         <span>Buy</span>
@@ -121,7 +105,7 @@ export function BuySellOverlay() {
         }
         className={cn(
           "flex flex-col items-center rounded px-2 py-0.5 text-[9px] font-semibold text-white transition-all",
-          flash === "sell" ? "scale-95 bg-tv-red/60" : "bg-tv-red hover:bg-tv-red/80",
+          flash === "SELL" ? "scale-95 bg-tv-red/60" : "bg-tv-red hover:bg-tv-red/80",
         )}
       >
         <span>Sell</span>

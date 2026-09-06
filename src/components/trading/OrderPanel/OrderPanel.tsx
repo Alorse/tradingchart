@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, KeyRound, X } from "lucide-react";
 import { useTradingStore } from "@/lib/store/trading-store";
 import { useChartStore } from "@/lib/store/chart-store";
-import { useBookTicker } from "@/lib/binance/use-book-ticker";
+import { useQuote } from "@/lib/trading/quote";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { tradeGate } from "@/lib/trading/exchange-gate";
 import { ticksBetween } from "@/lib/trading/sizing";
@@ -64,7 +64,7 @@ export function OrderPanel() {
   const setKeyDialogOpen = useTradingStore((s) => s.setApiKeyDialogOpen);
 
   const symInfo = useSymbolInfo(symbol);
-  const { bid, ask } = useBookTicker(symbol);
+  const { bid, ask } = useQuote(symbol);
   const perp = isPerp(symbol);
   const baseAsset = getBaseAsset(symbol);
   // Account data comes from the connected exchange; the chart may be on

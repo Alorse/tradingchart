@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
-import { useBookTicker } from "@/lib/binance/use-book-ticker";
-import { getBybitWS } from "@/lib/bybit/ws";
+import { useQuote } from "@/lib/trading/quote";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { isPerp } from "@/lib/binance/rest";
-import { paperFeedSource } from "@/lib/trading/paper-feed";
 import { getBaseAsset } from "@/components/watchlist/CoinIcon";
 import {
   defaultPaperOrderForm,
@@ -35,34 +33,6 @@ const PAPER_ORDER_TYPE_TABS: Array<{ key: "MARKET" | "LIMIT"; label: string }> =
 ];
 
 /**
- * Venue-aware quote for the paper ticket: `useBookTicker` only ever carries
- * Binance data (and now skips subscribing at all for anything else, see its
- * own header comment), so a Bybit-charted or feedless symbol used to leave
- * bid/ask permanently null with no explanation — `submit()` would then just
- * silently no-op on a MARKET order (adversarial review finding 6). Bybit has
- * no separate book-ticker stream (same reasoning as `BuySellOverlay`'s quote),
- * so its last price stands in for both sides.
- */
-function usePaperQuote(symbol: string): { bid: number | null; ask: number | null } {
-  const [bybitTick, setBybitTick] = useState<{ symbol: string; price: number } | null>(null);
-  const source = paperFeedSource(symbol);
-
-  useEffect(() => {
-    if (source !== "bybit") return;
-    return getBybitWS().subscribeMiniTickers([symbol], (t) => setBybitTick({ symbol, price: t.close }));
-  }, [symbol, source]);
-
-  const binanceBook = useBookTicker(symbol);
-
-  if (source === "bybit") {
-    if (bybitTick?.symbol !== symbol) return { bid: null, ask: null };
-    return { bid: bybitTick.price, ask: bybitTick.price };
-  }
-  if (source === "binance") return binanceBook;
-  return { bid: null, ask: null };
-}
-
-/**
  * Paper-mode order panel — same layout as the live `OrderPanel` (built from
  * the same `shared.tsx` pieces), but reading/writing `paper-trading-store`
  * instead of exchange credentials. No API-key gate: paper trading never
@@ -88,10 +58,9 @@ export function PaperOrderPanel() {
   const lastEvents = usePaperTradingStore((s) => s.lastEvents);
 
   const symInfo = useSymbolInfo(symbol);
-  const { bid, ask } = usePaperQuote(symbol);
+  const { bid, ask, source: feedSource } = useQuote(symbol);
   const perp = isPerp(symbol);
   const baseAsset = getBaseAsset(symbol);
-  const feedSource = paperFeedSource(symbol);
 
   const [form, setForm] = useState<PaperOrderForm>(() =>
     defaultPaperOrderForm(account.settings.defaultLeverage),
