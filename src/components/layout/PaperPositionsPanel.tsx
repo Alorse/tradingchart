@@ -98,10 +98,39 @@ export function PaperPositionsPanel() {
   const [fullscreen, setFullscreen] = useState(false);
   const [tab, setTab] = useState<Tab>("positions");
 
+  if (mode !== "paper") return null;
+
   const positions = account.positions;
   const restingOrders = account.orders.filter((o) => o.status === "NEW");
 
-  if (mode !== "paper") return null;
+  // Label, count and body in one row per tab: the three used to be parallel
+  // lists that had to be edited in lockstep to add or reorder one.
+  const tabs: { key: Tab; label: React.ReactNode; count: number; body: () => React.ReactNode }[] = [
+    {
+      key: "positions",
+      label: "Positions",
+      count: positions.length,
+      body: () => <PositionsTable positions={positions} />,
+    },
+    {
+      key: "orders",
+      label: "Orders",
+      count: restingOrders.length,
+      body: () => <OrdersTable orders={restingOrders} />,
+    },
+    {
+      key: "history",
+      label: "History",
+      count: account.history.length,
+      body: () => <HistoryTable trades={account.history} />,
+    },
+    {
+      key: "notifications",
+      label: <Bell className="h-3 w-3" />,
+      count: notifications.length,
+      body: () => <NotificationsTable events={notifications} />,
+    },
+  ];
 
   return (
     <div
@@ -154,25 +183,20 @@ export function PaperPositionsPanel() {
           <AccountSummaryRow account={account} onReset={resetAccount} />
 
           <div className="flex shrink-0 border-b border-tv-border">
-            <TabBtn className="flex items-center" active={tab === "positions"} onClick={() => setTab("positions")}>
-              Positions {positions.length > 0 && <Badge n={positions.length} />}
-            </TabBtn>
-            <TabBtn className="flex items-center" active={tab === "orders"} onClick={() => setTab("orders")}>
-              Orders {restingOrders.length > 0 && <Badge n={restingOrders.length} />}
-            </TabBtn>
-            <TabBtn className="flex items-center" active={tab === "history"} onClick={() => setTab("history")}>
-              History {account.history.length > 0 && <Badge n={account.history.length} />}
-            </TabBtn>
-            <TabBtn className="flex items-center" active={tab === "notifications"} onClick={() => setTab("notifications")}>
-              <Bell className="h-3 w-3" /> {notifications.length > 0 && <Badge n={notifications.length} />}
-            </TabBtn>
+            {tabs.map((t) => (
+              <TabBtn
+                key={t.key}
+                className="flex items-center"
+                active={tab === t.key}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label} {t.count > 0 && <Badge n={t.count} />}
+              </TabBtn>
+            ))}
           </div>
 
           <div className="flex-1 overflow-auto">
-            {tab === "positions" && <PositionsTable positions={positions} />}
-            {tab === "orders" && <OrdersTable orders={restingOrders} />}
-            {tab === "history" && <HistoryTable trades={account.history} />}
-            {tab === "notifications" && <NotificationsTable events={notifications} />}
+            {tabs.find((t) => t.key === tab)?.body()}
           </div>
         </>
       )}
