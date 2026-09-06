@@ -111,8 +111,8 @@ function Form({
 }) {
   const isPosition = drawing.kind === "long" || drawing.kind === "short";
   const isRect = drawing.kind === "rectangle";
-  const tabs: Tab[] = isPosition ? ["style", "inputs"] : ["style", "coordinates"];
-  const [tab, setTab] = useState<Tab>("style");
+  const tabs: Tab[] = isPosition ? ["inputs", "style"] : ["style", "coordinates"];
+  const [tab, setTab] = useState<Tab>(() => (isPosition ? "inputs" : "style"));
   const [color, setColor] = useState<string>(drawing.color ?? TV_PINE.neutral);
   const [lineWidth, setLineWidth] = useState<number>(drawing.lineWidth ?? 1);
   const [lineStyle, setLineStyle] = useState<0 | 1 | 2>(drawing.lineStyle ?? 0);
@@ -193,6 +193,7 @@ function Form({
   const tickSize = symbolInfo.tickSize > 0 ? symbolInfo.tickSize : 0.01;
 
   useEffect(() => {
+    setTab(isPosition ? "inputs" : "style");
     setColor(drawing.color ?? TV_PINE.neutral);
     setLineWidth(drawing.lineWidth ?? 1);
     setLineStyle(drawing.lineStyle ?? 0);
@@ -229,7 +230,7 @@ function Form({
       setFillColor(drawing.fillColor ?? TV_PINE.blue);
       setFillOpacity(drawing.fillOpacity ?? 0.1);
     }
-  }, [drawing]);
+  }, [drawing, isPosition]);
 
   function apply() {
     const patch: Partial<Drawing> = {} as Partial<Drawing>;
