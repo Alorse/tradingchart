@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,11 +11,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ColorPicker } from "@/components/ui/color-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import type { Drawing, PositionStatKey } from "@/lib/drawings/types";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
+import { deriveQuoteCurrency } from "@/lib/drawings/position-math";
 import { cn } from "@/lib/utils";
 import { TV_PINE } from "@/lib/chart/theme";
 
@@ -181,8 +196,8 @@ function Form({
   const [lotSize, setLotSize] = useState<number>(
     isPosition ? ((drawing as { lotSize?: number }).lotSize ?? 1) : 1,
   );
-  const [qtyPrecision, setQtyPrecision] = useState<number>(
-    isPosition ? ((drawing as { qtyPrecision?: number }).qtyPrecision ?? 3) : 3,
+  const [qtyPrecision, setQtyPrecision] = useState<number | undefined>(
+    isPosition ? (drawing as { qtyPrecision?: number }).qtyPrecision : undefined,
   );
   // Applies to future drawings of this tool, not this one — read from/written
   // to `toolDefaults`, never to the drawing's own persisted fields.
@@ -219,7 +234,7 @@ function Form({
       setRiskIsPercent(drawing.riskIsPercent ?? false);
       setLeverage(drawing.leverage);
       setLotSize(drawing.lotSize ?? 1);
-      setQtyPrecision(drawing.qtyPrecision ?? 3);
+      setQtyPrecision(drawing.qtyPrecision);
       const toolDefaults = useChartStore.getState().toolDefaults[drawing.kind] as
         | { defaultRiskReward?: number; defaultZoneDistancePct?: number }
         | undefined;
@@ -386,6 +401,7 @@ function Form({
 
       {tab === "inputs" && isPosition && (
         <PositionInputsTab
+          symbol={drawing.symbol}
           tickSize={tickSize}
           entry={entry} target={target} stop={stop}
           onEntry={setEntry} onTarget={setTarget} onStop={setStop}
@@ -395,20 +411,31 @@ function Form({
           leverage={leverage} onLeverage={setLeverage}
           lotSize={lotSize} onLotSize={setLotSize}
           qtyPrecision={qtyPrecision} onQtyPrecision={setQtyPrecision}
-          defaultRiskReward={defaultRiskReward} onDefaultRiskReward={setDefaultRiskReward}
-          defaultZoneDistancePct={defaultZoneDistancePct} onDefaultZoneDistancePct={setDefaultZoneDistancePct}
         />
       )}
 
       <div className="mt-2 flex items-center justify-between border-t border-tv-border pt-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onDelete}
-          className="text-tv-red hover:bg-tv-red/10 hover:text-tv-red"
-        >
-          Delete
-        </Button>
+        <div className="flex items-center gap-2">
+          {isPosition && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1 rounded border border-tv-border px-2 py-1 text-[11px] text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text">
+                Template
+                <ChevronDown className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-tv-panel">
+                <DropdownMenuItem>Default template</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="text-tv-red hover:bg-tv-red/10 hover:text-tv-red"
+          >
+            Delete
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -620,6 +647,7 @@ function CoordinatesTab({
  * unusable for entering more than one value.
  */
 function PositionInputsTab({
+  symbol,
   tickSize,
   entry, target, stop,
   onEntry, onTarget, onStop,
@@ -629,9 +657,8 @@ function PositionInputsTab({
   leverage, onLeverage,
   lotSize, onLotSize,
   qtyPrecision, onQtyPrecision,
-  defaultRiskReward, onDefaultRiskReward,
-  defaultZoneDistancePct, onDefaultZoneDistancePct,
 }: {
+  symbol: string;
   tickSize: number;
   entry: number; target: number; stop: number;
   onEntry: (v: number) => void; onTarget: (v: number) => void; onStop: (v: number) => void;
@@ -640,62 +667,78 @@ function PositionInputsTab({
   riskIsPercent: boolean; onRiskIsPercent: (v: boolean) => void;
   leverage?: number; onLeverage: (v: number | undefined) => void;
   lotSize: number; onLotSize: (v: number) => void;
-  qtyPrecision: number; onQtyPrecision: (v: number) => void;
-  defaultRiskReward: number; onDefaultRiskReward: (v: number) => void;
-  defaultZoneDistancePct: number; onDefaultZoneDistancePct: (v: number) => void;
+  qtyPrecision: number | undefined; onQtyPrecision: (v: number | undefined) => void;
 }) {
+  const quoteCurrency = deriveQuoteCurrency(symbol);
   return (
     <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-tv-text-dim">
-        Position sizing
-      </div>
-      <OptionalNumberField label="Account size" value={accountSize} onChange={onAccountSize} placeholder="Not set" />
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-tv-text">Risk</span>
-        <div className="flex items-center gap-1">
-          <DraftNumberInput value={risk} onChange={onRisk} placeholder="Not set" className="w-24" />
-          <div className="flex items-center rounded border border-tv-border">
-            <button
-              onClick={() => onRiskIsPercent(false)}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center text-[11px]",
-                !riskIsPercent ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted",
-              )}
-            >
-              $
-            </button>
-            <button
-              onClick={() => onRiskIsPercent(true)}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center text-[11px]",
-                riskIsPercent ? "bg-tv-blue/15 text-tv-blue-text" : "text-tv-text-muted",
-              )}
-            >
-              %
-            </button>
-          </div>
+        <span className="text-xs text-tv-text">Account size</span>
+        <div className="flex items-center gap-1.5">
+          <DraftNumberInput value={accountSize} onChange={onAccountSize} placeholder="Not set" className="w-24" />
+          <Select value="default" disabled>
+            <SelectTrigger size="sm" className="h-7 w-[4.5rem] px-2 text-[11px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
-      <OptionalNumberField label="Leverage" value={leverage} onChange={onLeverage} placeholder="Not set" />
+
       <NumberField label="Lot size" value={lotSize} onChange={onLotSize} />
-      <NumberField label="Qty precision" value={qtyPrecision} onChange={(v) => onQtyPrecision(Math.max(0, Math.round(v)))} />
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-tv-text">Risk</span>
+        <div className="flex items-center gap-1.5">
+          <DraftNumberInput value={risk} onChange={onRisk} placeholder="Not set" className="w-24" />
+          <Select
+            value={riskIsPercent ? "percent" : "currency"}
+            onValueChange={(v) => onRiskIsPercent(v === "percent")}
+          >
+            <SelectTrigger size="sm" className="h-7 w-[4.5rem] px-2 text-[11px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="currency">{quoteCurrency}</SelectItem>
+              <SelectItem value="percent">%</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <NumberFieldStepped label="Entry price" value={entry} onChange={onEntry} step={tickSize} />
+      <OptionalNumberFieldStepped label="Leverage" value={leverage} onChange={onLeverage} step={1} placeholder="Not set" />
 
       <div className="mt-1 border-t border-tv-border pt-2 text-[10px] font-semibold uppercase tracking-wide text-tv-text-dim">
-        Prices
+        Profit level
       </div>
-      <NumberField label="Entry price" value={entry} onChange={onEntry} />
-      <PricePlusTicks label="Profit (target)" entry={entry} level={target} tickSize={tickSize} onLevel={onTarget} />
-      <PricePlusTicks label="Stop" entry={entry} level={stop} tickSize={tickSize} onLevel={onStop} />
+      <PricePlusTicks entry={entry} level={target} tickSize={tickSize} onLevel={onTarget} />
 
       <div className="mt-1 border-t border-tv-border pt-2 text-[10px] font-semibold uppercase tracking-wide text-tv-text-dim">
-        Defaults for new positions
+        Stop level
       </div>
-      <NumberField label="Risk:reward" value={defaultRiskReward} onChange={(v) => onDefaultRiskReward(v > 0 ? v : 1)} />
-      <NumberField
-        label="Zone distance %"
-        value={defaultZoneDistancePct}
-        onChange={(v) => onDefaultZoneDistancePct(v > 0 ? v : 16)}
-      />
+      <PricePlusTicks entry={entry} level={stop} tickSize={tickSize} onLevel={onStop} />
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-tv-text">Qty precision</span>
+        <Select
+          value={qtyPrecision === undefined ? "default" : String(qtyPrecision)}
+          onValueChange={(v) => onQtyPrecision(v === "default" ? undefined : Number(v))}
+        >
+          <SelectTrigger size="sm" className="h-7 w-[4.5rem] px-2 text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Default</SelectItem>
+            <SelectItem value="0">0</SelectItem>
+            <SelectItem value="1">1</SelectItem>
+            <SelectItem value="2">2</SelectItem>
+            <SelectItem value="3">3</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }
@@ -740,22 +783,82 @@ function NumberField({
   );
 }
 
-/** Same as `NumberField`, but `undefined` is a valid ("not set") value. */
-function OptionalNumberField({
+/** Small up/down stepper used next to a number input (entry price, leverage). */
+function StepperButtons({ onStep }: { onStep: (dir: 1 | -1) => void }) {
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        onClick={() => onStep(1)}
+        className="flex h-3.5 w-4 items-center justify-center rounded-t border border-b-0 border-tv-border text-tv-text-muted hover:bg-tv-panel-hover"
+      >
+        <ChevronUp className="size-2.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onStep(-1)}
+        className="flex h-3.5 w-4 items-center justify-center rounded-b border border-tv-border text-tv-text-muted hover:bg-tv-panel-hover"
+      >
+        <ChevronDown className="size-2.5" />
+      </button>
+    </div>
+  );
+}
+
+/** Same as `NumberField`, plus a stepper that nudges the value by `step`. */
+function NumberFieldStepped({
   label,
   value,
   onChange,
+  step,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  step: number;
+}) {
+  const [draft, setDraft] = useSyncedDraft(value, (v) => String(v));
+  return (
+    <label className="flex items-center justify-between gap-3">
+      <span className="text-xs text-tv-text">{label}</span>
+      <div className="flex items-center gap-1">
+        <Input
+          type="number"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            const n = parseFloat(draft);
+            if (!isNaN(n)) onChange(n);
+          }}
+          className="w-28 bg-tv-bg text-right tabular-nums"
+        />
+        <StepperButtons onStep={(dir) => onChange(value + dir * step)} />
+      </div>
+    </label>
+  );
+}
+
+/** Same as `NumberFieldStepped`, but `undefined` is a valid ("not set") value. */
+function OptionalNumberFieldStepped({
+  label,
+  value,
+  onChange,
+  step,
   placeholder,
 }: {
   label: string;
   value: number | undefined;
   onChange: (n: number | undefined) => void;
+  step: number;
   placeholder?: string;
 }) {
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs text-tv-text">{label}</span>
-      <DraftNumberInput value={value} onChange={onChange} placeholder={placeholder} className="w-32" />
+      <div className="flex items-center gap-1">
+        <DraftNumberInput value={value} onChange={onChange} placeholder={placeholder} className="w-28" />
+        <StepperButtons onStep={(dir) => onChange(Math.max(0, (value ?? 0) + dir * step))} />
+      </div>
     </label>
   );
 }
@@ -791,16 +894,14 @@ function DraftNumberInput({
   );
 }
 
-/** Paired Price + Ticks fields — editing either recomputes the other via
+/** Paired Ticks + Price fields — editing either recomputes the other via
  *  `tickSize`, both driving the same `level` (target or stop) price. */
 function PricePlusTicks({
-  label,
   entry,
   level,
   tickSize,
   onLevel,
 }: {
-  label: string;
   entry: number;
   level: number;
   tickSize: number;
@@ -811,19 +912,9 @@ function PricePlusTicks({
   const [ticksDraft, setTicksDraft] = useSyncedDraft(ticks, (v) => String(v));
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-xs text-tv-text">{label}</span>
-      <div className="flex items-center gap-1.5">
-        <Input
-          type="number"
-          value={priceDraft}
-          onChange={(e) => setPriceDraft(e.target.value)}
-          onBlur={() => {
-            const n = parseFloat(priceDraft);
-            if (!isNaN(n)) onLevel(n);
-          }}
-          className="w-24 bg-tv-bg text-right tabular-nums"
-        />
+    <>
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-xs text-tv-text">Ticks</span>
         <Input
           type="number"
           value={ticksDraft}
@@ -832,11 +923,23 @@ function PricePlusTicks({
             const n = parseFloat(ticksDraft);
             if (!isNaN(n) && tickSize > 0) onLevel(entry + n * tickSize);
           }}
-          className="w-20 bg-tv-bg text-right tabular-nums"
-          title="Ticks from entry"
+          className="w-32 bg-tv-bg text-right tabular-nums"
         />
-      </div>
-    </div>
+      </label>
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-xs text-tv-text">Price</span>
+        <Input
+          type="number"
+          value={priceDraft}
+          onChange={(e) => setPriceDraft(e.target.value)}
+          onBlur={() => {
+            const n = parseFloat(priceDraft);
+            if (!isNaN(n)) onLevel(n);
+          }}
+          className="w-32 bg-tv-bg text-right tabular-nums"
+        />
+      </label>
+    </>
   );
 }
 
