@@ -33,6 +33,7 @@ import {
   paperDisplaySymbol,
   positionFiguresAt,
   PNL_DISPLAY_MODES,
+  PNL_MODE_LABEL,
 } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { totalUnrealizedPnl, unrealizedPnl, positionRoi, usedMargin } from "@/lib/trading/paper-engine";
@@ -356,7 +357,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
                 : "text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text",
             )}
           >
-            {m === "MONEY" ? "Money" : m === "TICKS" ? "Ticks" : "%"}
+            {PNL_MODE_LABEL[m]}
           </button>
         ))}
       </div>

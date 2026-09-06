@@ -11,6 +11,14 @@ export type PnlDisplayMode = "MONEY" | "TICKS" | "PERCENT";
 
 export const PNL_DISPLAY_MODES: PnlDisplayMode[] = ["MONEY", "TICKS", "PERCENT"];
 
+/** Button labels for the panel's uPnL unit toggle, exhaustive over the union
+ *  so a new mode can't silently render as "%". */
+export const PNL_MODE_LABEL: Record<PnlDisplayMode, string> = {
+  MONEY: "Money",
+  TICKS: "Ticks",
+  PERCENT: "%",
+};
+
 /** Narrows a value off a persisted blob to a known mode, so a stale or
  *  hand-edited one falls back to the default instead of rendering blank. */
 export function isPnlDisplayMode(v: unknown): v is PnlDisplayMode {
