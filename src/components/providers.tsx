@@ -11,6 +11,7 @@ import { usePaperExposureFeed } from "@/hooks/usePaperExposureFeed";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AlertsToast } from "@/components/alerts/AlertsToast";
 import { PaperTradeToasts } from "@/components/trading/PaperTradeToasts";
+import { LoginDialog } from "@/components/auth/LoginDialog";
 
 function CloudSyncInner({ children }: { children: React.ReactNode }) {
   useCloudSync();
@@ -25,6 +26,7 @@ function CloudSyncInner({ children }: { children: React.ReactNode }) {
       {children}
       <AlertsToast />
       <PaperTradeToasts />
+      <LoginDialog />
     </>
   );
 }

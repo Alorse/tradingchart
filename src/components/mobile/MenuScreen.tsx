@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   ChevronRight,
   KeyRound,
@@ -16,7 +15,6 @@ import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useAlertsStore } from "@/lib/store/alerts-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
 import { useAuth } from "@/lib/supabase/auth-context";
-import { LoginDialog } from "@/components/auth/LoginDialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,8 +26,7 @@ export function MenuScreen() {
   const testnet = useTradingStore((s) => s.testnet);
   const exchange = useTradingStore((s) => s.exchange);
   const openSheet = useMobileStore((s) => s.openSheet);
-  const { user, signOut } = useAuth();
-  const [loginOpen, setLoginOpen] = useState(false);
+  const { user, signOut, promptLogin } = useAuth();
   const exLabel = exchange === "bybit" ? "Bybit" : "Binance";
   const activeAlerts = useAlertsStore((s) => s.alerts.filter((a) => a.enabled).length);
   const activeDrawingAlerts = useDrawingsStore(
@@ -99,14 +96,13 @@ export function MenuScreen() {
           </button>
         ) : (
           <button
-            onClick={() => setLoginOpen(true)}
+            onClick={promptLogin}
             className="flex w-full items-center justify-center gap-2 rounded border border-tv-border px-3 py-2.5 text-sm text-tv-text active:bg-tv-panel-hover"
           >
             Login
           </button>
         )}
       </div>
-      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
     </div>
   );
 }

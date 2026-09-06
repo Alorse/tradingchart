@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Bell, LogOut, Redo2, Rewind, Settings2, Undo2 } from "lucide-react";
 import { SymbolSelector } from "@/components/chart/SymbolSelector";
 import { TimeframeSelector } from "@/components/chart/TimeframeSelector";
@@ -13,11 +12,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useReplayStore } from "@/lib/replay/replay-store";
-import { LoginDialog } from "@/components/auth/LoginDialog";
 
 export function Header() {
-  const { user, loading, signOut } = useAuth();
-  const [loginOpen, setLoginOpen] = useState(false);
+  const { user, loading, signOut, promptLogin } = useAuth();
   const { undo, redo } = useDrawings();
   const setChartSettingsOpen = useChartStore((s) => s.setChartSettingsOpen);
   const openAlertDialog = useChartStore((s) => s.openAlertDialog);
@@ -142,7 +139,7 @@ export function Header() {
             <>
               <Separator orientation="vertical" className="h-6 bg-tv-border-strong" />
               <button
-                onClick={() => setLoginOpen(true)}
+                onClick={promptLogin}
                 className="rounded px-2 py-1 text-xs font-medium text-tv-text-muted hover:bg-tv-panel-hover hover:text-tv-text"
               >
                 Login
@@ -151,7 +148,6 @@ export function Header() {
           )
         )}
       </div>
-      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
     </header>
   );
 }
