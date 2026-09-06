@@ -13,7 +13,7 @@ import { DrawHandle } from "./DrawHandle";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
-import { xToTime, timeframeToSeconds } from "@/lib/chart/coords";
+import { xToTime, timeToX, timeframeToSeconds } from "@/lib/chart/coords";
 import { useChartStore } from "@/lib/store/chart-store";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import { TV_PINE } from "@/lib/chart/theme";
@@ -144,10 +144,14 @@ export function PositionDraw({
   // ticks mutate it in place) rather than plumbed through props — same
   // 1s cadence as BarCountdown, and never persisted (derived-only).
   const [markPrice, setMarkPrice] = useState<number | null>(null);
+  const [markTime, setMarkTime] = useState<number | null>(null);
   useEffect(() => {
     const id = setInterval(() => {
       const last = globalCandlesRef.current[globalCandlesRef.current.length - 1];
-      if (last) setMarkPrice(last.close);
+      if (last) {
+        setMarkPrice(last.close);
+        setMarkTime(last.time);
+      }
     }, 1000);
     return () => clearInterval(id);
   }, []);
@@ -310,6 +314,18 @@ export function PositionDraw({
     markPrice !== null && hasMoneyStats
       ? openPnlCurrency(drawing.entry, markPrice, qty!, side, pointValue)
       : null;
+
+  // Open-P&L connector — entry point to the live mark price, gated the same
+  // as the rest of the money stats so a purely-geometric drawing (no
+  // account/risk set) never shows a phantom connector to nowhere.
+  const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
+  const markX =
+    chart && markTime !== null
+      ? timeToX(chart, markTime, globalCandlesRef.current, intervalSec)
+      : null;
+  const markY =
+    markPrice !== null && candleSeries ? candleSeries.priceToCoordinate(markPrice) : null;
+  const showConnector = hasMoneyStats && markX !== null && markY !== null;
 
   // 1R/2R/3R… guide lines — legacy behavior, now opt-in (default off) so the
   // native TV look ships by default.
@@ -497,6 +513,25 @@ export function PositionDraw({
         strokeDasharray={lineDash(drawing.lineStyle)}
         style={{ pointerEvents: "none" }}
       />
+
+      {/* Open P&L connector — thin dashed grey line from entry to the live
+          mark price, capped with a small "x" at the current-price end. */}
+      {showConnector && (
+        <g style={{ pointerEvents: "none" }}>
+          <line
+            x1={xA} y1={yEntry} x2={markX!} y2={markY!}
+            stroke="var(--color-tv-text-muted)" strokeWidth={1} strokeDasharray="2,3"
+          />
+          <line
+            x1={markX! - 5} y1={markY! - 5} x2={markX! + 5} y2={markY! + 5}
+            stroke="var(--color-tv-text-muted)" strokeWidth={1.5}
+          />
+          <line
+            x1={markX! - 5} y1={markY! + 5} x2={markX! + 5} y2={markY! - 5}
+            stroke="var(--color-tv-text-muted)" strokeWidth={1.5}
+          />
+        </g>
+      )}
 
       {/* Outer tags — above top zone, below bottom zone — visible on hover or selected */}
       {(hovered || selected) && (
