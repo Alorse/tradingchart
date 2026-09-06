@@ -1,5 +1,5 @@
 import { bracketSidesValid } from "@/lib/trading/paper-brackets";
-import { pnlAtExit } from "@/lib/trading/sizing";
+import { marginFor, pnlAtExit } from "@/lib/trading/sizing";
 
 /**
  * Paper-trading fills engine.
@@ -225,10 +225,14 @@ function closingSide(dir: PaperDirection): PaperSide {
   return dir === "LONG" ? "SELL" : "BUY";
 }
 
-/** Margin locked to hold `qty` at `price` on `leverage`x. */
-export function marginFor(qty: number, price: number, leverage: number): number {
-  if (leverage <= 0) return 0;
-  return (qty * price) / leverage;
+/** Re-exported so the engine's own callers (and its tests) read the margin
+ *  formula off the engine, while `sizing.ts` stays its single definition. */
+export { marginFor };
+
+/** The fee a fill of `qty` at `price` pays at `rate` — the same expression on
+ *  a market open, a close and a resting limit order's reserve. */
+function feeFor(qty: number, price: number, rate: number): number {
+  return qty * price * rate;
 }
 
 /**
@@ -443,7 +447,7 @@ function closeSlice(
   const fraction = isDust ? 1 : closedQty / position.qty;
   const releasedMargin = position.margin * fraction;
   const entryFeeShare = position.feesPaid * fraction;
-  const exitFee = closedQty * exitPrice * feeRate;
+  const exitFee = feeFor(closedQty, exitPrice, feeRate);
   const grossPnl = pnlAtExit(
     position.entryPrice,
     exitPrice,
@@ -584,7 +588,7 @@ function applyFill(
   // position over it.
   if (openQty > qty * DUST_QTY_TOLERANCE) {
     const margin = marginFor(openQty, price, leverage);
-    fee = openQty * price * feeRate;
+    fee = feeFor(openQty, price, feeRate);
     if (balance + 1e-9 < margin + fee) {
       // Nothing is applied: an order the account cannot margin is refused whole,
       // including any reducing leg it came bundled with.
@@ -711,7 +715,7 @@ export function placeLimitOrder(
   const leverage = clampLeverage(req.leverage, account.settings.defaultLeverage);
   const reserved =
     marginFor(req.qty, req.price, leverage) +
-    req.qty * req.price * account.settings.makerFeeRate;
+    feeFor(req.qty, req.price, account.settings.makerFeeRate);
   if (account.balance + 1e-9 < reserved) {
     return reject(account, req.symbol, "Insufficient paper balance");
   }
