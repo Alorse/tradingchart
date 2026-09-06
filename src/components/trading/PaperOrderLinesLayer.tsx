@@ -8,17 +8,17 @@ import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { unrealizedPnl } from "@/lib/trading/paper-engine";
 import { formatPnlDisplay, pnlDisplayValue } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
-import { TV_PINE } from "@/lib/chart/theme";
 import { useSeriesPriceLines, type PriceLineLevel } from "@/lib/chart/price-lines";
 import {
   CHIP_HEIGHT,
   LIQ_COLOR,
   SL_COLOR,
   TP_COLOR,
-  chipWidth,
   entryLineColor,
   layoutChipsRightToLeft,
-  stopEvt,
+  outlineChip,
+  pnlCloseChip,
+  solidChip,
 } from "./chart-chips";
 import type { Chip } from "./chart-chips";
 import {
@@ -198,77 +198,23 @@ function EntryToolbarRow({
   const chips: Chip[] = [];
 
   // Rightmost: P&L merged with the close (×) button into one outlined box.
-  const pnlW = chipWidth(pnlStr);
-  const closeW = 20;
-  const mergedW = pnlW + closeW;
-  chips.push({
-    w: mergedW,
-    el: (x) => (
-      <g key="pnl-close">
-        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} />
-        <text x={x + pnlW / 2} y={y + 4} fill={pnlColor} fontSize={11} fontFamily="var(--font-mono), monospace" textAnchor="middle">{pnlStr}</text>
-        <line x1={x + pnlW} x2={x + pnlW} y1={yTop} y2={yTop + H} stroke={entryColor} strokeWidth={1} />
-        <text x={x + pnlW + closeW / 2} y={y + 4} fill={entryColor} fontSize={13} fontWeight="bold" textAnchor="middle">×</text>
-        <rect
-          x={x + pnlW}
-          y={yTop}
-          width={closeW}
-          height={H}
-          fill="transparent"
-          style={{ pointerEvents: "all", cursor: "pointer" }}
-          onMouseDown={stopEvt}
-          onClick={(e) => { stopEvt(e); onClose(); }}
-        />
-      </g>
-    ),
-  });
+  chips.push(pnlCloseChip({ y, yTop, h: H, pnlStr, pnlColor, borderColor: entryColor, onClose }));
 
-  // Reverse (⇄) button.
-  const reverseW = 24;
-  chips.push({
-    w: reverseW,
-    el: (x) => (
-      <g
-        key="reverse"
-        style={{ pointerEvents: "all", cursor: "pointer" }}
-        onMouseDown={stopEvt}
-        onClick={(e) => { stopEvt(e); onReverse(); }}
-      >
-        <rect x={x} y={yTop} width={reverseW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} />
-        <text x={x + reverseW / 2} y={y + 4} fill={entryColor} fontSize={12} fontWeight="bold" textAnchor="middle">⇄</text>
-      </g>
-    ),
-  });
+  chips.push(outlineChip({
+    key: "reverse", label: "⇄", color: entryColor, y, yTop, h: H, fontSize: 12, onClick: onReverse,
+  }));
 
-  // Edit TP/SL button.
-  const editW = chipWidth("TP/SL");
-  chips.push({
-    w: editW,
-    el: (x) => (
-      <g
-        key="edit"
-        style={{ pointerEvents: "all", cursor: "pointer" }}
-        onMouseDown={stopEvt}
-        onClick={(e) => { stopEvt(e); onEdit(); }}
-      >
-        <rect x={x} y={yTop} width={editW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} strokeDasharray="3,2" />
-        <text x={x + editW / 2} y={y + 4} fill={entryColor} fontSize={11} fontWeight="bold" textAnchor="middle">TP/SL</text>
-      </g>
-    ),
-  });
+  chips.push(outlineChip({
+    key: "edit", label: "TP/SL", color: entryColor, y, yTop, h: H, dashed: true, onClick: onEdit,
+  }));
 
   // Side + qty chip (solid).
-  const sizeStr = `${isLong ? "Long" : "Short"} ${position.qty}`;
-  const sizeW = chipWidth(sizeStr);
-  chips.push({
-    w: sizeW,
-    el: (x) => (
-      <g key="size">
-        <rect x={x} y={yTop} width={sizeW} height={H} rx={3} fill={entryColor} />
-        <text x={x + sizeW / 2} y={y + 4} fill={TV_PINE.white} fontSize={11} fontWeight="bold" fontFamily="var(--font-mono), monospace" textAnchor="middle">{sizeStr}</text>
-      </g>
-    ),
-  });
+  chips.push(solidChip({
+    key: "size",
+    label: `${isLong ? "Long" : "Short"} ${position.qty}`,
+    fill: entryColor,
+    y, yTop, h: H,
+  }));
 
   const { placed, lineEnd } = layoutChipsRightToLeft(chips, width);
 

@@ -23,6 +23,9 @@ import {
   chipWidth,
   entryLineColor,
   layoutChipsRightToLeft,
+  outlineChip,
+  pnlCloseChip,
+  solidChip,
   stopEvt,
 } from "./chart-chips";
 import type { Chip } from "./chart-chips";
@@ -332,28 +335,7 @@ function bracketChip(
   h: number,
   onMouseDown: (e: React.MouseEvent) => void,
 ) {
-  const w = chipWidth(label);
-  return {
-    w,
-    el: (x: number) => (
-      <g
-        key={key}
-        style={{ pointerEvents: "all", cursor: "ns-resize" }}
-        onMouseDown={onMouseDown}
-      >
-        <rect
-          x={x} y={yTop} width={w} height={h} rx={3}
-          fill={TV_PINE.pillFill} stroke={color} strokeDasharray="3,2"
-        />
-        <text
-          x={x + w / 2} y={y + 4}
-          fill={color} fontSize={11} fontWeight="bold" textAnchor="middle"
-        >
-          {label}
-        </text>
-      </g>
-    ),
-  };
+  return outlineChip({ key, label, color, y, yTop, h, dashed: true, cursor: "ns-resize", onMouseDown });
 }
 
 interface PendingCtl {
@@ -392,46 +374,17 @@ function EntryToolbarRow({
   // box (black fill, blue border), separated by a thin divider — not two
   // separate boxes with a gap.
   const pnlStr = `${pnlPct >= 0 ? "+" : "−"}${Math.abs(pnlPct).toFixed(2)}%`;
-  const pnlColor = pnlPct >= 0 ? TP_COLOR : LIQ_COLOR;
-  const pnlW = chipWidth(pnlStr);
-  const closeW = 20;
-  const mergedW = pnlW + closeW;
-  chips.push({
-    w: mergedW,
-    el: (x) => (
-      <g key="pnl-close">
-        <rect x={x} y={yTop} width={mergedW} height={H} rx={3} fill={TV_PINE.pillFill} stroke={entryColor} />
-        <text x={x + pnlW / 2} y={y + 4} fill={pnlColor} fontSize={11} fontFamily="var(--font-mono), monospace" textAnchor="middle">{pnlStr}</text>
-        <line x1={x + pnlW} x2={x + pnlW} y1={yTop} y2={yTop + H} stroke={entryColor} strokeWidth={1} />
-        <text x={x + pnlW + closeW / 2} y={y + 4} fill={entryColor} fontSize={13} fontWeight="bold" textAnchor="middle">×</text>
-        <rect
-          x={x + pnlW}
-          y={yTop}
-          width={closeW}
-          height={H}
-          fill="transparent"
-          style={{ pointerEvents: "all", cursor: "pointer" }}
-          onMouseDown={stopEvt}
-          onClick={(e) => { stopEvt(e); onClose?.(); }}
-        />
-      </g>
-    ),
-  });
+  chips.push(pnlCloseChip({
+    y, yTop, h: H,
+    pnlStr,
+    pnlColor: pnlPct >= 0 ? TP_COLOR : LIQ_COLOR,
+    borderColor: entryColor,
+    onClose: () => onClose?.(),
+  }));
 
   // Position size.
-  const sizeStr = String(qty);
-  const sizeW = chipWidth(sizeStr);
-  chips.push({
-    w: sizeW,
-    el: (x) => (
-      <g key="size">
-        <rect x={x} y={yTop} width={sizeW} height={H} rx={3} fill={entryColor} />
-        <text x={x + sizeW / 2} y={y + 4} fill={TV_PINE.white} fontSize={11} fontWeight="bold" fontFamily="var(--font-mono), monospace" textAnchor="middle">{sizeStr}</text>
-      </g>
-    ),
-  });
+  chips.push(solidChip({ key: "size", label: String(qty), fill: entryColor, y, yTop, h: H }));
 
-  // Bracket placement chips, to the left of the size chip.
   if (onPlaceSl) chips.push(bracketChip("place-sl", "SL", SL_COLOR, y, yTop, H, onPlaceSl));
   if (onPlaceTp) chips.push(bracketChip("place-tp", "TP", TP_COLOR, y, yTop, H, onPlaceTp));
 
