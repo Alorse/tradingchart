@@ -53,17 +53,16 @@ export interface PaperFeedExposure {
  */
 export function paperFeedExposure(account: PaperAccount): PaperFeedExposure {
   const owners = new Map<string, string>();
-  for (const p of account.positions) {
-    if (typeof p.feedSymbol === "string" && p.feedSymbol) {
-      const key = stripExchangePrefix(p.feedSymbol);
-      if (!owners.has(key)) owners.set(key, p.feedSymbol);
-    }
-  }
-  for (const o of account.orders) {
-    if (o.status === "NEW" && typeof o.feedSymbol === "string" && o.feedSymbol) {
-      const key = stripExchangePrefix(o.feedSymbol);
-      if (!owners.has(key)) owners.set(key, o.feedSymbol);
-    }
+  // Positions before resting orders, so a position's feed claims the key
+  // first — the "only one venue per key" rule described above.
+  const exposed: Array<{ feedSymbol: string | null }> = [
+    ...account.positions,
+    ...account.orders.filter((o) => o.status === "NEW"),
+  ];
+  for (const row of exposed) {
+    if (typeof row.feedSymbol !== "string" || !row.feedSymbol) continue;
+    const key = stripExchangePrefix(row.feedSymbol);
+    if (!owners.has(key)) owners.set(key, row.feedSymbol);
   }
 
   const exposure: PaperFeedExposure = { binance: [], bybit: [] };
