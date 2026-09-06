@@ -143,30 +143,6 @@ export function FloatingContextToolbar({ containerSize, onOpenSettings }: Props)
         </>
       )}
 
-      {/* Position drawings: E / S / T color pickers */}
-      {isPosition && (
-        <Seg gap>
-          <MiniColorLabel label="E">
-            <SwatchPicker
-              value={drawing.color ?? TV_PINE.neutral}
-              onChange={(c) => patch({ color: c })}
-            />
-          </MiniColorLabel>
-          <MiniColorLabel label="S">
-            <SwatchPicker
-              value={(drawing as { stopColor?: string }).stopColor ?? TV_PINE.red}
-              onChange={(c) => patch({ stopColor: c } as Partial<Drawing>)}
-            />
-          </MiniColorLabel>
-          <MiniColorLabel label="T">
-            <SwatchPicker
-              value={(drawing as { targetColor?: string }).targetColor ?? TV_PINE.green}
-              onChange={(c) => patch({ targetColor: c } as Partial<Drawing>)}
-            />
-          </MiniColorLabel>
-        </Seg>
-      )}
-
       {isPosition && (
         <>
           <Sep />
@@ -267,15 +243,6 @@ function LockBtn({ drawing, onPatch }: { drawing: Drawing; onPatch: (p: Partial<
     >
       {locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
     </button>
-  );
-}
-
-function MiniColorLabel({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col items-center gap-px">
-      <span className="text-[7px] font-bold uppercase tracking-wider text-tv-text-muted/60">{label}</span>
-      {children}
-    </div>
   );
 }
 
