@@ -13,7 +13,7 @@ import { DrawHandle } from "./DrawHandle";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
-import { xToTime, timeframeToSeconds } from "@/lib/chart/coords";
+import { xToTime, timeToX, timeframeToSeconds } from "@/lib/chart/coords";
 import { useChartStore } from "@/lib/store/chart-store";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import { TV_PINE } from "@/lib/chart/theme";
@@ -82,7 +82,7 @@ function OuterPill({
       <rect
         x={cx - w / 2} y={pillY}
         width={w} height={h}
-        fill={color} rx={3}
+        fill={color} rx={6}
       />
       <text
         x={cx} y={pillY + h / 2 + 4}
@@ -119,7 +119,9 @@ export function PositionDraw({
   // TV's own long/short tool fills the zones with a fairly solid wash rather
   // than the near-transparent 0x20 (~12%) hex-alpha suffix this used before.
   const ZONE_OPACITY = 0.28;
-  const textColor = drawing.textColor ?? TV_PINE.pillText;
+  // TV's own tool renders solid, opaque label boxes with white text, not the
+  // dark pillText this used to default to (still overridable per-drawing).
+  const textColor = drawing.textColor ?? TV_PINE.white;
   const textSize = drawing.textSize ?? 11;
   const showRMultiples = drawing.showRMultiples ?? false;
 
@@ -144,10 +146,14 @@ export function PositionDraw({
   // ticks mutate it in place) rather than plumbed through props — same
   // 1s cadence as BarCountdown, and never persisted (derived-only).
   const [markPrice, setMarkPrice] = useState<number | null>(null);
+  const [markTime, setMarkTime] = useState<number | null>(null);
   useEffect(() => {
     const id = setInterval(() => {
       const last = globalCandlesRef.current[globalCandlesRef.current.length - 1];
-      if (last) setMarkPrice(last.close);
+      if (last) {
+        setMarkPrice(last.close);
+        setMarkTime(last.time);
+      }
     }, 1000);
     return () => clearInterval(id);
   }, []);
@@ -310,6 +316,18 @@ export function PositionDraw({
     markPrice !== null && hasMoneyStats
       ? openPnlCurrency(drawing.entry, markPrice, qty!, side, pointValue)
       : null;
+
+  // Open-P&L connector — entry point to the live mark price, gated the same
+  // as the rest of the money stats so a purely-geometric drawing (no
+  // account/risk set) never shows a phantom connector to nowhere.
+  const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
+  const markX =
+    chart && markTime !== null
+      ? timeToX(chart, markTime, globalCandlesRef.current, intervalSec)
+      : null;
+  const markY =
+    markPrice !== null && candleSeries ? candleSeries.priceToCoordinate(markPrice) : null;
+  const showConnector = hasMoneyStats && markX !== null && markY !== null;
 
   // 1R/2R/3R… guide lines — legacy behavior, now opt-in (default off) so the
   // native TV look ships by default.
@@ -498,6 +516,25 @@ export function PositionDraw({
         style={{ pointerEvents: "none" }}
       />
 
+      {/* Open P&L connector — thin dashed grey line from entry to the live
+          mark price, capped with a small "x" at the current-price end. */}
+      {showConnector && (
+        <g style={{ pointerEvents: "none" }}>
+          <line
+            x1={xA} y1={yEntry} x2={markX!} y2={markY!}
+            stroke="var(--color-tv-text-muted)" strokeWidth={1} strokeDasharray="2,3"
+          />
+          <line
+            x1={markX! - 5} y1={markY! - 5} x2={markX! + 5} y2={markY! + 5}
+            stroke="var(--color-tv-text-muted)" strokeWidth={1.5}
+          />
+          <line
+            x1={markX! - 5} y1={markY! + 5} x2={markX! + 5} y2={markY! - 5}
+            stroke="var(--color-tv-text-muted)" strokeWidth={1.5}
+          />
+        </g>
+      )}
+
       {/* Outer tags — above top zone, below bottom zone — visible on hover or selected */}
       {(hovered || selected) && (
         <>
@@ -518,7 +555,7 @@ export function PositionDraw({
           {compact ? (
             <>
               {entryRowSegments.length > 0 && (
-                <EntryRowText x={textX} y={yEntry - 4} fontSize={textSize} segments={entryRowSegments} gap="  " />
+                <EntryStatsBox x={textX} y={yEntry} fontSize={textSize} segments={entryRowSegments} gap="  " boxColor={profitColor} textColor={textColor} />
               )}
               {targetRowParts.length > 0 && profitZoneH > 14 && (
                 <text x={textX} y={profitCenterY + 4} textAnchor="middle" fill={profitColor} fontSize={textSize} fontWeight="700">
@@ -534,7 +571,7 @@ export function PositionDraw({
           ) : (
             <>
               {entryRowSegments.length > 0 && (
-                <EntryRowText x={textX} y={yEntry - 4} fontSize={textSize} segments={entryRowSegments} gap="   " />
+                <EntryStatsBox x={textX} y={yEntry} fontSize={textSize} segments={entryRowSegments} gap="   " boxColor={profitColor} textColor={textColor} />
               )}
               {targetRowParts.length > 0 && profitZoneH > 32 && (
                 <text x={textX} y={profitCenterY + (profitZoneH > 56 ? -2 : 4)} textAnchor="middle" fill={profitColor} fontSize={textSize} fontWeight="700" opacity={0.9}>
@@ -572,21 +609,34 @@ export function PositionDraw({
   );
 }
 
-/** Entry stats row: each segment keeps its own color (Open P&L is
- *  movement-colored; qty/R:R stay neutral) inside one centered text run. */
-function EntryRowText({
-  x, y, fontSize, segments, gap,
+/**
+ * Entry stats box: an opaque rounded pill straddling the entry line, matching
+ * TradingView's solid label style — white text on the profit color, rather
+ * than the per-segment movement-colored text this used to render bare (no
+ * box) directly over the chart.
+ */
+function EntryStatsBox({
+  x, y, fontSize, segments, gap, boxColor, textColor,
 }: {
   x: number; y: number; fontSize: number; segments: { text: string; color: string }[]; gap: string;
+  boxColor: string; textColor: string;
 }) {
+  const text = segments.map((s) => s.text).join(gap);
+  const charW = fontSize * 0.62;
+  const padX = 10;
+  const h = 19;
+  const w = Math.max(text.length * charW + padX * 2, 60);
   return (
-    <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fontWeight="700">
-      {segments.map((s, i) => (
-        <tspan key={i} fill={s.color}>
-          {i > 0 ? gap : ""}
-          {s.text}
-        </tspan>
-      ))}
-    </text>
+    <g>
+      <rect x={x - w / 2} y={y - h / 2} width={w} height={h} fill={boxColor} rx={6} />
+      <text
+        x={x} y={y + 4}
+        textAnchor="middle" fontSize={fontSize} fontWeight="700"
+        fill={textColor}
+        fontFamily="var(--font-mono), monospace"
+      >
+        {text}
+      </text>
+    </g>
   );
 }
