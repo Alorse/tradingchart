@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePaperTradingStore, PAPER_STORAGE_KEY } from "@/lib/store/paper-trading-store";
+import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useAuth } from "./auth-context";
 import { loadPaperAccount, savePaperAccount } from "./paper-account-data";
 
@@ -47,15 +47,14 @@ export function usePaperAccountSync() {
   const account = usePaperTradingStore((s) => s.account);
 
   // ── Wipe local paper state on sign-out / user switch ───────────────────
-  // The account persists to localStorage under one un-namespaced key
-  // (PAPER_STORAGE_KEY), so signing out used to leave whatever the last
-  // signed-in user was trading sitting in this browser's storage — visible
-  // to the next person who opens the app on this device before signing in,
-  // and liable to bleed into a *different* user's account on their own
-  // sign-in via the "no cloud row yet, push local up" branch below, if that
-  // runs before their own load lands. Runs before the load-on-sign-in effect
-  // clears `initializedRef` (both fire off the same `user` change), so a
-  // fresh sign-in always starts from a clean local slate.
+  // The account persists to localStorage under one un-namespaced key, so
+  // signing out used to leave whatever the last signed-in user was trading
+  // sitting in this browser's storage — visible to the next person who opens
+  // the app on this device before signing in, and liable to bleed into a
+  // *different* user's account on their own sign-in via the "no cloud row
+  // yet, push local up" branch below, if that runs before their own load
+  // lands. Declared first so it runs before the two effects below on the same
+  // `user` change, leaving a fresh sign-in a clean local slate.
   useEffect(() => {
     const currentId = user?.id ?? null;
     // A *change* of signed-in id, not merely "signed out": covers a sign-out
@@ -64,7 +63,10 @@ export function usePaperAccountSync() {
     // be pushed up to a cloud row that doesn't exist yet.
     if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentId) {
       usePaperTradingStore.getState().resetAccount();
-      globalThis.localStorage.removeItem(PAPER_STORAGE_KEY);
+      // The store's own persist API, so the storage key and backend stay
+      // declared in one place (`paper-trading-store.ts`) rather than being
+      // re-stated here.
+      usePaperTradingStore.persist.clearStorage();
     }
     prevUserIdRef.current = currentId;
   }, [user]);
