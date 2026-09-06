@@ -31,7 +31,6 @@ import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { totalUnrealizedPnl } from "@/lib/trading/paper-engine";
 import type { PaperPosition } from "@/lib/trading/paper-engine";
 import type { Order } from "@/lib/binance/trading-types";
-import type { TradingMode } from "@/lib/store/trading-mode-store";
 
 /**
  * Mobile Trade tab — combined view with the order form on top and the user's
@@ -54,10 +53,8 @@ import type { TradingMode } from "@/lib/store/trading-mode-store";
  */
 export function TradeScreen() {
   const mode = useTradingModeStore((s) => s.mode);
-  const setMode = useTradingModeStore((s) => s.setMode);
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);
-  const setKeyDialogOpen = useTradingStore((s) => s.setApiKeyDialogOpen);
   const symbol = useChartStore((s) => s.symbol);
   // Account-wide, not scoped to the chart's current symbol — otherwise an
   // open position on a different symbol than the one charted would never
@@ -91,20 +88,13 @@ export function TradeScreen() {
   const totalEquity = balance.reduce((acc, b) => acc + b.free + b.locked, 0);
   const unrealizedPnL = activePositions.reduce((acc, p) => acc + p.unrealizedProfit, 0);
 
-  function handleModeChange(next: TradingMode) {
-    setMode(next);
-    if (next === "live" && (!apiKey || !apiSecret)) {
-      setKeyDialogOpen(true);
-    }
-  }
-
   // Paper mode: the live order form, live positions/orders and the live-only
   // position-edit panel are all unreachable — only the paper equivalents
   // render, matching desktop's `TradePanel` gate (finding 1).
   if (mode !== "live") {
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        <TradeModeToggle mode={mode} onChange={handleModeChange} />
+        <TradeModeToggle />
         <div className="flex-1 overflow-y-auto">
           <div className="shrink-0 border-b border-tv-border">
             <PaperOrderPanel key={symbol} />
@@ -128,7 +118,7 @@ export function TradeScreen() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <TradeModeToggle mode={mode} onChange={handleModeChange} />
+      <TradeModeToggle />
       {/* Stats */}
       {connected && (
         <div className="grid shrink-0 grid-cols-3 gap-2 border-b border-tv-border bg-tv-panel px-3 py-2 text-[11px]">
