@@ -43,13 +43,12 @@ import type { Order } from "@/lib/binance/trading-types";
  * gate when not connected.
  *
  * Gated on `trading-mode-store` the same way desktop's `TradePanel` is: the
- * live order form/positions/orders (and the live-only position-edit panel)
- * are unreachable whenever `mode !== "live"` — this used to render the live
- * `OrderPanel` and live close/cancel buttons unconditionally, so a mobile
- * user who had switched to Paper could still fire real orders (finding 1).
- * The paper branch reuses `PaperOrderPanel` and `PaperPositionsPanel` as-is:
- * neither has hover-only affordances, so both work on touch unmodified (see
- * CLAUDE.md's "Responsive shell" reuse checklist).
+ * live order form, live positions/orders and the live-only position-edit
+ * panel are all unreachable whenever `mode !== "live"`, so the Paper toggle
+ * is what decides whether this screen can place a real order at all. The
+ * paper branch reuses `PaperOrderPanel` as-is (no hover-only affordances, so
+ * it works on touch unmodified) but renders its own `PaperTradeSection`:
+ * desktop's positions *table* doesn't reflow onto a phone width.
  */
 export function TradeScreen() {
   const mode = useTradingModeStore((s) => s.mode);
@@ -88,9 +87,9 @@ export function TradeScreen() {
   const totalEquity = balance.reduce((acc, b) => acc + b.free + b.locked, 0);
   const unrealizedPnL = activePositions.reduce((acc, p) => acc + p.unrealizedProfit, 0);
 
-  // Paper mode: the live order form, live positions/orders and the live-only
-  // position-edit panel are all unreachable — only the paper equivalents
-  // render, matching desktop's `TradePanel` gate (finding 1).
+  // Inverted on purpose (checks "live", not "paper"), matching `TradePanel`:
+  // any unrecognized mode must fail closed to the paper branch, never to the
+  // one that can place real orders.
   if (mode !== "live") {
     return (
       <div className="flex h-full flex-col overflow-hidden">

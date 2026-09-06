@@ -351,16 +351,13 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // mounted once in providers.tsx for every symbol the account has exposure
   // to — not just this chart's — so a position stays live while a different
   // symbol is charted.
-  // Live credentials can still be configured while the Trade tab is toggled
-  // to Paper — OrderLinesLayer draws/drags/right-click-modifies the LIVE
-  // account's orders and positions, so it's unmounted outright rather than
-  // just hidden, since its price lines are created imperatively in an effect
-  // (a JSX-level `return null` inside it wouldn't stop those). The paper
-  // layer is gated symmetrically on the opposite mode: it used to mount
-  // unconditionally, so a live-mode chart carried dashed "(paper)" lines from
-  // a simulated position over the real orders (holistic review finding 6),
-  // and — being effect-driven the same way — it has to be unmounted, not
-  // hidden, for those lines to actually go away.
+  // Selects which of the two order-line layers is mounted below. Live
+  // credentials can still be configured while the Trade tab is toggled to
+  // Paper, so each layer is gated on its own mode — otherwise a chart carries
+  // the other account's lines on top of its own. Both create their price
+  // lines imperatively in an effect, so each has to be *unmounted* rather
+  // than hidden: a JSX-level `return null` inside them wouldn't tear those
+  // lines down.
   const tradingMode = useTradingModeStore((s) => s.mode);
   const isMobile = useIsMobile();
 
