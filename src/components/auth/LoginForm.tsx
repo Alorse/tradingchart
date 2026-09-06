@@ -11,19 +11,34 @@ type Mode = "magic" | "password" | "signup";
  * `/login` and inside `LoginDialog`'s overlay — success is signalled purely
  * through Supabase's own `onAuthStateChange` (consumed by `AuthProvider`), so
  * this component never hard-navigates.
+ *
+ * `notice` is an error the *caller* already knows about before the user has
+ * touched anything — currently the `/login?error=auth` the auth callback
+ * redirects to when the code exchange fails. It clears as soon as the user
+ * acts, so a stale "authentication failed" can't sit above a form that has
+ * since succeeded.
  */
-export function LoginForm({ onSuccess }: { onSuccess?: () => void }) {
+export function LoginForm({
+  onSuccess,
+  notice,
+}: {
+  onSuccess?: () => void;
+  notice?: string;
+}) {
   const [mode, setMode] = useState<Mode>("magic");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [error, setError] = useState("");
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
   const supabase = createClient();
+  const showNotice = !!notice && !noticeDismissed && !error;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("loading");
     setError("");
+    setNoticeDismissed(true);
 
     if (mode === "magic") {
       const { error } = await supabase.auth.signInWithOtp({
@@ -85,13 +100,22 @@ export function LoginForm({ onSuccess }: { onSuccess?: () => void }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
+          {showNotice && (
+            <p
+              role="alert"
+              className="rounded-lg border border-tv-red/30 bg-tv-red/10 p-3 text-center text-xs text-tv-red"
+            >
+              {notice}
+            </p>
+          )}
+
           {/* Mode tabs */}
           <div className="flex rounded-lg border border-tv-border bg-tv-panel p-1">
             {(["magic", "password", "signup"] as Mode[]).map((m) => (
               <button
                 key={m}
                 type="button"
-                onClick={() => { setMode(m); setError(""); setStatus("idle"); }}
+                onClick={() => { setMode(m); setError(""); setStatus("idle"); setNoticeDismissed(true); }}
                 className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
                   mode === m
                     ? "bg-tv-blue text-white"
