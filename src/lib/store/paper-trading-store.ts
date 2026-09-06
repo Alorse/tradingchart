@@ -123,6 +123,38 @@ function isQuote(price: number | undefined): price is number {
   return price !== undefined && Number.isFinite(price) && price > 0;
 }
 
+/**
+ * The price a manual action should transact at: the caller's explicit price if
+ * it gave one, else the symbol's last live mark. `null` when neither is a
+ * usable quote, which is every such action's bail-out condition.
+ */
+function quoteFor(
+  marks: Record<string, number>,
+  symbol: string,
+  price?: number,
+): number | null {
+  const quote = price ?? marks[symbol];
+  return isQuote(quote) ? quote : null;
+}
+
+/**
+ * `marks` with `symbol` marked at `price`, reusing the existing object when
+ * the value is unchanged — a repeated tick must not hand subscribers a fresh
+ * identity and re-render them.
+ */
+function withMark(
+  marks: Record<string, number>,
+  symbol: string,
+  price: number,
+): Record<string, number> {
+  return marks[symbol] === price ? marks : { ...marks, [symbol]: price };
+}
+
+/** Narrows an unknown persisted blob to something with readable fields. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 function isFiniteNumber(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n);
 }
@@ -154,7 +186,7 @@ const PAPER_ORDER_STATUSES = new Set(["NEW", "FILLED", "CANCELED"]);
  * for the whole session (holistic review finding 3).
  */
 function isValidPersistedPosition(p: unknown): p is PaperPosition {
-  if (typeof p !== "object" || p === null) return false;
+  if (!isRecord(p)) return false;
   const pos = p as Partial<PaperPosition>;
   return (
     isFiniteNumber(pos.qty) &&
@@ -171,7 +203,7 @@ function isValidPersistedPosition(p: unknown): p is PaperPosition {
 }
 
 function isValidPersistedOrder(o: unknown): o is PaperOrder {
-  if (typeof o !== "object" || o === null) return false;
+  if (!isRecord(o)) return false;
   const ord = o as Partial<PaperOrder>;
   return (
     isFiniteNumber(ord.price) &&
@@ -186,7 +218,7 @@ function isValidPersistedOrder(o: unknown): o is PaperOrder {
 /** The fields the History table renders — a non-finite one shows up as
  *  "NaN USDT" in a row that can never be corrected. */
 function isValidPersistedTrade(t: unknown): t is PaperTrade {
-  if (typeof t !== "object" || t === null) return false;
+  if (!isRecord(t)) return false;
   const trade = t as Partial<PaperTrade>;
   return (
     isFiniteNumber(trade.realizedPnl) &&
@@ -202,7 +234,7 @@ function isValidPersistedTrade(t: unknown): t is PaperTrade {
  *  string or NaN left in place would rehydrate straight into every fee/margin
  *  calculation that reads `settings` (adversarial re-audit finding 4). */
 function sanitizePersistedSettings(raw: unknown): Partial<PaperSettings> {
-  if (typeof raw !== "object" || raw === null) return {};
+  if (!isRecord(raw)) return {};
   const settings = raw as Record<string, unknown>;
   const out: Partial<PaperSettings> = {};
   for (const key of Object.keys(DEFAULT_PAPER_SETTINGS) as (keyof PaperSettings)[]) {
@@ -267,14 +299,14 @@ export const usePaperTradingStore = create<PaperTradingState>()(
 
       placeOrder: (req, price) => {
         const { account, marks } = get();
-        const quote = price ?? marks[req.symbol];
-        if (!isQuote(quote)) return;
+        const quote = quoteFor(marks, req.symbol, price);
+        if (quote === null) return;
         const res = fillMarketOrder(account, req, quote, Date.now());
         set({
           account: res.account,
           // The fill price is a quote by definition, so it seeds the mark and
           // equity is meaningful before the first socket tick arrives.
-          marks: marks[req.symbol] === quote ? marks : { ...marks, [req.symbol]: quote },
+          marks: withMark(marks, req.symbol, quote),
           lastEvents: res.events,
         });
       },
@@ -291,16 +323,16 @@ export const usePaperTradingStore = create<PaperTradingState>()(
 
       closePosition: (symbol, price, qty) => {
         const { account, marks } = get();
-        const quote = price ?? marks[symbol];
-        if (!isQuote(quote)) return;
+        const quote = quoteFor(marks, symbol, price);
+        if (quote === null) return;
         const res = engineClosePosition(account, symbol, quote, Date.now(), qty);
         set({ account: res.account, lastEvents: res.events });
       },
 
       reversePosition: (symbol, price, qty) => {
         const { account, marks } = get();
-        const quote = price ?? marks[symbol];
-        if (!isQuote(quote)) return;
+        const quote = quoteFor(marks, symbol, price);
+        if (quote === null) return;
         const res = engineReversePosition(account, symbol, quote, Date.now(), qty);
         set({ account: res.account, lastEvents: res.events });
       },
@@ -328,7 +360,7 @@ export const usePaperTradingStore = create<PaperTradingState>()(
           account.orders.some((o) => o.symbol === symbol);
         if (!relevant) return;
 
-        const nextMarks = marks[symbol] === price ? marks : { ...marks, [symbol]: price };
+        const nextMarks = withMark(marks, symbol, price);
         const res = engineEvaluateTick(account, symbol, price, Date.now());
         // Identical price, nothing triggered: leave every reference alone so
         // subscribed components don't re-render on a repeated tick. A tick
