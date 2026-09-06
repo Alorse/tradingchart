@@ -7,6 +7,14 @@ A crypto charting platform built on **Binance**'s public data (WebSocket) and th
 
 ---
 
+## 📸 Screenshots
+
+| Desktop | Mobile |
+|:---:|:---:|
+| <img src="docs/screenshots/desktop.png" alt="TradingChart desktop" width="640"> | <img src="docs/screenshots/mobile.png" alt="TradingChart mobile" width="240"> |
+
+---
+
 ## 🙏 Based on
 
 This project descends from two prior open-source efforts. The earliest MVP —
