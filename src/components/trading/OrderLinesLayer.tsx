@@ -12,14 +12,14 @@ import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { pnlAtExit } from "@/lib/trading/sizing";
 import type { Order, Position } from "@/lib/binance/trading-types";
 import { TV_PINE } from "@/lib/chart/theme";
+import { AXIS_GAP, CHIP_HEIGHT, chipWidth, layoutChipsRightToLeft, stopEvt } from "./chart-chips";
+import type { Chip } from "./chart-chips";
 
 /** Bybit-style colors. Limit is always blue regardless of side. */
 const LIMIT_COLOR = TV_PINE.blue;
 const TP_COLOR = TV_PINE.green;
 const SL_COLOR = TV_PINE.amber;
 const LIQ_COLOR = TV_PINE.liquidation;
-/** Gap kept between the labels/toolbar and the price scale on the right. */
-const AXIS_GAP = 48;
 
 interface Props {
   chart: IChartApi | null;
@@ -309,13 +309,6 @@ function LineRow({
   );
 }
 
-function stopEvt(e: React.MouseEvent) {
-  e.preventDefault();
-  e.stopPropagation();
-}
-
-const chipWidth = (s: string) => Math.max(s.length * 7 + 12, 24);
-
 /**
  * "Place a TP/SL" chip. Shown only while that bracket is unset; pressing it
  * starts a drag that positions the new level (a plain click drops it at a
@@ -379,10 +372,9 @@ function EntryToolbarRow({
   onPlaceTp?: (e: React.MouseEvent) => void;
   onPlaceSl?: (e: React.MouseEvent) => void;
 }) {
-  const H = 20;
-  const GAP = 4;
+  const H = CHIP_HEIGHT;
   const yTop = y - 10;
-  const chips: { w: number; el: (x: number) => React.ReactNode }[] = [];
+  const chips: Chip[] = [];
   // Short entries read red end-to-end (line, chips) instead of the long's
   // blue, so the direction is legible at a glance without reading the label.
   const entryColor = side === "SELL" ? LIQ_COLOR : LIMIT_COLOR;
@@ -468,15 +460,7 @@ function EntryToolbarRow({
     });
   }
 
-  // Lay chips out right→left, kept clear of the price scale.
-  let x = width - AXIS_GAP;
-  const placed: React.ReactNode[] = [];
-  for (const c of chips) {
-    x -= c.w;
-    placed.push(c.el(x));
-    x -= GAP;
-  }
-  const lineEnd = Math.max(0, x);
+  const { placed, lineEnd } = layoutChipsRightToLeft(chips, width);
 
   return (
     <g>
@@ -507,10 +491,9 @@ function PreviewOrderRow({
   onCancel?: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
 }) {
-  const H = 20;
-  const GAP = 4;
+  const H = CHIP_HEIGHT;
   const yTop = y - 10;
-  const chips: { w: number; el: (x: number) => React.ReactNode }[] = [];
+  const chips: Chip[] = [];
 
   // Rightmost: [qty | type | ×] merged into one outlined box with dividers.
   const qtyStr = qty > 0 ? String(qty) : "—";
@@ -561,14 +544,7 @@ function PreviewOrderRow({
     ),
   });
 
-  let x = width - AXIS_GAP;
-  const placed: React.ReactNode[] = [];
-  for (const c of chips) {
-    x -= c.w;
-    placed.push(c.el(x));
-    x -= GAP;
-  }
-  const lineEnd = Math.max(0, x);
+  const { placed, lineEnd } = layoutChipsRightToLeft(chips, width);
 
   return (
     <g>

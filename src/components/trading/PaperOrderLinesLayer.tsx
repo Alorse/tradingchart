@@ -9,6 +9,8 @@ import { unrealizedPnl } from "@/lib/trading/paper-engine";
 import { formatPnlDisplay, pnlDisplayValue } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { TV_PINE } from "@/lib/chart/theme";
+import { CHIP_HEIGHT, chipWidth, layoutChipsRightToLeft, stopEvt } from "./chart-chips";
+import type { Chip } from "./chart-chips";
 import {
   ClosePositionDialog,
   EditPositionDialog,
@@ -22,8 +24,6 @@ const SELL_COLOR = TV_PINE.liquidation;
 const TP_COLOR = TV_PINE.green;
 const SL_COLOR = TV_PINE.amber;
 const LIQ_COLOR = TV_PINE.liquidation;
-/** Gap kept between the toolbar and the price scale on the right, same as `OrderLinesLayer`. */
-const AXIS_GAP = 48;
 
 interface Level {
   id: string;
@@ -214,13 +214,6 @@ export function PaperOrderLinesLayer({
   );
 }
 
-function stopEvt(e: React.MouseEvent) {
-  e.preventDefault();
-  e.stopPropagation();
-}
-
-const chipWidth = (s: string) => Math.max(s.length * 7 + 12, 24);
-
 /**
  * The paper position's entry line: a TradingView-style chip toolbar — side +
  * qty, live uPnL, and [Edit] [Reverse] [×] buttons — laid out right-to-left
@@ -240,8 +233,7 @@ function EntryToolbarRow({
   onReverse: () => void;
   onClose: () => void;
 }) {
-  const H = 20;
-  const GAP = 4;
+  const H = CHIP_HEIGHT;
   const yTop = y - 10;
   const isLong = position.side === "LONG";
   const entryColor = isLong ? LIMIT_COLOR : SELL_COLOR;
@@ -250,7 +242,7 @@ function EntryToolbarRow({
   const pnlColor = pnl >= 0 ? TP_COLOR : LIQ_COLOR;
   const pnlStr = formatPnlDisplay(displayPnl, pnlDisplayMode);
 
-  const chips: { w: number; el: (x: number) => React.ReactNode }[] = [];
+  const chips: Chip[] = [];
 
   // Rightmost: P&L merged with the close (×) button into one outlined box.
   const pnlW = chipWidth(pnlStr);
@@ -325,14 +317,7 @@ function EntryToolbarRow({
     ),
   });
 
-  let x = width - AXIS_GAP;
-  const placed: React.ReactNode[] = [];
-  for (const c of chips) {
-    x -= c.w;
-    placed.push(c.el(x));
-    x -= GAP;
-  }
-  const lineEnd = Math.max(0, x);
+  const { placed, lineEnd } = layoutChipsRightToLeft(chips, width);
 
   return (
     <g>
