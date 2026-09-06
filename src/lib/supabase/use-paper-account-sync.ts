@@ -73,13 +73,14 @@ export function usePaperAccountSync() {
   useEffect(() => {
     if (!user || initializedRef.current) return;
     initializedRef.current = true;
+    const userId = user.id;
 
     loadPaperAccount()
       .then((cloud) => {
         if (cloud) {
           usePaperTradingStore.getState().setAccount(cloud);
         } else {
-          savePaperAccount(usePaperTradingStore.getState().account);
+          savePaperAccount(userId, usePaperTradingStore.getState().account);
         }
         loadedRef.current = true;
       })
@@ -106,7 +107,7 @@ export function usePaperAccountSync() {
   useEffect(() => {
     if (!user || !loadedRef.current) return;
     const timer = setTimeout(() => {
-      savePaperAccount(account);
+      savePaperAccount(user.id, account);
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [user, account]);

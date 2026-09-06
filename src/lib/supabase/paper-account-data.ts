@@ -29,12 +29,22 @@ export async function loadPaperAccount(): Promise<PaperAccount | null> {
   return sanitizePaperAccount(data.state);
 }
 
-export async function savePaperAccount(account: PaperAccount) {
+/**
+ * Takes the signed-in `userId` from the caller rather than calling
+ * `supabase.auth.getUser()` for it: that is not a local read — it round-trips
+ * to the auth server on every call — so each debounced save was two
+ * sequential requests instead of one, for an id `usePaperAccountSync` already
+ * holds via `useAuth()`. RLS (`auth.uid() = user_id`) is what authorizes the
+ * row. Same reasoning as the save functions in `user-data.ts`.
+ */
+export async function savePaperAccount(userId: string, account: PaperAccount) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase.from("user_paper_accounts").upsert(
-    { user_id: user.id, state: account, updated_at: new Date().toISOString() },
+  const { error } = await supabase.from("user_paper_accounts").upsert(
+    { user_id: userId, state: account, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   );
+  // supabase-js returns its errors rather than throwing, so an RLS rejection
+  // or a failed write would otherwise leave no trace at all — asymmetric with
+  // the loader above, which is deliberately loud about the same failures.
+  if (error) console.error("Failed to save paper account to Supabase", error);
 }
