@@ -11,6 +11,15 @@ export function utcDateKey(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Move since the UTC-midnight open, or null until both sides are known. */
+export function dailyChange(
+  price: number | undefined,
+  open: number | undefined,
+): { amount: number; pct: number } | null {
+  if (price === undefined || !open) return null;
+  return { amount: price - open, pct: ((price - open) / open) * 100 };
+}
+
 async function fetchDayOpen(symbol: string): Promise<number | null> {
   try {
     // The current (still-forming) 1d candle's open is the UTC-midnight open.

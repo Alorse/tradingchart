@@ -12,7 +12,8 @@ export interface WatchSort {
 
 export interface WatchRow {
   price: number;
-  pct: number;
+  /** Undefined while the change baseline is still loading — sorted as unknown. */
+  pct?: number;
 }
 
 interface ItemLike {
@@ -35,10 +36,7 @@ export function sortWatchlistItems<T extends ItemLike>(
     const r = rows[i.value];
     if (!r) return missing;
     const v = sort.key === "price" ? r.price : r.pct;
-    // A symbol whose daily-change baseline hasn't loaded yet reports pct as
-    // NaN rather than being absent from `rows` (price is still known) — treat
-    // it the same as a missing row so it doesn't corrupt the sort order.
-    return Number.isNaN(v) ? missing : v;
+    return v ?? missing;
   };
 
   return [...symbols].sort((a, b) => {

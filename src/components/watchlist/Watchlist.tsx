@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 import { fetchTickers24h, cleanSym } from "@/lib/binance/rest";
 import { fetchBybitTickers24h } from "@/lib/bybit/public";
-import { sortWatchlistItems, cycleSort } from "@/lib/watchlist/sort";
-import { getDailyOpens } from "@/lib/watchlist/daily-open";
+import { sortWatchlistItems, cycleSort, type WatchRow } from "@/lib/watchlist/sort";
+import { getDailyOpens, dailyChange } from "@/lib/watchlist/daily-open";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { resolveSource } from "@/lib/symbols/source";
@@ -304,15 +304,14 @@ export function Watchlist() {
     });
   }, [items, collapsed]);
 
-  // Sort input: price straight from `rows`, but "change" is the daily pct
-  // (price vs UTC-midnight open) rather than `rows`' own field, so a symbol
-  // whose daily open hasn't loaded yet is treated as missing (sorted last)
-  // instead of by a rolling-24h number it no longer displays.
+  // Sort input: "change" sorts on the daily pct (price vs UTC-midnight open),
+  // not `rows`' own rolling-24h field, which is no longer displayed. A symbol
+  // whose open hasn't loaded leaves pct undefined so the sorter ranks it as
+  // unknown, while its price still sorts normally.
   const sortRows = useMemo(() => {
-    const out: Record<string, { price: number; pct: number }> = {};
+    const out: Record<string, WatchRow> = {};
     for (const [sym, r] of Object.entries(rows)) {
-      const open = dailyOpens[sym];
-      out[sym] = { price: r.price, pct: open ? ((r.price - open) / open) * 100 : NaN };
+      out[sym] = { price: r.price, pct: dailyChange(r.price, dailyOpens[sym])?.pct };
     }
     return out;
   }, [rows, dailyOpens]);
