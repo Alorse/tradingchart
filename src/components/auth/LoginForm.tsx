@@ -7,16 +7,18 @@ import { TrendingUp } from "lucide-react";
 type Mode = "magic" | "password" | "signup";
 
 /**
- * Sign-in form (magic link / password / signup). Used both full-screen on
- * `/login` and inside `LoginDialog`'s overlay — success is signalled purely
- * through Supabase's own `onAuthStateChange` (consumed by `AuthProvider`), so
- * this component never hard-navigates.
+ * Sign-in form (magic link / password / signup). Rendered both full-screen on
+ * `/login` and inside `LoginDialog`'s overlay. Magic-link and signup finish on
+ * the "check your email" panel; only a password login completes in place, and
+ * that is when `onSuccess` fires.
  */
 export function LoginForm({ onSuccess }: { onSuccess?: () => void }) {
   const [mode, setMode] = useState<Mode>("magic");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  // No "error" state: an error renders from `error` alone, and the form looks
+  // the same as it does at rest, so the two would always be set together.
+  const [status, setStatus] = useState<"idle" | "loading" | "sent">("idle");
   const [error, setError] = useState("");
   const supabase = createClient();
 
@@ -25,42 +27,22 @@ export function LoginForm({ onSuccess }: { onSuccess?: () => void }) {
     setStatus("loading");
     setError("");
 
-    if (mode === "magic") {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: `${location.origin}/auth/callback` },
-      });
-      if (error) {
-        setError(error.message);
-        setStatus("error");
-      } else {
-        setStatus("sent");
-      }
-      return;
-    }
+    const options = { emailRedirectTo: `${location.origin}/auth/callback` };
+    const { error } =
+      mode === "magic"
+        ? await supabase.auth.signInWithOtp({ email, options })
+        : mode === "signup"
+          ? await supabase.auth.signUp({ email, password, options })
+          : await supabase.auth.signInWithPassword({ email, password });
 
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: `${location.origin}/auth/callback` },
-      });
-      if (error) {
-        setError(error.message);
-        setStatus("error");
-      } else {
-        setStatus("sent");
-      }
-      return;
-    }
-
-    // password login
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError(error.message);
-      setStatus("error");
-    } else {
+      setStatus("idle");
+    } else if (mode === "password") {
+      // The only mode that signs in right here; the other two wait on an email.
       onSuccess?.();
+    } else {
+      setStatus("sent");
     }
   }
 
