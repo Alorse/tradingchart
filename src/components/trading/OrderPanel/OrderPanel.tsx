@@ -14,7 +14,7 @@ import {
   ticksBetween,
   type SizingCtx,
 } from "@/lib/trading/sizing";
-import { isPerp } from "@/lib/binance/rest";
+import { cleanSym, isPerp } from "@/lib/binance/rest";
 import { getBaseAsset } from "@/components/watchlist/CoinIcon";
 import { cn } from "@/lib/utils";
 import type { Position, TimeInForce } from "@/lib/binance/trading-types";
@@ -146,7 +146,9 @@ export function OrderPanel() {
     return <PositionEditPanel symbol={editingPosition.symbol} position={editingPosition.position} />;
   }
 
-  const cleanSymForSummary = symbol.replace(/\.P$/, "");
+  // `cleanSym`, not a bare `.P` strip: a Bybit-charted ticker also carries a
+  // `BYBIT:` prefix, which would otherwise read "0.5 BYBIT:SOLUSDT MARKET".
+  const cleanSymForSummary = cleanSym(symbol);
   const priceLabel = `${form.qty || "0"} ${cleanSymForSummary} ${form.type === "LIMIT" ? `@ ${form.price || "—"} LIMIT` : form.type}`;
 
   return (
