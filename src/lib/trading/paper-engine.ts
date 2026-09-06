@@ -211,9 +211,15 @@ function directionOf(side: PaperSide): PaperDirection {
   return side === "BUY" ? "LONG" : "SHORT";
 }
 
+/** The order side that *opened* a position pointing this way — what
+ *  `pnlAtExit` signs its result by. Inverse of `directionOf`. */
+function entrySide(dir: PaperDirection): PaperSide {
+  return dir === "LONG" ? "BUY" : "SELL";
+}
+
 /** The order side that closes a position pointing this way. */
 function closingSide(dir: PaperDirection): PaperSide {
-  return dir === "LONG" ? "SELL" : "BUY";
+  return entrySide(dir) === "BUY" ? "SELL" : "BUY";
 }
 
 /** Margin locked to hold `qty` at `price` on `leverage`x. */
@@ -268,12 +274,7 @@ export function liquidationPriceFromMargin(
 /** Signed P&L (USDT) if the position exits at `price`. */
 export function unrealizedPnl(position: PaperPosition, price: number): number {
   if (!isPositive(price)) return 0;
-  return pnlAtExit(position.entryPrice, price, position.qty, closingSideEntry(position.side));
-}
-
-/** The *entry* side of a direction — what `pnlAtExit` signs its result by. */
-function closingSideEntry(dir: PaperDirection): PaperSide {
-  return dir === "LONG" ? "BUY" : "SELL";
+  return pnlAtExit(position.entryPrice, price, position.qty, entrySide(position.side));
 }
 
 /** Unrealized P&L over the position's initial margin (true ROI, not a
@@ -309,11 +310,7 @@ export function usedMargin(account: PaperAccount): number {
  * ticked is worth what it cost).
  */
 export function equity(account: PaperAccount, marks: Record<string, number>): number {
-  const open = account.positions.reduce(
-    (s, p) => s + unrealizedPnl(p, marks[p.symbol] ?? p.entryPrice),
-    0,
-  );
-  return account.balance + usedMargin(account) + open;
+  return account.balance + usedMargin(account) + totalUnrealizedPnl(account.positions, marks);
 }
 
 /* ── account lifecycle ───────────────────────────────────────────────────── */
@@ -338,9 +335,39 @@ export function resetAccount(account: PaperAccount): PaperAccount {
 const MAX_FEE_RATE = 0.01;
 
 /** Inclusive on both ends. */
-function isFiniteInRange(n: unknown, min: number, max: number): n is number {
-  return typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+function isFiniteInRange(
+  n: unknown,
+  { min, max, exclusiveMin, exclusiveMax }: SettingRange,
+): n is number {
+  if (typeof n !== "number" || !Number.isFinite(n)) return false;
+  if (exclusiveMin ? n <= min : n < min) return false;
+  return exclusiveMax ? n < max : n <= max;
 }
+
+interface SettingRange {
+  min: number;
+  max: number;
+  exclusiveMin?: true;
+  exclusiveMax?: true;
+}
+
+/**
+ * The range each numeric setting has to land in to be accepted. `maintMarginRate`
+ * is capped *strictly* under 1/MAX_LEVERAGE: at exactly that value,
+ * `liquidationPrice`'s buffer clamps to zero for a position at that same
+ * leverage, liquidating it on its very first tick.
+ *
+ * `defaultLeverage` isn't here — it clamps rather than drops (see below).
+ */
+const SETTING_RANGES: Record<
+  "takerFeeRate" | "makerFeeRate" | "maintMarginRate" | "seedBalance",
+  SettingRange
+> = {
+  takerFeeRate: { min: 0, max: MAX_FEE_RATE },
+  makerFeeRate: { min: 0, max: MAX_FEE_RATE },
+  maintMarginRate: { min: 0, max: 1 / MAX_LEVERAGE, exclusiveMax: true },
+  seedBalance: { min: 0, max: Infinity, exclusiveMin: true },
+};
 
 /**
  * Patch the account's settings, leaving its balance and open state alone.
@@ -356,25 +383,9 @@ export function updateSettings(
   patch: Partial<PaperSettings>,
 ): PaperAccount {
   const settings = { ...account.settings };
-  if (isFiniteInRange(patch.takerFeeRate, 0, MAX_FEE_RATE)) {
-    settings.takerFeeRate = patch.takerFeeRate;
-  }
-  if (isFiniteInRange(patch.makerFeeRate, 0, MAX_FEE_RATE)) {
-    settings.makerFeeRate = patch.makerFeeRate;
-  }
-  // Strictly under 1/MAX_LEVERAGE, not inclusive: at exactly 1/MAX_LEVERAGE,
-  // `liquidationPrice`'s buffer clamps to zero for a position at that same
-  // leverage, liquidating it on its very first tick.
-  if (
-    typeof patch.maintMarginRate === "number" &&
-    Number.isFinite(patch.maintMarginRate) &&
-    patch.maintMarginRate >= 0 &&
-    patch.maintMarginRate < 1 / MAX_LEVERAGE
-  ) {
-    settings.maintMarginRate = patch.maintMarginRate;
-  }
-  if (typeof patch.seedBalance === "number" && Number.isFinite(patch.seedBalance) && patch.seedBalance > 0) {
-    settings.seedBalance = patch.seedBalance;
+  for (const key of Object.keys(SETTING_RANGES) as Array<keyof typeof SETTING_RANGES>) {
+    const value = patch[key];
+    if (isFiniteInRange(value, SETTING_RANGES[key])) settings[key] = value;
   }
   if (patch.defaultLeverage !== undefined) {
     // Reuses the same clamp a per-order leverage gets; a non-finite value
@@ -434,7 +445,7 @@ function closeSlice(
     position.entryPrice,
     exitPrice,
     closedQty,
-    closingSideEntry(position.side),
+    entrySide(position.side),
   );
   const realizedPnl = grossPnl - entryFeeShare - exitFee;
 
