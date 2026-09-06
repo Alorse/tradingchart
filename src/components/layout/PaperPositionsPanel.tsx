@@ -792,11 +792,10 @@ export function EditPositionDialog({
     // the engine does the same inside `setBrackets`, and a stale prop could
     // let a submit through that the engine would then silently re-clamp.
     const liveMark = markOf(usePaperTradingStore.getState().marks, position);
+    // Past the guard above, `warningAt` has already rejected any unparseable
+    // input, so both values are a real price or `null` (= remove the bracket).
     if (warningAt(liveMark)) return;
-    setBrackets(position.symbol, {
-      tp: tpValid ? tpNum : undefined,
-      sl: slValid ? slNum : undefined,
-    });
+    setBrackets(position.symbol, { tp: tpNum, sl: slNum });
     onOpenChange(false);
   }
 
