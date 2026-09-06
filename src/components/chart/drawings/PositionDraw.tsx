@@ -169,7 +169,7 @@ export function PositionDraw({
    */
   function makeYDrag(field: "entry" | "stop" | "target") {
     const resizesWidth = field === "entry";
-    return (e: React.MouseEvent) => {
+    return (e: React.PointerEvent<SVGElement>) => {
       if (!candleSeries || !container) return;
       if (resizesWidth && !chart) return;
       if (drawing.locked) return;
@@ -181,7 +181,9 @@ export function PositionDraw({
       onSelect();
       snap();
       const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
-      function onMove(ev: MouseEvent) {
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+      function onMove(ev: PointerEvent) {
         const rect = container!.getBoundingClientRect();
         const patch: Record<string, number> = {};
         const p = candleSeries!.coordinateToPrice(ev.clientY - rect.top);
@@ -194,19 +196,22 @@ export function PositionDraw({
           updateLive(drawing.id, patch as Partial<Drawing>);
         }
       }
-      function onUp() {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+      function onUp(ev: PointerEvent) {
+        target.releasePointerCapture(ev.pointerId);
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onUp);
+        target.removeEventListener("pointercancel", onUp);
         document.body.style.cursor = "";
         commitEnd();
       }
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onUp);
+      target.addEventListener("pointercancel", onUp);
       document.body.style.cursor = resizesWidth ? "move" : "ns-resize";
     };
   }
 
-  function onRightHandleDrag(e: React.MouseEvent) {
+  function onRightHandleDrag(e: React.PointerEvent<SVGElement>) {
     if (!chart || !container) return;
     if (drawing.locked) return;
     e.preventDefault();
@@ -214,21 +219,26 @@ export function PositionDraw({
     onSelect();
     snap();
     const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
-    function onMove(ev: MouseEvent) {
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    function onMove(ev: PointerEvent) {
       const rect = container!.getBoundingClientRect();
       const x = ev.clientX - rect.left;
       const t = xToTime(chart!, x, globalCandlesRef.current, intervalSec);
       if (t === null) return;
       updateLive(drawing.id, { timeB: t } as Partial<Drawing>);
     }
-    function onUp() {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+    function onUp(ev: PointerEvent) {
+      target.releasePointerCapture(ev.pointerId);
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
       document.body.style.cursor = "";
       commitEnd();
     }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
     document.body.style.cursor = "ew-resize";
   }
 
@@ -344,11 +354,38 @@ export function PositionDraw({
   const showStats = alwaysShowStats || hovered || selected;
   const compact = drawing.compactStats ?? false;
 
-  function onZoneMouseDown(e: React.MouseEvent) {
+  // Bounding-rect drag target — only live while selected, so the chart stays
+  // pannable/zoomable over an unselected drawing even when its box spans the
+  // whole viewport (a large timeB on a small timeframe covers the full
+  // width). Selecting is handled separately by the zones below.
+  function onBoundPointerDown(e: React.PointerEvent<SVGRectElement>) {
+    if (!selected) return;
     e.stopPropagation();
-    onSelect();
-    // Drag immediately — no need to click twice
     dragShape(e);
+  }
+
+  // Tap-to-select on the visible zones while unselected. A plain "click"
+  // handler isn't reliable here: the chart surface runs with
+  // `touch-action: none`, which — like everywhere else pointer events are
+  // used in this file — suppresses the synthesized compatibility mouse/click
+  // events on touch, so a click-only listener would silently never fire on
+  // mobile. Track the raw pointer down→up instead and only select if the
+  // gesture didn't move (a real drag). No preventDefault/stopPropagation on
+  // the initial pointerdown, so a genuine pan attempt starting on a zone is
+  // not actively blocked beyond the unavoidable hit-test capture itself.
+  function onZonePointerDown(e: React.PointerEvent<SVGRectElement>) {
+    if (selected) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    function onUp(ev: PointerEvent) {
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (dx * dx + dy * dy < 16) onSelect();
+    }
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }
 
   // ── Stats block rows ────────────────────────────────────────────────────
@@ -391,21 +428,36 @@ export function PositionDraw({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Bounding rect — hover + drag target for the whole drawing */}
+      {/* Bounding rect — hover + whole-drawing drag target, but only live
+          while selected: unselected, it stays pointer-events:none so a pan
+          gesture over a box spanning the whole viewport still reaches the
+          chart instead of starting a body-drag. */}
       <rect
         x={boundLeft} y={boundTop}
         width={zoneWidth + handleR * 2} height={boundBottom - boundTop}
         fill="transparent"
         className="drawing-hit"
-        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={onZoneMouseDown}
+        style={{ pointerEvents: selected ? "all" : "none", cursor: "move", touchAction: "none" }}
+        onPointerDown={onBoundPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
 
       {/* Colored zones — a solid-enough wash via a real alpha channel
-          (fillOpacity), not a truncated hex-alpha suffix. */}
-      <rect x={left} y={profitY1} width={zoneWidth} height={profitZoneH} fill={profitColor} fillOpacity={ZONE_OPACITY} style={{ pointerEvents: "none" }} />
-      <rect x={left} y={lossY1} width={zoneWidth} height={lossZoneH} fill={lossColor} fillOpacity={ZONE_OPACITY} style={{ pointerEvents: "none" }} />
+          (fillOpacity), not a truncated hex-alpha suffix. Only tap-to-select
+          while unselected; once selected, the bounding rect above takes over
+          the same area for dragging. */}
+      <rect
+        x={left} y={profitY1} width={zoneWidth} height={profitZoneH} fill={profitColor} fillOpacity={ZONE_OPACITY}
+        style={{ pointerEvents: selected ? "none" : "all", cursor: "pointer" }}
+        onPointerDown={selected ? undefined : onZonePointerDown}
+        onDoubleClick={selected ? undefined : (e) => { e.stopPropagation(); onEdit(); }}
+      />
+      <rect
+        x={left} y={lossY1} width={zoneWidth} height={lossZoneH} fill={lossColor} fillOpacity={ZONE_OPACITY}
+        style={{ pointerEvents: selected ? "none" : "all", cursor: "pointer" }}
+        onPointerDown={selected ? undefined : onZonePointerDown}
+        onDoubleClick={selected ? undefined : (e) => { e.stopPropagation(); onEdit(); }}
+      />
 
       {/* 1R/2R/3R… guide lines — opt-in, off by default */}
       {rLevels.map(({ n, y }) => (
@@ -504,16 +556,16 @@ export function PositionDraw({
           otherwise need to land first for the handle to exist to click on.
           Only their visibility is hover/selection-gated. */}
       <g style={{ opacity: hovered || selected ? 1 : 0, transition: "opacity 80ms" }}>
-        <DrawHandle x={left} y={yEntry} color={entryColor} selected={selected} onMouseDown={makeYDrag("entry")} />
-        <DrawHandle x={left} y={yStop} color={lossColor} selected={selected} shape="square" onMouseDown={makeYDrag("stop")} />
-        <DrawHandle x={left} y={yTarget} color={profitColor} selected={selected} shape="square" onMouseDown={makeYDrag("target")} />
+        <DrawHandle x={left} y={yEntry} color={entryColor} selected={selected} onPointerDown={makeYDrag("entry")} />
+        <DrawHandle x={left} y={yStop} color={lossColor} selected={selected} shape="square" onPointerDown={makeYDrag("stop")} />
+        <DrawHandle x={left} y={yTarget} color={profitColor} selected={selected} shape="square" onPointerDown={makeYDrag("target")} />
         <DrawHandle
           x={xB}
           y={(Math.min(profitY1, lossY1) + Math.max(profitY2, lossY2)) / 2}
           color={entryColor}
           selected={selected}
           shape="square"
-          onMouseDown={onRightHandleDrag}
+          onPointerDown={onRightHandleDrag}
         />
       </g>
     </g>
