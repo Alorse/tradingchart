@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { TV_PINE } from "@/lib/chart/theme";
 
 /**
  * Geometry and event helpers shared by the SVG chip toolbars both chart order
@@ -8,10 +9,27 @@ import type { ReactNode } from "react";
  * right-to-left from a gap short of the price scale, with the entry line
  * running from x=0 to wherever the leftmost chip starts.
  *
- * Keeping the geometry in one place is what stops the live and paper
- * toolbars drifting apart, which is the entire point of the paper layer
- * looking like the live one.
+ * Keeping the geometry — and the order-line palette below — in one place is
+ * what stops the live and paper toolbars drifting apart, which is the entire
+ * point of the paper layer looking like the live one.
  */
+
+/**
+ * Bybit-style order-line colours, from the frozen `TV_PINE` trading set (see
+ * CLAUDE.md "Color"): a resting limit is always blue regardless of side.
+ */
+export const LIMIT_COLOR = TV_PINE.blue;
+export const TP_COLOR = TV_PINE.green;
+export const SL_COLOR = TV_PINE.amber;
+export const LIQ_COLOR = TV_PINE.liquidation;
+
+/**
+ * Entry/limit line colour by direction. Blue for long/buy, red for
+ * short/sell — the *direction* axis, not the up/down movement one.
+ */
+export function entryLineColor(long: boolean): string {
+  return long ? LIMIT_COLOR : LIQ_COLOR;
+}
 
 /** Gap kept between the labels/toolbar and the price scale on the right. */
 export const AXIS_GAP = 48;

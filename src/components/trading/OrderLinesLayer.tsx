@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { IChartApi, ISeriesApi, IPriceLine } from "lightweight-charts";
+import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { useTradingStore } from "@/lib/store/trading-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { isPerp, cleanSym } from "@/lib/binance/rest";
@@ -12,14 +12,23 @@ import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { pnlAtExit } from "@/lib/trading/sizing";
 import type { Order, Position } from "@/lib/binance/trading-types";
 import { TV_PINE } from "@/lib/chart/theme";
-import { AXIS_GAP, CHIP_HEIGHT, chipWidth, layoutChipsRightToLeft, stopEvt } from "./chart-chips";
+import { useSeriesPriceLines } from "@/lib/chart/price-lines";
+import {
+  AXIS_GAP,
+  CHIP_HEIGHT,
+  LIMIT_COLOR,
+  LIQ_COLOR,
+  SL_COLOR,
+  TP_COLOR,
+  chipWidth,
+  entryLineColor,
+  layoutChipsRightToLeft,
+  stopEvt,
+} from "./chart-chips";
 import type { Chip } from "./chart-chips";
 
-/** Bybit-style colors. Limit is always blue regardless of side. */
-const LIMIT_COLOR = TV_PINE.blue;
-const TP_COLOR = TV_PINE.green;
-const SL_COLOR = TV_PINE.amber;
-const LIQ_COLOR = TV_PINE.liquidation;
+const NO_ORDERS: Order[] = [];
+const NO_POSITIONS: Position[] = [];
 
 interface Props {
   chart: IChartApi | null;
@@ -377,7 +386,7 @@ function EntryToolbarRow({
   const chips: Chip[] = [];
   // Short entries read red end-to-end (line, chips) instead of the long's
   // blue, so the direction is legible at a glance without reading the label.
-  const entryColor = side === "SELL" ? LIQ_COLOR : LIMIT_COLOR;
+  const entryColor = entryLineColor(side !== "SELL");
 
   // P&L percent merged with the close (×) button into ONE continuous outlined
   // box (black fill, blue border), separated by a thin divider — not two
@@ -533,7 +542,7 @@ function PreviewOrderRow({
   // Side chip (solid, like TradingView's Buy/Sell tag).
   const sideLabel = side === "BUY" ? "Buy" : "Sell";
   const sideW = chipWidth(sideLabel);
-  const sideColor = side === "BUY" ? LIMIT_COLOR : LIQ_COLOR;
+  const sideColor = entryLineColor(side === "BUY");
   chips.push({
     w: sideW,
     el: (x) => (
@@ -627,7 +636,7 @@ function computeAxisLevels(
     out.push({
       id: `${cleanedSym}-EP`,
       price: pos.entryPrice,
-      color: pos.positionAmt < 0 ? LIQ_COLOR : LIMIT_COLOR,
+      color: entryLineColor(pos.positionAmt >= 0),
     });
 
     const { tpOrder, slOrder } = findTpSlOrders(pos, orders, cleanedSym);
@@ -677,8 +686,11 @@ export function OrderLinesLayer({
   // a Bybit position never leaks its EP/SL lines onto the Binance chart (or
   // vice versa).
   const symbolMatchesExchange = resolveSource(symbol).kind === tradingExchange;
-  const orders = symbolMatchesExchange ? rawOrders : [];
-  const positions = symbolMatchesExchange ? rawPositions : [];
+  // Gated to the shared empties rather than fresh `[]` literals: these feed
+  // the `levels` memo below, which would otherwise recompute every render
+  // whenever the chart is on another venue's symbol.
+  const orders = symbolMatchesExchange ? rawOrders : NO_ORDERS;
+  const positions = symbolMatchesExchange ? rawPositions : NO_POSITIONS;
 
   // `renderTick` is already a prop from PriceChart — receiving it as a prop
   // re-renders this component on every chart pan/zoom without an extra hook.
@@ -695,64 +707,18 @@ export function OrderLinesLayer({
     x: number; y: number; pos: Position; field: "TP" | "SL"; onRemove: () => void;
   } | null>(null);
 
-  // Native price lines for EP/TP/SL/liquidation: these are drawn on the chart's
-  // own canvas (always in sync, no React-render lag) and span the FULL pane
-  // width, so they visibly continue past our custom SVG box all the way to a
-  // color-matched label on the price scale — instead of a plain last-price tag.
-  const priceLinesRef = useRef<Map<string, IPriceLine>>(new Map());
-  useEffect(() => {
-    if (!candleSeries) return;
-    // A dragged (or pending) TP/SL overrides its stored price so the native
-    // line moves WITH the SVG one instead of leaving a second line behind, and
-    // its axis label live-tracks the price being set.
+  // Native price lines for EP/TP/SL/liquidation, reconciled onto the series by
+  // `useSeriesPriceLines`. A dragged (or pending) TP/SL overrides its stored
+  // price so the native line moves WITH the SVG one instead of leaving a
+  // second line behind, and its axis label live-tracks the price being set.
+  const levels = useMemo(() => {
     const overrides = new Map<string, number>();
     if (preview) overrides.set(preview.id, preview.price);
     if (pending) overrides.set(pending.id, pending.price);
-    const levels = computeAxisLevels(positions, orders, symbol, overrides);
-    const map = priceLinesRef.current;
-    const seen = new Set<string>();
-    for (const lvl of levels) {
-      seen.add(lvl.id);
-      const existing = map.get(lvl.id);
-      if (existing) {
-        existing.applyOptions({ price: lvl.price, color: lvl.color });
-      } else {
-        map.set(
-          lvl.id,
-          candleSeries.createPriceLine({
-            price: lvl.price,
-            color: lvl.color,
-            lineWidth: 1,
-            lineStyle: 0, // Solid
-            axisLabelVisible: true,
-            lineVisible: true,
-            title: "",
-          }),
-        );
-      }
-    }
-    for (const [id, line] of map) {
-      if (!seen.has(id)) {
-        candleSeries.removePriceLine(line);
-        map.delete(id);
-      }
-    }
-  }, [candleSeries, positions, orders, symbol, preview, pending]);
+    return computeAxisLevels(positions, orders, symbol, overrides);
+  }, [positions, orders, symbol, preview, pending]);
 
-  // Drop all price lines when the series itself goes away (symbol/chart teardown).
-  useEffect(() => {
-    return () => {
-      if (!candleSeries) return;
-      for (const line of priceLinesRef.current.values()) {
-        try {
-          candleSeries.removePriceLine(line);
-        } catch {
-          // series may already be disposed
-        }
-      }
-      priceLinesRef.current.clear();
-    };
-  }, [candleSeries]);
+  useSeriesPriceLines(candleSeries, levels, 0);
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
