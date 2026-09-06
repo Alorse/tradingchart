@@ -70,6 +70,26 @@ export function isLiquidationUrgent(position: PaperPosition, mark: number): bool
   return remaining < fullDistance * 0.1;
 }
 
+/**
+ * How a position or order is labelled on screen: the decorated symbol it was
+ * opened from (`BYBIT:SOLUSDT.P`) when there is one, else the plain key the
+ * engine stores it under. Rows fall back rather than showing nothing for a
+ * position persisted before `feedSymbol` existed.
+ */
+export function paperDisplaySymbol(row: { feedSymbol: string | null; symbol: string }): string {
+  return row.feedSymbol ?? row.symbol;
+}
+
+/**
+ * The price to value `position` at right now. A symbol missing from `marks`
+ * has never ticked, and a position that has never ticked is worth what it
+ * cost — the same fallback `equity` and `totalUnrealizedPnl` apply, kept here
+ * so the panels and dialogs can't spell it differently.
+ */
+export function markOf(marks: Record<string, number>, position: PaperPosition): number {
+  return marks[position.symbol] ?? position.entryPrice;
+}
+
 /** Everything a position row needs to render, computed once per (position, mark, mode). */
 export interface PaperPositionFigures {
   mark: number;
@@ -102,7 +122,7 @@ export function positionFiguresAt(
     pnl: unrealizedPnl(position, at),
     displayPnl: pnlDisplayValue(position, at, mode, tickSize),
     roe: positionRoi(position, at) * 100,
-    displaySymbol: position.feedSymbol ?? position.symbol,
+    displaySymbol: paperDisplaySymbol(position),
     liquidationUrgent: isLiquidationUrgent(position, at),
   };
 }

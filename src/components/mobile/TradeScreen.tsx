@@ -22,7 +22,11 @@ import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
-import { computePositionFigures, formatPnlDisplay } from "@/lib/trading/paper-position-display";
+import {
+  computePositionFigures,
+  formatPnlDisplay,
+  paperDisplaySymbol,
+} from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { totalUnrealizedPnl } from "@/lib/trading/paper-engine";
 import type { PaperPosition } from "@/lib/trading/paper-engine";
@@ -359,7 +363,7 @@ function PaperTradeSection() {
           >
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-semibold">
-                {o.feedSymbol ?? o.symbol}{" "}
+                {paperDisplaySymbol(o)}{" "}
                 <span className={cn(
                   "rounded px-1 text-[9px]",
                   o.side === "BUY" ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
@@ -388,7 +392,7 @@ function PaperTradeSection() {
 function PaperPositionCard({
   position, mark, pnlDisplayMode,
 }: { position: PaperPosition; mark: number; pnlDisplayMode: PnlDisplayMode }) {
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
   const figures = computePositionFigures(position, { [position.symbol]: mark }, pnlDisplayMode, tickSize);
 

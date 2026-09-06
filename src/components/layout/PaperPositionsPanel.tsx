@@ -24,6 +24,8 @@ import { bracketEditReason } from "@/lib/trading/paper-brackets";
 import { describePaperEvent, formatDuration, reasonLabel } from "@/lib/trading/paper-format";
 import {
   formatPnlDisplay,
+  markOf,
+  paperDisplaySymbol,
   positionFiguresAt,
   PNL_DISPLAY_MODES,
 } from "@/lib/trading/paper-position-display";
@@ -328,7 +330,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
 
   const rows = sortRows(
     positions.map((position) => {
-      const mark = marks[position.symbol] ?? position.entryPrice;
+      const mark = markOf(marks, position);
       return { position, mark, pnl: unrealizedPnl(position, mark), roe: positionRoi(position, mark) * 100 };
     }),
     sort,
@@ -472,7 +474,7 @@ function PositionRow({
   onReverse: () => void;
   onMenu: (x: number, y: number) => void;
 }) {
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
   // Same helper the chart's order-line layer and the mobile card derive their
   // figures from, so the three surfaces can't disagree about one position.
@@ -631,7 +633,7 @@ export function ClosePositionDialog({
   position, initialQty, onOpenChange,
 }: { position: PaperPosition; initialQty: number; onOpenChange: (open: boolean) => void }) {
   const closePosition = usePaperTradingStore((s) => s.closePosition);
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const [qtyStr, setQtyStr] = useState(String(initialQty));
 
   const qty = parseFloat(qtyStr);
@@ -644,7 +646,7 @@ export function ClosePositionDialog({
     if (!valid) return;
     // Read the mark fresh rather than a render-time prop, which can lag
     // behind the store between renders and book the close at a stale price.
-    const liveMark = usePaperTradingStore.getState().marks[position.symbol] ?? position.entryPrice;
+    const liveMark = markOf(usePaperTradingStore.getState().marks, position);
     closePosition(position.symbol, liveMark, qty);
     onOpenChange(false);
   }
@@ -715,11 +717,11 @@ export function ReversePositionDialog({
   position, onOpenChange,
 }: { position: PaperPosition; onOpenChange: (open: boolean) => void }) {
   const reversePosition = usePaperTradingStore((s) => s.reversePosition);
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const opposite = position.side === "LONG" ? "Short" : "Long";
 
   function confirm() {
-    const liveMark = usePaperTradingStore.getState().marks[position.symbol] ?? position.entryPrice;
+    const liveMark = markOf(usePaperTradingStore.getState().marks, position);
     reversePosition(position.symbol, liveMark);
     onOpenChange(false);
   }
@@ -763,7 +765,7 @@ export function EditPositionDialog({
   // fresh identity whenever *any* exposed symbol ticks, which re-rendered the
   // open dialog (and re-ran its validation) for symbols it doesn't show.
   const mark = usePaperTradingStore((s) => s.marks[position.symbol]) ?? position.entryPrice;
-  const displaySymbol = position.feedSymbol ?? position.symbol;
+  const displaySymbol = paperDisplaySymbol(position);
   const [tp, setTp] = useState(position.tp !== null ? String(position.tp) : "");
   const [sl, setSl] = useState(position.sl !== null ? String(position.sl) : "");
 
@@ -783,7 +785,7 @@ export function EditPositionDialog({
     // Re-validate against the live mark rather than the render-time value —
     // the engine does the same inside `setBrackets`, and a stale prop could
     // let a submit through that the engine would then silently re-clamp.
-    const liveMark = usePaperTradingStore.getState().marks[position.symbol] ?? position.entryPrice;
+    const liveMark = markOf(usePaperTradingStore.getState().marks, position);
     if (warningAt(liveMark)) return;
     setBrackets(position.symbol, {
       tp: tpValid ? tpNum : undefined,
@@ -874,7 +876,7 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
       <tbody>
         {orders.map((o) => (
           <tr key={o.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
-            <td className="px-3 py-1.5 font-semibold">{o.feedSymbol ?? o.symbol}</td>
+            <td className="px-3 py-1.5 font-semibold">{paperDisplaySymbol(o)}</td>
             <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red")}>
               {o.side === "BUY" ? "Buy" : "Sell"}
             </td>
