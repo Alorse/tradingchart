@@ -28,7 +28,7 @@ import {
   positionFiguresAt,
 } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
-import { totalUnrealizedPnl } from "@/lib/trading/paper-engine";
+import { totalUnrealizedPnl, usedMargin } from "@/lib/trading/paper-engine";
 import type { PaperPosition } from "@/lib/trading/paper-engine";
 import type { Order } from "@/lib/binance/trading-types";
 
@@ -309,7 +309,6 @@ function Section({
 function PaperTradeSection() {
   const account = usePaperTradingStore((s) => s.account);
   const marks = usePaperTradingStore((s) => s.marks);
-  const equity = usePaperTradingStore((s) => s.equity());
   const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
   const cancelOrder = usePaperTradingStore((s) => s.cancelOrder);
 
@@ -317,10 +316,11 @@ function PaperTradeSection() {
     () => account.orders.filter((o) => o.status === "NEW"),
     [account.orders],
   );
-  const unrealized = useMemo(
-    () => totalUnrealizedPnl(account.positions, marks),
-    [account.positions, marks],
-  );
+  const unrealized = totalUnrealizedPnl(account.positions, marks);
+  // `equity()` is defined as exactly this sum, so calling it would walk the
+  // positions twice more per tick — and as a selector it ran on every store
+  // `set`, not just on render. Same shape as desktop's `AccountSummaryRow`.
+  const equity = account.balance + usedMargin(account) + unrealized;
 
   return (
     <>
