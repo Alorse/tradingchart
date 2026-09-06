@@ -21,7 +21,7 @@ import {
 import { fetchTickers24h, cleanSym } from "@/lib/binance/rest";
 import { fetchBybitTickers24h } from "@/lib/bybit/public";
 import { sortWatchlistItems, cycleSort, type WatchRow } from "@/lib/watchlist/sort";
-import { getDailyOpens, dailyChange } from "@/lib/watchlist/daily-open";
+import { dailyChange } from "@/lib/watchlist/daily-open";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { resolveSource } from "@/lib/symbols/source";
@@ -33,6 +33,7 @@ import type { Position } from "@/lib/binance/trading-types";
 import { formatPrice, formatPct, formatChangeAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBatchedTicks } from "@/hooks/useBatchedTicks";
+import { useDailyOpens } from "@/hooks/useDailyOpens";
 import { CoinIcon, getBaseAsset } from "@/components/watchlist/CoinIcon";
 import { FlagPennant } from "@/components/watchlist/FlagPennant";
 import { FLAG_COLORS } from "@/lib/watchlist/flags";
@@ -106,10 +107,7 @@ export function WatchlistScreen() {
   const [rows, setRows] = useState<Record<string, Row>>({});
   const [flash, setFlash] = useState<Record<string, "up" | "down" | null>>({});
   const applyTick = useBatchedTicks(setRows, setFlash);
-  // UTC-midnight open per symbol — the baseline for the daily "Chg" column.
-  // Kept separate from `rows` (live price/flash) since it only changes once a
-  // day; see src/lib/watchlist/daily-open.ts for the caching strategy.
-  const [dailyOpens, setDailyOpens] = useState<Record<string, number>>({});
+  const dailyOpens = useDailyOpens(symbols);
   const [manageOpen, setManageOpen] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -150,25 +148,6 @@ export function WatchlistScreen() {
     return () => {
       cancelled = true;
       unsubs.forEach((u) => u());
-    };
-  }, [symbols.join(",")]);
-
-  // Daily open per symbol. `getDailyOpens` caches by UTC date internally, so
-  // this periodic re-invoke costs nothing until the date actually rolls over
-  // — no N-call fan-out on every tick, just a once-a-day refetch.
-  useEffect(() => {
-    if (symbols.length === 0) return;
-    let cancelled = false;
-    function load() {
-      getDailyOpens(symbols).then((opens) => {
-        if (!cancelled) setDailyOpens((prev) => ({ ...prev, ...opens }));
-      });
-    }
-    load();
-    const interval = setInterval(load, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
     };
   }, [symbols.join(",")]);
 
