@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isSignedTradeRoute } from "@/lib/auth/trade-routes";
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -25,13 +26,38 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // The app is guest-accessible, so nothing is gated here any more. The result
-  // is deliberately discarded: this call exists only for its side effect, since
-  // `getClaims()` rotates an expiring session and writes the refreshed cookies
-  // out through `setAll` above. A failure just means no refresh happened.
+  // The app is guest-accessible (see LoginDialog / Header), so *page* routes
+  // aren't gated. This call still runs on every matched request for two
+  // reasons: it rotates an expiring session and writes the refreshed cookies
+  // out through `setAll` above, and its result is the auth gate for the signed
+  // `/api/trade/*` routes below.
+  //
+  // `getClaims()` verifies the session JWT locally (falling back to a network
+  // call only when it genuinely can't, e.g. an expired token that needs a
+  // refresh), whereas `getUser()` always round-trips to Supabase's auth
+  // server; at one middleware run per request that round trip dominated the
+  // wall-clock — and therefore the billed compute — of every request.
+  //
+  // Any error counts as unauthenticated: a failure must close the door on the
+  // trade routes, not open it.
+  let authenticated = false;
   try {
-    await supabase.auth.getClaims();
+    const { data } = await supabase.auth.getClaims();
+    authenticated = !!data?.claims?.sub;
   } catch {}
+
+  // `/api/trade/*` (minus exchange-info) signs requests with the caller's
+  // exchange API key and forwards them to Binance/Bybit. This is the only
+  // thing standing between the deployment and being used as an anonymous
+  // request-signing relay, so it answers 401 rather than redirecting: these
+  // are fetch() calls from the client, and an HTML login page would just be
+  // parsed as a garbage response body.
+  if (!authenticated && isSignedTradeRoute(request.nextUrl.pathname)) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   return supabaseResponse;
 }
@@ -47,14 +73,10 @@ export async function middleware(request: NextRequest) {
  * actually makes that work; gating them behind auth bought nothing anyway,
  * since the data they return is public.
  *
- * `/api/trade/*` (minus exchange-info) stays matched, but note what that buys
- * now: the middleware stopped gating on the session when guest access landed,
- * so matching those routes no longer keeps a stranger from using the
- * deployment as a request-signing relay. No handler under `/api/trade/`
- * checks a session either. If that protection is wanted back it belongs in the
- * handlers (or `lib/exchanges/account.ts`), not in a matcher — an edge matcher
- * enforcing an invariant owned by eight route handlers is how it got dropped
- * by deleting a single `if`.
+ * `/api/trade/*` (minus exchange-info) deliberately stays matched: those
+ * routes sign requests against a real exchange, and the 401 above is the only
+ * session check they get — no handler under `/api/trade/` checks one itself.
+ * Unmatching one of them silently reopens the request-signing relay.
  */
 export const config = {
   matcher: [

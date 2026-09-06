@@ -30,21 +30,23 @@ export async function loadPaperAccount(): Promise<PaperAccount | null> {
 }
 
 /**
- * Takes the signed-in `userId` from the caller rather than calling
- * `supabase.auth.getUser()` for it: that is not a local read — it round-trips
- * to the auth server on every call — so each debounced save was two
- * sequential requests instead of one, for an id `usePaperAccountSync` already
- * holds via `useAuth()`. RLS (`auth.uid() = user_id`) is what authorizes the
- * row. Same reasoning as the save functions in `user-data.ts`.
+ * Upserts the account for `userId`. The id is a *parameter* rather than
+ * something re-derived from `supabase.auth.getUser()` here: that is not a
+ * local read — it round-trips to the auth server on every call — so each
+ * debounced save was two sequential requests instead of one, for an id
+ * `usePaperAccountSync` already holds via `useAuth()`. RLS
+ * (`auth.uid() = user_id`) is what authorizes the row. Same reasoning, and
+ * same argument order, as the save functions in `user-data.ts`.
+ *
+ * Rejects on a failed upsert instead of swallowing the error, so a cloud save
+ * that never landed is distinguishable from one that did — callers that
+ * fire-and-forget must attach a `.catch`.
  */
-export async function savePaperAccount(userId: string, account: PaperAccount) {
+export async function savePaperAccount(userId: string, account: PaperAccount): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("user_paper_accounts").upsert(
     { user_id: userId, state: account, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   );
-  // supabase-js returns its errors rather than throwing, so an RLS rejection
-  // or a failed write would otherwise leave no trace at all — asymmetric with
-  // the loader above, which is deliberately loud about the same failures.
-  if (error) console.error("Failed to save paper account to Supabase", error);
+  if (error) throw error;
 }

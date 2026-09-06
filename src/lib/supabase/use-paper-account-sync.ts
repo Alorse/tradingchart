@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
+import { clearPersistedPaperAccount, usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useAuth } from "./auth-context";
 import { loadPaperAccount, savePaperAccount } from "./paper-account-data";
 
 const DEBOUNCE_MS = 500;
+
+/** Saves are fire-and-forget, but a rejected one still has to say so — without
+ *  this the upsert's error was invisible and a failed cloud save looked
+ *  exactly like a successful one. */
+function logSaveFailure(err: unknown) {
+  console.error("Failed to save paper account to Supabase", err);
+}
 
 /**
  * Syncs the paper trading account to Supabase, mirroring `useCloudSync`'s
@@ -47,14 +54,15 @@ export function usePaperAccountSync() {
   const account = usePaperTradingStore((s) => s.account);
 
   // ── Wipe local paper state on sign-out / user switch ───────────────────
-  // The account persists to localStorage under one un-namespaced key, so
-  // signing out used to leave whatever the last signed-in user was trading
-  // sitting in this browser's storage — visible to the next person who opens
-  // the app on this device before signing in, and liable to bleed into a
-  // *different* user's account on their own sign-in via the "no cloud row
-  // yet, push local up" branch below, if that runs before their own load
-  // lands. Declared first so it runs before the two effects below on the same
-  // `user` change, leaving a fresh sign-in a clean local slate.
+  // The account persists to localStorage under one un-namespaced key
+  // (`PAPER_STORAGE_KEY`), so signing out used to leave whatever the last
+  // signed-in user was trading sitting in this browser's storage — visible
+  // to the next person who opens the app on this device before signing in,
+  // and liable to bleed into a *different* user's account on their own
+  // sign-in via the "no cloud row yet, push local up" branch below, if that
+  // runs before their own load lands. Declared first so it runs before the
+  // two effects below on the same `user` change, leaving a fresh sign-in a
+  // clean local slate.
   useEffect(() => {
     const currentId = user?.id ?? null;
     // A *change* of signed-in id, not merely "signed out": covers a sign-out
@@ -63,10 +71,13 @@ export function usePaperAccountSync() {
     // be pushed up to a cloud row that doesn't exist yet.
     if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentId) {
       usePaperTradingStore.getState().resetAccount();
-      // The store's own persist API, so the storage key and backend stay
-      // declared in one place (`paper-trading-store.ts`) rather than being
-      // re-stated here.
-      usePaperTradingStore.persist.clearStorage();
+      // Through the store's own persist path, not a bare
+      // `localStorage.removeItem`: the storage handle keeps a write-skip cache
+      // that a hand-rolled removal would leave stale (see
+      // `clearPersistedPaperAccount`), which makes the wipe depend on the
+      // `resetAccount()` above happening first. Going through the store also
+      // keeps the storage key and backend declared in one place.
+      clearPersistedPaperAccount();
     }
     prevUserIdRef.current = currentId;
   }, [user]);
@@ -82,7 +93,9 @@ export function usePaperAccountSync() {
         if (cloud) {
           usePaperTradingStore.getState().setAccount(cloud);
         } else {
-          savePaperAccount(userId, usePaperTradingStore.getState().account);
+          savePaperAccount(userId, usePaperTradingStore.getState().account).catch(
+            logSaveFailure,
+          );
         }
         loadedRef.current = true;
       })
@@ -109,7 +122,7 @@ export function usePaperAccountSync() {
   useEffect(() => {
     if (!user || !loadedRef.current) return;
     const timer = setTimeout(() => {
-      savePaperAccount(user.id, account);
+      savePaperAccount(user.id, account).catch(logSaveFailure);
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [user, account]);

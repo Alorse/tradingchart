@@ -119,6 +119,15 @@ function createPaperStorage(): PersistStorage<Persisted> | undefined {
       lastMode = value.state.pnlDisplayMode;
       base.setItem(name, value);
     },
+    removeItem: (name) => {
+      // Drop the write-skip cache along with the blob: after a removal the
+      // next write must land whatever the persisted slice's references are,
+      // or storage silently stays empty until some unrelated mutation
+      // happens to produce a fresh `account` object.
+      lastAccount = null;
+      lastMode = null;
+      base.removeItem(name);
+    },
   };
 }
 
@@ -424,3 +433,17 @@ export const usePaperTradingStore = create<PaperTradingState>()(
     },
   ),
 );
+
+/**
+ * Clears the persisted paper blob through `persist`'s own storage handle
+ * (`createPaperStorage` above) rather than reaching for
+ * `localStorage.removeItem(PAPER_STORAGE_KEY)` directly — a hand-rolled
+ * removal leaves that storage's write-skip cache pointing at a blob that no
+ * longer exists, so the next `set` whose persisted slice is
+ * reference-identical short-circuits and storage stays empty.
+ *
+ * Used by the sign-out / user-switch wipe in `use-paper-account-sync.ts`.
+ */
+export function clearPersistedPaperAccount() {
+  usePaperTradingStore.persist.clearStorage();
+}

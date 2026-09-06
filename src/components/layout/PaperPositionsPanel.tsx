@@ -219,8 +219,12 @@ function AccountSummaryRow({
   // positions twice more per tick — and as a selector it ran on every store
   // `set`, not just on render.
   const equity = account.balance + marginUsed + unrealized;
-  // `history` is append-only and uncapped, but the total only moves when a
-  // trade closes — not on the ticks that re-render this row.
+  // Realized P&L is a reduce over the whole (append-only, uncapped) trade
+  // history, and it depends on `account` alone — no mark anywhere in it. This
+  // row re-renders on every raw WS tick, since the Unrealized/Equity stats
+  // beside it are mark-driven by definition, so without the memo a long
+  // history was summed from scratch several times a second for a number that
+  // only moves when a trade closes.
   const realized = useMemo(
     () => account.history.reduce((sum, t) => sum + t.realizedPnl, 0),
     [account.history],
