@@ -86,22 +86,18 @@ export function MenuScreen() {
       </Section>
 
       <div className="mt-auto px-4 py-6">
-        {user ? (
-          <button
-            onClick={() => void signOut()}
-            className="flex w-full items-center justify-center gap-2 rounded border border-tv-border px-3 py-2.5 text-sm text-tv-red active:bg-tv-red/10"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        ) : (
-          <button
-            onClick={promptLogin}
-            className="flex w-full items-center justify-center gap-2 rounded border border-tv-border px-3 py-2.5 text-sm text-tv-text active:bg-tv-panel-hover"
-          >
-            Login
-          </button>
-        )}
+        <button
+          onClick={user ? () => void signOut() : promptLogin}
+          className={cn(
+            "flex w-full items-center justify-center gap-2 rounded border border-tv-border px-3 py-2.5 text-sm",
+            user
+              ? "text-tv-red active:bg-tv-red/10"
+              : "text-tv-text active:bg-tv-panel-hover",
+          )}
+        >
+          {user && <LogOut className="h-4 w-4" />}
+          {user ? "Sign out" : "Login"}
+        </button>
       </div>
     </div>
   );
