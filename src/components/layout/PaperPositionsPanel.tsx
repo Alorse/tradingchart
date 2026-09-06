@@ -18,6 +18,7 @@ import {
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { cn } from "@/lib/utils";
+import { Badge, Stat, Stub, TabBtn } from "@/components/layout/panel-bits";
 import { formatPrice } from "@/lib/format";
 import { bracketEditReason } from "@/lib/trading/paper-brackets";
 import { describePaperEvent, formatDuration, reasonLabel } from "@/lib/trading/paper-format";
@@ -145,16 +146,16 @@ export function PaperPositionsPanel() {
           <AccountSummaryRow account={account} onReset={resetAccount} />
 
           <div className="flex shrink-0 border-b border-tv-border">
-            <TabBtn active={tab === "positions"} onClick={() => setTab("positions")}>
+            <TabBtn className="flex items-center" active={tab === "positions"} onClick={() => setTab("positions")}>
               Positions {positions.length > 0 && <Badge n={positions.length} />}
             </TabBtn>
-            <TabBtn active={tab === "orders"} onClick={() => setTab("orders")}>
+            <TabBtn className="flex items-center" active={tab === "orders"} onClick={() => setTab("orders")}>
               Orders {restingOrders.length > 0 && <Badge n={restingOrders.length} />}
             </TabBtn>
-            <TabBtn active={tab === "history"} onClick={() => setTab("history")}>
+            <TabBtn className="flex items-center" active={tab === "history"} onClick={() => setTab("history")}>
               History {account.history.length > 0 && <Badge n={account.history.length} />}
             </TabBtn>
-            <TabBtn active={tab === "notifications"} onClick={() => setTab("notifications")}>
+            <TabBtn className="flex items-center" active={tab === "notifications"} onClick={() => setTab("notifications")}>
               <Bell className="h-3 w-3" /> {notifications.length > 0 && <Badge n={notifications.length} />}
             </TabBtn>
           </div>
@@ -227,39 +228,6 @@ function AccountSummaryRow({
         Reset account
       </button>
     </div>
-  );
-}
-
-function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] text-tv-text-muted">{label}</span>
-      <span className={cn("font-mono text-xs tabular-nums", valueClass ?? "text-tv-text")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Badge({ n }: { n: number }) {
-  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue-text">{n}</span>;
-}
-
-function TabBtn({
-  active, onClick, children,
-}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center border-b-2 px-3 py-1.5 text-[11px] font-medium transition-colors",
-        active
-          ? "border-tv-blue text-tv-text"
-          : "border-transparent text-tv-text-muted hover:text-tv-text",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -355,11 +323,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
   }
 
   if (positions.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No open positions
-      </div>
-    );
+    return <Stub message="No open positions" />;
   }
 
   const rows = sortRows(
@@ -891,11 +855,7 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
   const cancelOrder = usePaperTradingStore((s) => s.cancelOrder);
 
   if (orders.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No resting orders
-      </div>
-    );
+    return <Stub message="No resting orders" />;
   }
 
   return (
@@ -955,11 +915,7 @@ const REASON_CLASS: Record<PaperTrade["reason"], string> = {
 
 function HistoryTable({ trades }: { trades: PaperTrade[] }) {
   if (trades.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No closed trades yet
-      </div>
-    );
+    return <Stub message="No closed trades yet" />;
   }
 
   // Most recent first; `history` is appended in close order, but sorting by
@@ -1022,11 +978,7 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
 
 function NotificationsTable({ events }: { events: PaperEvent[] }) {
   if (events.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-        No notifications yet
-      </div>
-    );
+    return <Stub message="No notifications yet" />;
   }
 
   return (

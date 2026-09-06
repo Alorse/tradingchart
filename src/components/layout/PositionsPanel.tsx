@@ -6,6 +6,7 @@ import { useTradingStore } from "@/lib/store/trading-store";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { cn } from "@/lib/utils";
+import { Badge, Stat, Stub, TabBtn } from "@/components/layout/panel-bits";
 import { formatPrice } from "@/lib/format";
 import type { Order, Position } from "@/lib/binance/trading-types";
 
@@ -152,47 +153,6 @@ export function PositionsPanel() {
 }
 
 /* ─── helpers ─── */
-
-function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] text-tv-text-muted">{label}</span>
-      <span className={cn("font-mono text-xs tabular-nums", valueClass ?? "text-tv-text")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Badge({ n }: { n: number }) {
-  return <span className="ml-1 rounded bg-tv-blue/20 px-1 text-[9px] font-bold text-tv-blue-text">{n}</span>;
-}
-
-function TabBtn({
-  active, onClick, children,
-}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "border-b-2 px-3 py-1.5 text-[11px] font-medium transition-colors",
-        active
-          ? "border-tv-blue text-tv-text"
-          : "border-transparent text-tv-text-muted hover:text-tv-text",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Stub({ message }: { message: string }) {
-  return (
-    <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
-      {message}
-    </div>
-  );
-}
 
 /* ───────────────────────── Positions table ───────────────────────── */
 
