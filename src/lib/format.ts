@@ -73,9 +73,9 @@ export function formatPct(n: number): string {
 }
 
 /**
- * Signed change amount (e.g. "+46.26" / "−0.0012"), decimal count matched to
- * the instrument's price magnitude via `pricePrecisionFor` so it lines up
- * with how `formatPrice` renders the price it was computed against.
+ * Signed change amount (e.g. "+46.26" / "-0.0012"), with the decimal count
+ * taken from the instrument's price magnitude via `pricePrecisionFor` so a
+ * sub-$1 symbol keeps the digits it needs to show any move at all.
  */
 export function formatChangeAmount(amount: number, price: number): string {
   if (!isFinite(amount)) return "—";
