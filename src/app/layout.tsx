@@ -17,18 +17,18 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TradingView Free — Open source crypto charts",
+  title: "TradingChart — Open source crypto charts",
   description:
     "Live crypto charting platform. A free alternative to TradingView. Powered by Binance + lightweight-charts.",
   manifest: "/manifest.webmanifest",
-  applicationName: "TV Free",
+  applicationName: "TradingChart",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "TV Free",
+    title: "TradingChart",
   },
   icons: {
-    icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
+    icon: [{ url: "/favicon.png", type: "image/png", sizes: "32x32" }],
     apple: "/apple-touch-icon.png",
   },
 };

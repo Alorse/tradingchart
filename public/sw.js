@@ -1,4 +1,4 @@
-/* TradingView Free — minimal offline shell service worker.
+/* TradingChart — minimal offline shell service worker.
  *
  * Strategy:
  *  - On install, pre-cache the app shell (`/`, manifest, logo).
