@@ -43,6 +43,12 @@ function DialogOverlay({
 // Interactive element tags — mousedown on these should not initiate drag
 const NO_DRAG_TAGS = new Set(["input", "textarea", "select", "button", "a", "label"])
 
+/** Tailwind's `sm`. Must stay in sync with the `max-sm:` full-screen classes
+ *  below: the JS gate and the CSS have to flip at the same width, or in the
+ *  band between them the dialog drops its centering transform without ever
+ *  getting the full-screen layout that replaces it. */
+const SM_BREAKPOINT = 640
+
 function DialogContent({
   className,
   children,
@@ -57,7 +63,7 @@ function DialogContent({
    *  untouched (the prop only changes anything under the `sm` breakpoint). */
   mobileFullScreen?: boolean
 }) {
-  const isMobile = useIsMobile()
+  const isMobile = useIsMobile(SM_BREAKPOINT)
   const [offset, setOffset] = React.useState({ x: 0, y: 0 })
   const drag = React.useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
   const isDragging = React.useRef(false)

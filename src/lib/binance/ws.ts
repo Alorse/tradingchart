@@ -81,7 +81,12 @@ class BinanceWSConn {
     string,
     Set<{ onTick: (s: { symbol: string; close: number; open: number; pct: number }) => void; symbol: string }>
   >();
-  private bookTickerSubs = new Map<string, (m: { bid: number; ask: number }) => void>();
+  // Same fan-out shape, and for the same reason: `OrderPanel` and
+  // `BuySellOverlay` both want a bid/ask quote for the charted symbol at once.
+  private bookTickerSubs = new Map<
+    string,
+    Set<{ onTick: (m: { bid: number; ask: number }) => void }>
+  >();
   private connected = false;
   private closing = false;
   private url: string;
@@ -166,10 +171,11 @@ class BinanceWSConn {
         }
       }
     } else if (msg.stream.includes("@bookTicker")) {
-      const handler = this.bookTickerSubs.get(msg.stream);
-      if (handler) {
+      const listeners = this.bookTickerSubs.get(msg.stream);
+      if (listeners) {
         const d = (msg as BookTickerMsg).data;
-        handler({ bid: parseFloat(d.b), ask: parseFloat(d.a) });
+        const quote = { bid: parseFloat(d.b), ask: parseFloat(d.a) };
+        for (const { onTick } of listeners) onTick(quote);
       }
     }
   }
@@ -236,16 +242,28 @@ class BinanceWSConn {
     onTick: (data: { bid: number; ask: number }) => void,
   ): () => void {
     const stream = `${cleanSym(symbol).toLowerCase()}@bookTicker`;
-    this.bookTickerSubs.set(stream, onTick);
-    if (this.connected) {
+    const listener = { onTick };
+    let set = this.bookTickerSubs.get(stream);
+    const isNewStream = !set;
+    if (!set) {
+      set = new Set();
+      this.bookTickerSubs.set(stream, set);
+    }
+    set.add(listener);
+    if (this.connected && isNewStream) {
       this.send({ method: "SUBSCRIBE", params: [stream], id: this.nextId++ });
     } else if (!this.ws) {
       this.connect();
     }
     return () => {
-      this.bookTickerSubs.delete(stream);
-      if (this.connected) {
-        this.send({ method: "UNSUBSCRIBE", params: [stream], id: this.nextId++ });
+      const current = this.bookTickerSubs.get(stream);
+      if (!current) return;
+      current.delete(listener);
+      if (current.size === 0) {
+        this.bookTickerSubs.delete(stream);
+        if (this.connected) {
+          this.send({ method: "UNSUBSCRIBE", params: [stream], id: this.nextId++ });
+        }
       }
     };
   }

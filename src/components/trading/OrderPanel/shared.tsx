@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/format";
 import type { OrderSide, SizingMode, SlMode } from "@/lib/binance/trading-types";
+import { cleanSym } from "@/lib/binance/rest";
 
 export const SIZING_LABELS: Record<SizingMode, string> = {
   AMOUNT: "Amount",
@@ -672,10 +673,15 @@ export function useOrderTicket({
   return { referencePrice, ctx, qtyNum, derived, sizingHandlers };
 }
 
-/** The one-line order summary under the submit button. */
+/**
+ * The one-line order summary under the submit button.
+ *
+ * `cleanSym`, not a bare `.P` strip: a Bybit-charted ticker also carries a
+ * `BYBIT:` prefix, which would otherwise read "0.5 BYBIT:SOLUSDT MARKET".
+ */
 export function orderSummaryLabel(form: TicketFields, symbol: string): string {
   const suffix = form.type === "LIMIT" ? `@ ${form.price || "—"} LIMIT` : form.type;
-  return `${form.qty || "0"} ${symbol.replace(/\.P$/, "")} ${suffix}`;
+  return `${form.qty || "0"} ${cleanSym(symbol)} ${suffix}`;
 }
 
 /**

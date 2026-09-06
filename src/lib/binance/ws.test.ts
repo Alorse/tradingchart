@@ -42,6 +42,17 @@ function emitMiniTicker(stream: string, close: number, open: number) {
   }
 }
 
+function emitBookTicker(stream: string, bid: number, ask: number) {
+  for (const sock of FakeSocket.instances) {
+    sock.onmessage?.({
+      data: JSON.stringify({
+        stream,
+        data: { u: 0, s: "", b: String(bid), B: "1", a: String(ask), A: "1" },
+      }),
+    });
+  }
+}
+
 const OriginalWebSocket = globalThis.WebSocket;
 
 beforeEach(() => {
@@ -89,6 +100,53 @@ describe("BinanceWS mini-ticker fan-out", () => {
     const ws = getBinanceWS();
     const unsubA = ws.subscribeMiniTickers(["BTCUSDT"], () => {});
     const unsubB = ws.subscribeMiniTickers(["BTCUSDT"], () => {});
+    openAll();
+
+    unsubA();
+    const sentBeforeSecondUnsub = FakeSocket.instances.flatMap((s) => s.sent).join("\n");
+    expect(sentBeforeSecondUnsub.includes("UNSUBSCRIBE")).toBe(false);
+
+    unsubB();
+    const sentAfter = FakeSocket.instances.flatMap((s) => s.sent).join("\n");
+    expect(sentAfter.includes("UNSUBSCRIBE")).toBe(true);
+  });
+});
+
+describe("BinanceWS book-ticker fan-out", () => {
+  it("delivers quotes to two concurrent subscribers on the same symbol", () => {
+    const ws = getBinanceWS();
+    const asksA: number[] = [];
+    const asksB: number[] = [];
+    ws.subscribeBookTicker("BTCUSDT", (q) => asksA.push(q.ask));
+    ws.subscribeBookTicker("BTCUSDT", (q) => asksB.push(q.ask));
+
+    openAll();
+    emitBookTicker("btcusdt@bookTicker", 99, 101);
+
+    expect(asksA).toEqual([101]);
+    expect(asksB).toEqual([101]);
+  });
+
+  it("unsubscribing one listener leaves the other intact", () => {
+    const ws = getBinanceWS();
+    const asksA: number[] = [];
+    const asksB: number[] = [];
+    const unsubA = ws.subscribeBookTicker("BTCUSDT", (q) => asksA.push(q.ask));
+    ws.subscribeBookTicker("BTCUSDT", (q) => asksB.push(q.ask));
+
+    openAll();
+    emitBookTicker("btcusdt@bookTicker", 99, 101);
+    unsubA();
+    emitBookTicker("btcusdt@bookTicker", 103, 105);
+
+    expect(asksA).toEqual([101]);
+    expect(asksB).toEqual([101, 105]);
+  });
+
+  it("only sends an UNSUBSCRIBE once every listener on a stream is gone", () => {
+    const ws = getBinanceWS();
+    const unsubA = ws.subscribeBookTicker("BTCUSDT", () => {});
+    const unsubB = ws.subscribeBookTicker("BTCUSDT", () => {});
     openAll();
 
     unsubA();

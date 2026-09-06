@@ -2,15 +2,17 @@
 
 import { useEffect, useRef } from "react";
 import { useTradingStore } from "@/lib/store/trading-store";
+import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useToastStore } from "@/lib/alerts/toast-store";
 import { formatPrice } from "@/lib/format";
 import type { Position } from "@/lib/binance/trading-types";
 
 /**
- * Global trading sync. Keeps positions / orders / balance fresh whenever
- * credentials are set, independent of whether any trading panel is open — so
- * the chart's EP / SL / TP / liquidation lines always reflect the live account.
+ * Global trading sync. Keeps positions / orders / balance fresh whenever Live
+ * mode is on and credentials are set, independent of whether any trading panel
+ * is open — so the chart's EP / SL / TP / liquidation lines always reflect the
+ * live account.
  *
  * Also keeps `allPositions` (every open position on the account, not just the
  * chart's current symbol) fresh, so the watchlist can badge any row with an
@@ -55,16 +57,23 @@ export function useTradingSync() {
   const exchange = useTradingStore((s) => s.exchange);
   const testnet = useTradingStore((s) => s.testnet);
   const symbol = useChartStore((s) => s.symbol);
+  // Credentials alone aren't enough: they can stay configured while the Trade
+  // tab is toggled back to Paper, and every consumer of what this writes
+  // (`PositionsPanel`, `TradeScreen`, the chart's order lines) is suppressed
+  // in Paper mode. Polling then bills `/api/trade/*` invocations to feed
+  // panels that render nothing. Paper trading runs entirely off
+  // `paper-trading-store` + localStorage and touches none of these routes.
+  const liveMode = useTradingModeStore((s) => s.mode) === "live";
 
   /** False until the first snapshot lands, so pre-existing positions don't
    *  announce themselves as fresh fills on load or after switching accounts. */
   const seededRef = useRef(false);
   useEffect(() => {
     seededRef.current = false;
-  }, [apiKey, apiSecret, exchange, testnet]);
+  }, [apiKey, apiSecret, exchange, testnet, liveMode]);
 
   useEffect(() => {
-    if (!apiKey || !apiSecret) return;
+    if (!liveMode || !apiKey || !apiSecret) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let currentDelay = 0;
@@ -140,7 +149,7 @@ export function useTradingSync() {
       unsubActivity();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [apiKey, apiSecret, exchange, testnet, symbol]);
+  }, [liveMode, apiKey, apiSecret, exchange, testnet, symbol]);
 
   // Clear the order ticket when the chart moves to another symbol. `qty` is
   // canonical and sized for one instrument, but it used to survive a symbol
