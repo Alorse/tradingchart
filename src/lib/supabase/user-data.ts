@@ -63,14 +63,22 @@ export async function loadChartSettings(): Promise<CloudChartSettings | null> {
   return data as CloudChartSettings;
 }
 
-export async function saveChartSettings(settings: CloudChartSettings) {
+/**
+ * Upserts the signed-in user's chart settings.
+ *
+ * Rejects on a failed upsert instead of swallowing the error, so a cloud save
+ * that never landed is distinguishable from one that did (same contract as
+ * `savePaperAccount`) — callers that fire-and-forget must attach a `.catch`.
+ */
+export async function saveChartSettings(settings: CloudChartSettings): Promise<void> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from("user_chart_settings").upsert(
+  const { error } = await supabase.from("user_chart_settings").upsert(
     { user_id: user.id, ...settings, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   );
+  if (error) throw error;
 }
 
 // ─── Watchlists ───────────────────────────────────────────────────────────────
@@ -108,12 +116,17 @@ export async function loadWatchlists(): Promise<CloudWatchlists | null> {
  * them would leave a stale copy of *one* of N lists that the loader's legacy
  * branch could resurface, silently dropping the rest. Nothing reads them once
  * `lists` is non-empty, which it is from this write onwards.
+ *
+ * Rejects on a failed upsert rather than swallowing the error — the sync
+ * hook's one-shot seed write awaits this to decide whether the row it is about
+ * to keep syncing against actually exists, and the debounced saves attach a
+ * `.catch` so a cloud write that never landed is at least visible.
  */
-export async function saveWatchlists(lists: Watchlist[], activeId: string) {
+export async function saveWatchlists(lists: Watchlist[], activeId: string): Promise<void> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from("user_watchlists").upsert(
+  const { error } = await supabase.from("user_watchlists").upsert(
     {
       user_id: user.id,
       lists,
@@ -122,4 +135,5 @@ export async function saveWatchlists(lists: Watchlist[], activeId: string) {
     },
     { onConflict: "user_id" },
   );
+  if (error) throw error;
 }

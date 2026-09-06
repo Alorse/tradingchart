@@ -16,6 +16,13 @@ import { useAuth } from "./auth-context";
 
 const DEBOUNCE_MS = 1500;
 
+/** The debounced saves are fire-and-forget, but a rejected one still has to
+ *  say so — otherwise a cloud write that never landed looks exactly like one
+ *  that did. Same helper, same reason, as `usePaperAccountSync`. */
+function logSaveFailure(err: unknown) {
+  console.error("Failed to save chart settings/watchlists to Supabase", err);
+}
+
 export function useCloudSync() {
   const { user } = useAuth();
   /** Load *attempted* — guards the one-shot init effect against re-running. */
@@ -111,7 +118,11 @@ export function useCloudSync() {
         // user to happen to edit a list.
         const { watchlists: local, activeWatchlistId: localActive } =
           useChartStore.getState();
-        saveWatchlists(local, localActive);
+        // Awaited, not fire-and-forget: a rejected seed used to escape the
+        // `.catch` below while `loadedRef` flipped `true` anyway, so the
+        // session carried on debounce-saving against a row that was never
+        // created. Letting it reject leaves the flag matching reality.
+        await saveWatchlists(local, localActive);
       }
     }
 
@@ -164,7 +175,7 @@ export function useCloudSync() {
           userEMAs,
           chartType,
         },
-      });
+      }).catch(logSaveFailure);
     }, DEBOUNCE_MS);
     return () => {
       if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
@@ -182,7 +193,7 @@ export function useCloudSync() {
     if (!user || !loadedRef.current) return;
     if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
     wlTimerRef.current = setTimeout(() => {
-      saveWatchlists(watchlists, activeWatchlistId);
+      saveWatchlists(watchlists, activeWatchlistId).catch(logSaveFailure);
     }, DEBOUNCE_MS);
     return () => {
       if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
