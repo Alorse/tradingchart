@@ -85,11 +85,9 @@ class BinanceWSConn {
   private connected = false;
   private closing = false;
   private url: string;
-  private symbolDecorator: (s: string) => string;
 
-  constructor(url: string, symbolDecorator: (s: string) => string) {
+  constructor(url: string) {
     this.url = url;
-    this.symbolDecorator = symbolDecorator;
   }
 
   connect() {
@@ -164,7 +162,7 @@ class BinanceWSConn {
         const open = parseFloat(d.o);
         const pct = open === 0 ? 0 : ((close - open) / open) * 100;
         for (const { onTick, symbol } of listeners) {
-          onTick({ symbol: this.symbolDecorator(symbol), close, open, pct });
+          onTick({ symbol, close, open, pct });
         }
       }
     } else if (msg.stream.includes("@bookTicker")) {
@@ -265,8 +263,8 @@ class BinanceWSConn {
  * subscriptions by inspecting the symbol for the ".P" suffix.
  */
 export class BinanceWS {
-  private spot = new BinanceWSConn(SPOT_WS, (s) => s);
-  private futures = new BinanceWSConn(FUTURES_WS, (s) => s);
+  private spot = new BinanceWSConn(SPOT_WS);
+  private futures = new BinanceWSConn(FUTURES_WS);
 
   connect() {
     // Lazy: connect on first subscription
