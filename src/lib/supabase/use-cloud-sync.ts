@@ -21,15 +21,11 @@ export function useCloudSync() {
   /** Load *attempted* — guards the one-shot init effect against re-running. */
   const initializedRef = useRef(false);
   /**
-   * Load *succeeded* — guards both debounced saves below.
-   *
-   * These used to share `initializedRef`, which flips synchronously at the
-   * top of the init effect: the save effects then ran on the very same
-   * sign-in render, saw it already set, and scheduled an upsert of this
-   * device's local state 1.5s later. A load slower than that debounce (or one
-   * that failed outright) therefore overwrote the cloud row with whatever
-   * localStorage happened to hold, before ever seeing what was up there. Same
-   * split, and same reasoning, as `usePaperAccountSync`.
+   * Load *succeeded* — gates both debounced saves below. Separate from
+   * `initializedRef` because that one flips synchronously at the top of the
+   * init effect: sharing it would let a load slower than `DEBOUNCE_MS` (or one
+   * that fails outright) upsert this device's localStorage state over a cloud
+   * row it never read. Same split, and same reasoning, as `usePaperAccountSync`.
    */
   const loadedRef = useRef(false);
 
