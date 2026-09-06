@@ -765,16 +765,6 @@ export function Watchlist() {
                       ) : (
                         <span className="tabular-nums text-tv-text-muted">—</span>
                       )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (active) removeWatchlistItem(active.id, item.id);
-                        }}
-                        className="invisible rounded p-0.5 text-tv-text-muted hover:bg-tv-bg hover:text-tv-red group-hover:visible"
-                        aria-label={`Remove ${s} from watchlist`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
                     </div>
                   );
                 })()}
@@ -834,6 +824,21 @@ export function Watchlist() {
                       />
                     ))}
                   </>
+                );
+              })()}
+              {(() => {
+                const item = items.find((i) => i.id === contextMenu.itemId);
+                if (item?.type !== "symbol") return null;
+                return (
+                  <ContextItem
+                    icon={Trash2}
+                    label="Remove from watchlist"
+                    danger
+                    onClick={() => {
+                      removeWatchlistItem(active.id, contextMenu.itemId!);
+                      setContextMenu(null);
+                    }}
+                  />
                 );
               })()}
               <div className="my-1 h-px bg-tv-border" />
