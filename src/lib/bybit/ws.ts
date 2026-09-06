@@ -161,7 +161,7 @@ class BybitWS {
    *  gets its own listener entry rather than clobbering another caller's. */
   subscribeMiniTickers(symbols: string[], onTick: (t: MiniTick) => void): () => void {
     const topics = symbols.map((s) => `tickers.${bybitSymbol(s)}`);
-    const listeners = topics.map((_, i) => ({ onTick, ticker: symbols[i] }));
+    const listeners = symbols.map((symbol) => ({ onTick, ticker: symbol }));
     const newTopics: string[] = [];
     topics.forEach((topic, i) => {
       let set = this.tickerSubs.get(topic);
