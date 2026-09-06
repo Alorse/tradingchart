@@ -739,15 +739,12 @@ export function placeLimitOrder(
   };
 }
 
-/** Cancel a resting order and hand its reserve back. Unknown ids are no-ops. */
-export function cancelOrder(
-  account: PaperAccount,
-  orderId: string,
-  now: number,
-): EngineResult {
+/** Cancel a resting order and hand its reserve back. Unknown ids are no-ops.
+ *  Takes no `now`: a cancel drops the order outright rather than stamping it
+ *  `CANCELED`, so there is nothing to timestamp. */
+export function cancelOrder(account: PaperAccount, orderId: string): EngineResult {
   const order = account.orders.find((o) => o.id === orderId && o.status === "NEW");
   if (!order) return { account, events: [] };
-  void now;
   return {
     account: {
       ...account,

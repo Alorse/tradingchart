@@ -373,14 +373,14 @@ describe("limit orders", () => {
       { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
       NOW,
     ).account;
-    const a = cancelOrder(placed, placed.orders[0].id, NOW + 1).account;
+    const a = cancelOrder(placed, placed.orders[0].id).account;
     expect(a.orders).toHaveLength(0);
     expect(a.balance).toBeCloseTo(S.seedBalance, 6);
   });
 
   it("cancelling an unknown id is a no-op", () => {
     const a = acct();
-    expect(cancelOrder(a, "nope", NOW).account).toBe(a);
+    expect(cancelOrder(a, "nope").account).toBe(a);
   });
 
   it("rejects a limit whose reserve exceeds the free balance", () => {

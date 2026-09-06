@@ -317,7 +317,7 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       },
 
       cancelOrder: (orderId) => {
-        const res = engineCancelOrder(get().account, orderId, Date.now());
+        const res = engineCancelOrder(get().account, orderId);
         set({ account: res.account, lastEvents: res.events });
       },
 
