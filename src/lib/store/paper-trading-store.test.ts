@@ -2,6 +2,7 @@ import { beforeEach, describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
 import {
   PAPER_STORAGE_KEY,
+  clearPersistedPaperAccount,
   sanitizePaperAccount,
   usePaperTradingStore,
 } from "./paper-trading-store";
@@ -546,5 +547,20 @@ describe("persist write skipping (adversarial review finding 7)", () => {
     // A real account mutation still persists.
     st().closePosition("BTCUSDT");
     expect(localStorage.getItem(PAPER_STORAGE_KEY) === rawAfterOpen).toBe(false);
+  });
+
+  it("clearPersistedPaperAccount drops the blob and the write-skip cache with it", () => {
+    st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
+    expect(localStorage.getItem(PAPER_STORAGE_KEY) === null).toBe(false);
+
+    clearPersistedPaperAccount();
+    expect(localStorage.getItem(PAPER_STORAGE_KEY)).toBeNull();
+
+    // A `set` that leaves the persisted slice reference-identical (only
+    // `marks` moves) must still re-write now that the blob is gone — with the
+    // cache left stale by a hand-rolled `localStorage.removeItem`, this write
+    // short-circuits and storage stays empty for the rest of the session.
+    usePaperTradingStore.setState({ marks: { BTCUSDT: 20_400 } });
+    expect(localStorage.getItem(PAPER_STORAGE_KEY) === null).toBe(false);
   });
 });

@@ -41,24 +41,44 @@ export interface CloudChartSettings {
 
 // ─── Chart Settings ───────────────────────────────────────────────────────────
 
+/**
+ * Loads the signed-in user's chart settings.
+ *
+ * Returns `null` only when there genuinely is no row yet, and *throws* on any
+ * other failure — same contract, and same reasoning, as `loadWatchlists`
+ * below. `.maybeSingle()` rather than `.single()`: the latter reports "no row"
+ * as an error, so discarding that error made a dropped connection (or an RLS
+ * rejection) indistinguishable from a fresh account. The caller would read the
+ * resulting `null` as "nothing up there yet", leave `loadedRef` set and go on
+ * to upsert this device's local settings over a cloud row it never read.
+ */
 export async function loadChartSettings(): Promise<CloudChartSettings | null> {
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("user_chart_settings")
     .select("symbol, timeframe, indicators, hidden, config, visual_settings")
-    .single();
+    .maybeSingle();
+  if (error) throw error;
   if (!data) return null;
   return data as CloudChartSettings;
 }
 
-export async function saveChartSettings(settings: CloudChartSettings) {
+/**
+ * Upserts the signed-in user's chart settings.
+ *
+ * Rejects on a failed upsert instead of swallowing the error, so a cloud save
+ * that never landed is distinguishable from one that did (same contract as
+ * `savePaperAccount`) — callers that fire-and-forget must attach a `.catch`.
+ */
+export async function saveChartSettings(settings: CloudChartSettings): Promise<void> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from("user_chart_settings").upsert(
+  const { error } = await supabase.from("user_chart_settings").upsert(
     { user_id: user.id, ...settings, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   );
+  if (error) throw error;
 }
 
 // ─── Watchlists ───────────────────────────────────────────────────────────────
@@ -96,12 +116,17 @@ export async function loadWatchlists(): Promise<CloudWatchlists | null> {
  * them would leave a stale copy of *one* of N lists that the loader's legacy
  * branch could resurface, silently dropping the rest. Nothing reads them once
  * `lists` is non-empty, which it is from this write onwards.
+ *
+ * Rejects on a failed upsert rather than swallowing the error — the sync
+ * hook's one-shot seed write awaits this to decide whether the row it is about
+ * to keep syncing against actually exists, and the debounced saves attach a
+ * `.catch` so a cloud write that never landed is at least visible.
  */
-export async function saveWatchlists(lists: Watchlist[], activeId: string) {
+export async function saveWatchlists(lists: Watchlist[], activeId: string): Promise<void> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from("user_watchlists").upsert(
+  const { error } = await supabase.from("user_watchlists").upsert(
     {
       user_id: user.id,
       lists,
@@ -110,4 +135,5 @@ export async function saveWatchlists(lists: Watchlist[], activeId: string) {
     },
     { onConflict: "user_id" },
   );
+  if (error) throw error;
 }

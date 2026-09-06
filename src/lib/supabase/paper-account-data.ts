@@ -29,12 +29,21 @@ export async function loadPaperAccount(): Promise<PaperAccount | null> {
   return sanitizePaperAccount(data.state);
 }
 
-export async function savePaperAccount(account: PaperAccount) {
+/**
+ * Upserts the account for `userId`. The id is a *parameter* rather than
+ * something re-derived from `supabase.auth.getUser()` here: the only caller
+ * (the sync hook) already holds the signed-in user, and getting it again cost
+ * a second HTTP round trip on every debounced save.
+ *
+ * Rejects on a failed upsert instead of swallowing the error, so a cloud save
+ * that never landed is distinguishable from one that did — callers that
+ * fire-and-forget must attach a `.catch`.
+ */
+export async function savePaperAccount(account: PaperAccount, userId: string): Promise<void> {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase.from("user_paper_accounts").upsert(
-    { user_id: user.id, state: account, updated_at: new Date().toISOString() },
+  const { error } = await supabase.from("user_paper_accounts").upsert(
+    { user_id: userId, state: account, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   );
+  if (error) throw error;
 }
