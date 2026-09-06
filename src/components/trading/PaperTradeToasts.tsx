@@ -43,14 +43,22 @@ export function PaperTradeToasts() {
     setToasts((prev) => [...prev, ...next]);
   }, [lastEvents]);
 
+  // Keyed on "is anything showing", not on the array: `filter` always returns a
+  // new array, so depending on `toasts` tore down and rebuilt the interval
+  // twice a second for the whole TTL. Returning `prev` when nothing expired
+  // keeps that from re-rendering the list too.
+  const hasToasts = toasts.length > 0;
   useEffect(() => {
-    if (toasts.length === 0) return;
+    if (!hasToasts) return;
     const interval = setInterval(() => {
       const now = Date.now();
-      setToasts((prev) => prev.filter((t) => t.expiresAt > now));
+      setToasts((prev) => {
+        const next = prev.filter((t) => t.expiresAt > now);
+        return next.length === prev.length ? prev : next;
+      });
     }, 500);
     return () => clearInterval(interval);
-  }, [toasts]);
+  }, [hasToasts]);
 
   if (toasts.length === 0) return null;
 

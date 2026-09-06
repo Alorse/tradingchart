@@ -37,15 +37,21 @@ export function useQuote(symbol: string): Quote {
   );
 
   useEffect(() => {
-    if (source === "bybit") {
-      return getBybitWS().subscribeMiniTickers([symbol], (t) =>
-        setState({ symbol, bid: t.close, ask: t.close }),
+    // Binance's `@bookTicker` pushes on every best-*size* change too, so most
+    // ticks carry the same bid/ask we already hold. Keeping the previous state
+    // object on those skips a re-render of the whole order ticket (and the
+    // sizing math hanging off it) for a message that changed nothing.
+    const apply = (bid: number, ask: number) =>
+      setState((prev) =>
+        prev.symbol === symbol && prev.bid === bid && prev.ask === ask
+          ? prev
+          : { symbol, bid, ask },
       );
+    if (source === "bybit") {
+      return getBybitWS().subscribeMiniTickers([symbol], (t) => apply(t.close, t.close));
     }
     if (source === "binance") {
-      return getBinanceWS().subscribeBookTicker(symbol, (d) =>
-        setState({ symbol, bid: d.bid, ask: d.ask }),
-      );
+      return getBinanceWS().subscribeBookTicker(symbol, (d) => apply(d.bid, d.ask));
     }
   }, [symbol, source]);
 

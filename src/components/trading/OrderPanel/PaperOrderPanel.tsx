@@ -52,7 +52,9 @@ const PAPER_ORDER_TYPE_TABS: Array<{ key: "MARKET" | "LIMIT"; label: string }> =
  */
 export function PaperOrderPanel() {
   const symbol = useChartStore((s) => s.symbol);
-  const account = usePaperTradingStore((s) => s.account);
+  // Only the free balance is rendered/sized off here, so subscribing the whole
+  // account would re-render the ticket on every fill, cancel and bracket edit.
+  const balance = usePaperTradingStore((s) => s.account.balance);
   const placeOrder = usePaperTradingStore((s) => s.placeOrder);
   const placeLimitOrder = usePaperTradingStore((s) => s.placeLimitOrder);
   const lastEvents = usePaperTradingStore((s) => s.lastEvents);
@@ -63,7 +65,7 @@ export function PaperOrderPanel() {
   const baseAsset = getBaseAsset(symbol);
 
   const [form, setForm] = useState<PaperOrderForm>(() =>
-    defaultPaperOrderForm(account.settings.defaultLeverage),
+    defaultPaperOrderForm(usePaperTradingStore.getState().account.settings.defaultLeverage),
   );
   // Stable so `useOrderTicket`'s risk effect can depend on it.
   const patchForm = useCallback(
@@ -76,7 +78,7 @@ export function PaperOrderPanel() {
     patch: patchForm,
     bid,
     ask,
-    balanceUsd: account.balance,
+    balanceUsd: balance,
     // Mirrors `paperFormToMarketRequest`'s leverage cap: the slider is hidden
     // for a non-perp symbol, so the sizing preview shouldn't act like a
     // leverage the actual submission will never apply.
@@ -117,7 +119,7 @@ export function PaperOrderPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden text-tv-text">
-      <PaperPanelHeader symbol={symbol} freeBalance={account.balance} />
+      <PaperPanelHeader symbol={symbol} freeBalance={balance} />
 
       <BidAskBar
         bid={bid}
