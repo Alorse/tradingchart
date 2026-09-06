@@ -42,7 +42,7 @@ export function useDragShape<T>(
   getRef.current = getCurrent;
 
   return useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent<SVGElement>) => {
       if (!chart || !candleSeries || !container) return;
       if (selectedIsLocked()) return; // drawing is locked → no drag
       e.preventDefault();
@@ -62,7 +62,10 @@ export function useDragShape<T>(
 
       handlersRef.current.onStart?.();
 
-      function onMove(ev: MouseEvent) {
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+
+      function onMove(ev: PointerEvent) {
         if (!chart || !candleSeries) return;
         const x = ev.clientX - rect.left;
         const y = ev.clientY - rect.top;
@@ -81,15 +84,18 @@ export function useDragShape<T>(
         handlersRef.current.onMove(patch);
       }
 
-      function onUp() {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+      function onUp(ev: PointerEvent) {
+        target.releasePointerCapture(ev.pointerId);
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onUp);
+        target.removeEventListener("pointercancel", onUp);
         document.body.style.cursor = "";
         handlersRef.current.onEnd?.();
       }
 
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onUp);
+      target.addEventListener("pointercancel", onUp);
       document.body.style.cursor = "grabbing";
     },
     [chart, candleSeries, container],

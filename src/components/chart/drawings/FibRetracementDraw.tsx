@@ -98,8 +98,8 @@ export function FibRetracementDraw({
         height={Math.abs(by - ay)}
         fill="transparent"
         className="drawing-hit"
-        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={(e) => {
+        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer", touchAction: "none" }}
+        onPointerDown={(e) => {
           if (selected) {
             dragShape(e);
           } else {
@@ -143,8 +143,8 @@ export function FibRetracementDraw({
       })}
       {selected && (
         <>
-          <DrawHandle x={ax} y={ay} color={TV_PINE.blue} selected onMouseDown={dragA} />
-          <DrawHandle x={bx} y={by} color={TV_PINE.blue} selected onMouseDown={dragB} />
+          <DrawHandle x={ax} y={ay} color={TV_PINE.blue} selected onPointerDown={dragA} />
+          <DrawHandle x={bx} y={by} color={TV_PINE.blue} selected onPointerDown={dragB} />
         </>
       )}
     </g>

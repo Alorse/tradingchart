@@ -106,8 +106,8 @@ export function PitchforkDraw({
         stroke="transparent"
         strokeWidth={10}
         className="drawing-hit"
-        style={{ pointerEvents: "stroke", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={(e) => {
+        style={{ pointerEvents: "stroke", cursor: selected ? "move" : "pointer", touchAction: "none" }}
+        onPointerDown={(e) => {
           if (selected) {
             dragShape(e);
           } else {
@@ -129,9 +129,9 @@ export function PitchforkDraw({
       <line x1={cx} x2={cEnd.x} y1={cy} y2={cEnd.y} stroke={color} strokeWidth={strokeWidth} opacity={0.8} style={{ pointerEvents: "none" }} />
       {selected && (
         <>
-          <DrawHandle x={ax} y={ay} color={color} selected onMouseDown={dragA} />
-          <DrawHandle x={bx} y={by} color={color} selected onMouseDown={dragB} />
-          <DrawHandle x={cx} y={cy} color={color} selected onMouseDown={dragC} />
+          <DrawHandle x={ax} y={ay} color={color} selected onPointerDown={dragA} />
+          <DrawHandle x={bx} y={by} color={color} selected onPointerDown={dragB} />
+          <DrawHandle x={cx} y={cy} color={color} selected onPointerDown={dragC} />
         </>
       )}
     </g>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import type {
   LongPositionDrawing,
   ShortPositionDrawing,
   Drawing,
+  PositionStatKey,
 } from "@/lib/drawings/types";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { DrawHandle } from "./DrawHandle";
@@ -16,6 +17,18 @@ import { xToTime, timeframeToSeconds } from "@/lib/chart/coords";
 import { useChartStore } from "@/lib/store/chart-store";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import { TV_PINE } from "@/lib/chart/theme";
+import { useSymbolInfo } from "@/lib/trading/symbol-info";
+import {
+  positionQty,
+  pnlAtLevel,
+  balanceAfter,
+  signedPct,
+  signedTicks,
+  rewardRiskRatio,
+  openPnl,
+  openPnlCurrency,
+  deriveQuoteCurrency,
+} from "@/lib/drawings/position-math";
 
 type PositionDrawing = LongPositionDrawing | ShortPositionDrawing;
 
@@ -34,7 +47,26 @@ interface Props {
   container: HTMLElement | null;
 }
 
-/** Pill shown outside the zone (above or below). */
+function lineDash(style: 0 | 1 | 2 | undefined): string | undefined {
+  return style === 1 ? "6 4" : style === 2 ? "2 4" : undefined;
+}
+
+function fmtMoney(n: number, quote: string): string {
+  const sign = n >= 0 ? "+" : "-";
+  return `${sign}${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 2 })} ${quote}`;
+}
+
+function fmtSignedPct(n: number): string {
+  const sign = n >= 0 ? "+" : "-";
+  return `${sign}${Math.abs(n).toFixed(2)}%`;
+}
+
+function fmtSignedTicks(n: number): string {
+  const sign = n >= 0 ? "+" : "";
+  return `${sign}${n} ticks`;
+}
+
+/** Small flag/tag shown outside the zone (above or below). */
 function OuterPill({
   cx, y, text, color, textColor, above,
 }: {
@@ -50,8 +82,7 @@ function OuterPill({
       <rect
         x={cx - w / 2} y={pillY}
         width={w} height={h}
-        fill={color} rx={6}
-        opacity={0.92}
+        fill={color} rx={3}
       />
       <text
         x={cx} y={pillY + h / 2 + 4}
@@ -80,17 +111,46 @@ export function PositionDraw({
   container,
 }: Props) {
   const isLong = drawing.kind === "long";
+  const side = isLong ? "long" : "short";
 
   const profitColor = drawing.targetColor ?? TV_PINE.green;
   const lossColor = drawing.stopColor ?? TV_PINE.red;
-  const profitFill = `${profitColor}20`;
-  const lossFill = `${lossColor}20`;
   const entryColor = drawing.color ?? TV_PINE.neutral;
+  // TV's own long/short tool fills the zones with a fairly solid wash rather
+  // than the near-transparent 0x20 (~12%) hex-alpha suffix this used before.
+  const ZONE_OPACITY = 0.28;
+  const textColor = drawing.textColor ?? TV_PINE.pillText;
+  const textSize = drawing.textSize ?? 11;
+  const showRMultiples = drawing.showRMultiples ?? false;
 
   const [hovered, setHovered] = useState(false);
 
   const { updateLive, commit } = useDrawings();
   const snapshotRef = useRef<PositionDrawing | null>(null);
+
+  // Instrument metadata for the ticks/qty stats. `tickSize` comes from the
+  // symbol's exchange info (Binance/Bybit `exchangeInfo`, cached client-side
+  // by `useSymbolInfo`). `pointValue` (contract multiplier) has no exchange
+  // field — every symbol this app trades is spot or a USDT-margined linear
+  // perp, where 1 contract = 1 unit of base asset, so it's a fixed 1 rather
+  // than fetched. `quoteCurrency` is parsed off the symbol string itself
+  // since `SymbolInfo` doesn't carry a quote asset.
+  const symbolInfo = useSymbolInfo(drawing.symbol);
+  const tickSize = symbolInfo.tickSize > 0 ? symbolInfo.tickSize : 0.01;
+  const pointValue = 1;
+  const quoteCurrency = deriveQuoteCurrency(drawing.symbol);
+
+  // Live mark price for Open P&L, polled off the shared candles array (WS
+  // ticks mutate it in place) rather than plumbed through props — same
+  // 1s cadence as BarCountdown, and never persisted (derived-only).
+  const [markPrice, setMarkPrice] = useState<number | null>(null);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const last = globalCandlesRef.current[globalCandlesRef.current.length - 1];
+      if (last) setMarkPrice(last.close);
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   function snap() {
     const current = useDrawingsStore.getState().drawings.find((d) => d.id === drawing.id);
@@ -109,7 +169,7 @@ export function PositionDraw({
    */
   function makeYDrag(field: "entry" | "stop" | "target") {
     const resizesWidth = field === "entry";
-    return (e: React.MouseEvent) => {
+    return (e: React.PointerEvent<SVGElement>) => {
       if (!candleSeries || !container) return;
       if (resizesWidth && !chart) return;
       if (drawing.locked) return;
@@ -121,7 +181,9 @@ export function PositionDraw({
       onSelect();
       snap();
       const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
-      function onMove(ev: MouseEvent) {
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+      function onMove(ev: PointerEvent) {
         const rect = container!.getBoundingClientRect();
         const patch: Record<string, number> = {};
         const p = candleSeries!.coordinateToPrice(ev.clientY - rect.top);
@@ -134,19 +196,22 @@ export function PositionDraw({
           updateLive(drawing.id, patch as Partial<Drawing>);
         }
       }
-      function onUp() {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+      function onUp(ev: PointerEvent) {
+        target.releasePointerCapture(ev.pointerId);
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onUp);
+        target.removeEventListener("pointercancel", onUp);
         document.body.style.cursor = "";
         commitEnd();
       }
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onUp);
+      target.addEventListener("pointercancel", onUp);
       document.body.style.cursor = resizesWidth ? "move" : "ns-resize";
     };
   }
 
-  function onRightHandleDrag(e: React.MouseEvent) {
+  function onRightHandleDrag(e: React.PointerEvent<SVGElement>) {
     if (!chart || !container) return;
     if (drawing.locked) return;
     e.preventDefault();
@@ -154,21 +219,26 @@ export function PositionDraw({
     onSelect();
     snap();
     const intervalSec = timeframeToSeconds(useChartStore.getState().timeframe);
-    function onMove(ev: MouseEvent) {
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    function onMove(ev: PointerEvent) {
       const rect = container!.getBoundingClientRect();
       const x = ev.clientX - rect.left;
       const t = xToTime(chart!, x, globalCandlesRef.current, intervalSec);
       if (t === null) return;
       updateLive(drawing.id, { timeB: t } as Partial<Drawing>);
     }
-    function onUp() {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+    function onUp(ev: PointerEvent) {
+      target.releasePointerCapture(ev.pointerId);
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
       document.body.style.cursor = "";
       commitEnd();
     }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
     document.body.style.cursor = "ew-resize";
   }
 
@@ -206,18 +276,45 @@ export function PositionDraw({
   const lossY2 = Math.max(yEntry, yStop);
 
   const risk = Math.abs(drawing.entry - drawing.stop);
-  const reward = Math.abs(drawing.target - drawing.entry);
-  const rr = risk === 0 ? 0 : reward / risk;
-  const pctProfit = drawing.entry === 0 ? 0 : (reward / Math.abs(drawing.entry)) * 100;
-  const pctLoss = drawing.entry === 0 ? 0 : (risk / Math.abs(drawing.entry)) * 100;
+  const rr = rewardRiskRatio(drawing.entry, drawing.stop, drawing.target);
 
-  // 1R/2R/3R… guide lines inside the profit zone — R is the risk distance
-  // (entry to stop), so these mark whole risk-multiples of reward, letting
-  // you see at a glance when price reaches 1R to consider taking partials.
-  // Stops strictly before the target's own multiple so it doesn't double up
-  // with the target line when the target sits exactly on a whole R.
+  // Sign convention: profit % / ticks / $ are always positive, loss values
+  // always negative, regardless of long/short (movement axis) — see
+  // signedPct/signedTicks in position-math.ts.
+  const targetPct = signedPct(drawing.entry, drawing.target, side);
+  const stopPct = signedPct(drawing.entry, drawing.stop, side);
+  const targetTicks = signedTicks(drawing.entry, drawing.target, tickSize, side);
+  const stopTicks = signedTicks(drawing.entry, drawing.stop, tickSize, side);
+
+  const qty = positionQty({
+    entry: drawing.entry,
+    stop: drawing.stop,
+    accountSize: drawing.accountSize,
+    risk: drawing.risk,
+    riskIsPercent: drawing.riskIsPercent,
+    leverage: drawing.leverage,
+    pointValue,
+    lotSize: drawing.lotSize ?? 1,
+  });
+  const hasMoneyStats = qty !== null && drawing.accountSize !== undefined;
+  const qtyPrecision = drawing.qtyPrecision ?? 3;
+
+  const targetPnl = hasMoneyStats ? pnlAtLevel(drawing.entry, drawing.target, qty!, side, pointValue) : 0;
+  const stopPnl = hasMoneyStats ? pnlAtLevel(drawing.entry, drawing.stop, qty!, side, pointValue) : 0;
+  const balanceAfterTP = hasMoneyStats ? balanceAfter(drawing.accountSize!, targetPnl) : 0;
+  const balanceAfterSL = hasMoneyStats ? balanceAfter(drawing.accountSize!, stopPnl) : 0;
+
+  const openPnlMove = markPrice !== null ? openPnl(drawing.entry, markPrice, side) : 0;
+  const openPnlIsProfit = openPnlMove >= 0;
+  const openPnlCurrencyVal =
+    markPrice !== null && hasMoneyStats
+      ? openPnlCurrency(drawing.entry, markPrice, qty!, side, pointValue)
+      : null;
+
+  // 1R/2R/3R… guide lines — legacy behavior, now opt-in (default off) so the
+  // native TV look ships by default.
   const rLevels: { n: number; y: number }[] = [];
-  if (candleSeries && risk > 0) {
+  if (showRMultiples && candleSeries && risk > 0) {
     const maxN = Math.min(Math.floor(rr - 1e-9), 10);
     for (let n = 1; n <= maxN; n++) {
       const price = drawing.entry + (isLong ? 1 : -1) * risk * n;
@@ -226,37 +323,104 @@ export function PositionDraw({
     }
   }
 
-  // Pill labels
-  const targetPillText = `${formatPrice(drawing.target)}  ${isLong ? "+" : "-"}${pctProfit.toFixed(2)}%`;
-  const stopPillText = `${formatPrice(drawing.stop)}  ${isLong ? "-" : "+"}${pctLoss.toFixed(2)}%`;
+  // Tag labels
+  const targetTagText = `${formatPrice(drawing.target)}  ${fmtSignedPct(targetPct)}`;
+  const stopTagText = `${formatPrice(drawing.stop)}  ${fmtSignedPct(stopPct)}`;
 
-  // Zone centers for inner text
+  const textX = left + zoneWidth / 2;
   const profitCenterY = (profitY1 + profitY2) / 2;
   const lossCenterY = (lossY1 + lossY2) / 2;
-  const textX = left + zoneWidth / 2;
   const profitZoneH = profitY2 - profitY1;
   const lossZoneH = lossY2 - lossY1;
 
-  // Which is top / bottom
   const topY = Math.min(profitY1, lossY1);
   const bottomY = Math.max(profitY2, lossY2);
-  const topPillColor = isLong ? profitColor : lossColor;
-  const topPillText = isLong ? targetPillText : stopPillText;
-  const bottomPillColor = isLong ? lossColor : profitColor;
-  const bottomPillText = isLong ? stopPillText : targetPillText;
+  const topTagColor = isLong ? profitColor : lossColor;
+  const topTagText = isLong ? targetTagText : stopTagText;
+  const bottomTagColor = isLong ? lossColor : profitColor;
+  const bottomTagText = isLong ? stopTagText : targetTagText;
 
-  // Bounding hover rect
   const handleR = 8;
   const pillH = 23;
   const boundTop = topY - pillH - handleR;
   const boundBottom = bottomY + pillH + handleR;
   const boundLeft = left - handleR;
 
-  function onZoneMouseDown(e: React.MouseEvent) {
+  function statVisible(key: PositionStatKey): boolean {
+    return drawing.statsOverrides?.[key] !== false;
+  }
+
+  const alwaysShowStats = drawing.alwaysShowStats ?? false;
+  const showStats = alwaysShowStats || hovered || selected;
+  const compact = drawing.compactStats ?? false;
+
+  // Bounding-rect drag target — only live while selected, so the chart stays
+  // pannable/zoomable over an unselected drawing even when its box spans the
+  // whole viewport (a large timeB on a small timeframe covers the full
+  // width). Selecting is handled separately by the zones below.
+  function onBoundPointerDown(e: React.PointerEvent<SVGRectElement>) {
+    if (!selected) return;
     e.stopPropagation();
-    onSelect();
-    // Drag immediately — no need to click twice
     dragShape(e);
+  }
+
+  // Tap-to-select on the visible zones while unselected. A plain "click"
+  // handler isn't reliable here: the chart surface runs with
+  // `touch-action: none`, which — like everywhere else pointer events are
+  // used in this file — suppresses the synthesized compatibility mouse/click
+  // events on touch, so a click-only listener would silently never fire on
+  // mobile. Track the raw pointer down→up instead and only select if the
+  // gesture didn't move (a real drag). No preventDefault/stopPropagation on
+  // the initial pointerdown, so a genuine pan attempt starting on a zone is
+  // not actively blocked beyond the unavoidable hit-test capture itself.
+  function onZonePointerDown(e: React.PointerEvent<SVGRectElement>) {
+    if (selected) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    function onUp(ev: PointerEvent) {
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (dx * dx + dy * dy < 16) onSelect();
+    }
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  // ── Stats block rows ────────────────────────────────────────────────────
+  // Entry row segments carry their own color (Open P&L is movement-colored
+  // green/red; qty and R:R stay the entry line's neutral color) so they
+  // render as separate <tspan>s inside one centered <text>.
+  const entryRowSegments: { text: string; color: string }[] = [];
+  if (statVisible("openPnl") && markPrice !== null) {
+    const txt =
+      openPnlCurrencyVal !== null
+        ? fmtMoney(openPnlCurrencyVal, quoteCurrency)
+        : fmtSignedPct(openPnlMove !== 0 ? (openPnlMove / drawing.entry) * 100 : 0);
+    entryRowSegments.push({ text: `P&L ${txt}`, color: openPnlIsProfit ? TV_PINE.green : TV_PINE.red });
+  }
+  if (statVisible("qty") && hasMoneyStats) {
+    entryRowSegments.push({ text: `Qty ${qty!.toFixed(qtyPrecision)}`, color: entryColor });
+  }
+  if (statVisible("rr")) {
+    entryRowSegments.push({ text: `R:R ${rr.toFixed(2)}`, color: entryColor });
+  }
+
+  const targetRowParts: string[] = [];
+  if (statVisible("profitLoss") && hasMoneyStats) targetRowParts.push(fmtMoney(targetPnl, quoteCurrency));
+  if (statVisible("pct")) targetRowParts.push(fmtSignedPct(targetPct));
+  if (statVisible("ticks")) targetRowParts.push(fmtSignedTicks(targetTicks));
+  if (statVisible("balance") && hasMoneyStats) {
+    targetRowParts.push(`Bal ${balanceAfterTP.toLocaleString("en-US", { maximumFractionDigits: 2 })}`);
+  }
+
+  const stopRowParts: string[] = [];
+  if (statVisible("profitLoss") && hasMoneyStats) stopRowParts.push(fmtMoney(stopPnl, quoteCurrency));
+  if (statVisible("pct")) stopRowParts.push(fmtSignedPct(stopPct));
+  if (statVisible("ticks")) stopRowParts.push(fmtSignedTicks(stopTicks));
+  if (statVisible("balance") && hasMoneyStats) {
+    stopRowParts.push(`Bal ${balanceAfterSL.toLocaleString("en-US", { maximumFractionDigits: 2 })}`);
   }
 
   return (
@@ -264,22 +428,38 @@ export function PositionDraw({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Bounding rect — hover + drag target for the whole drawing */}
+      {/* Bounding rect — hover + whole-drawing drag target, but only live
+          while selected: unselected, it stays pointer-events:none so a pan
+          gesture over a box spanning the whole viewport still reaches the
+          chart instead of starting a body-drag. */}
       <rect
         x={boundLeft} y={boundTop}
         width={zoneWidth + handleR * 2} height={boundBottom - boundTop}
         fill="transparent"
         className="drawing-hit"
-        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={onZoneMouseDown}
+        style={{ pointerEvents: selected ? "all" : "none", cursor: "move", touchAction: "none" }}
+        onPointerDown={onBoundPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
 
-      {/* Colored zones */}
-      <rect x={left} y={profitY1} width={zoneWidth} height={profitZoneH} fill={profitFill} style={{ pointerEvents: "none" }} />
-      <rect x={left} y={lossY1} width={zoneWidth} height={lossZoneH} fill={lossFill} style={{ pointerEvents: "none" }} />
+      {/* Colored zones — a solid-enough wash via a real alpha channel
+          (fillOpacity), not a truncated hex-alpha suffix. Only tap-to-select
+          while unselected; once selected, the bounding rect above takes over
+          the same area for dragging. */}
+      <rect
+        x={left} y={profitY1} width={zoneWidth} height={profitZoneH} fill={profitColor} fillOpacity={ZONE_OPACITY}
+        style={{ pointerEvents: selected ? "none" : "all", cursor: "pointer" }}
+        onPointerDown={selected ? undefined : onZonePointerDown}
+        onDoubleClick={selected ? undefined : (e) => { e.stopPropagation(); onEdit(); }}
+      />
+      <rect
+        x={left} y={lossY1} width={zoneWidth} height={lossZoneH} fill={lossColor} fillOpacity={ZONE_OPACITY}
+        style={{ pointerEvents: selected ? "none" : "all", cursor: "pointer" }}
+        onPointerDown={selected ? undefined : onZonePointerDown}
+        onDoubleClick={selected ? undefined : (e) => { e.stopPropagation(); onEdit(); }}
+      />
 
-      {/* 1R/2R/3R… guide lines */}
+      {/* 1R/2R/3R… guide lines — opt-in, off by default */}
       {rLevels.map(({ n, y }) => (
         <g key={`r${n}`} style={{ pointerEvents: "none" }}>
           <line
@@ -296,62 +476,78 @@ export function PositionDraw({
         </g>
       ))}
 
+      {/* Target line */}
+      <line
+        x1={left} x2={right} y1={yTarget} y2={yTarget}
+        stroke={profitColor} strokeWidth={drawing.targetLineWidth ?? 1.5}
+        strokeDasharray={lineDash(drawing.targetLineStyle)}
+        style={{ pointerEvents: "none" }}
+      />
+      {/* Stop line */}
+      <line
+        x1={left} x2={right} y1={yStop} y2={yStop}
+        stroke={lossColor} strokeWidth={drawing.stopLineWidth ?? 1.5}
+        strokeDasharray={lineDash(drawing.stopLineStyle)}
+        style={{ pointerEvents: "none" }}
+      />
       {/* Entry line */}
       <line
         x1={left} x2={right} y1={yEntry} y2={yEntry}
         stroke={entryColor} strokeWidth={drawing.lineWidth ?? 1.5}
+        strokeDasharray={lineDash(drawing.lineStyle)}
         style={{ pointerEvents: "none" }}
       />
 
-      {/* Outer pills — above top zone, below bottom zone — visible on hover or selected */}
+      {/* Outer tags — above top zone, below bottom zone — visible on hover or selected */}
       {(hovered || selected) && (
         <>
           <OuterPill
             cx={left + zoneWidth / 2} y={topY}
-            text={topPillText} color={topPillColor} textColor={drawing.textColor ?? TV_PINE.pillText} above
+            text={topTagText} color={topTagColor} textColor={textColor} above
           />
           <OuterPill
             cx={left + zoneWidth / 2} y={bottomY}
-            text={bottomPillText} color={bottomPillColor} textColor={drawing.textColor ?? TV_PINE.pillText} above={false}
+            text={bottomTagText} color={bottomTagColor} textColor={textColor} above={false}
           />
         </>
       )}
 
-      {/* Inner stats — only when selected and zone is tall enough */}
-      {selected && profitZoneH > 32 && (
-        <g style={{ pointerEvents: "none" }}>
-          <text
-            x={textX} y={profitCenterY + (profitZoneH > 56 ? -6 : 4)}
-            textAnchor="middle" fill={profitColor}
-            fontSize={13} fontWeight="700"
-            fontFamily="var(--font-mono), monospace"
-            opacity={0.85}
-          >
-            {isLong ? "+" : "-"}{pctProfit.toFixed(2)}%
-          </text>
-          {profitZoneH > 56 && (
-            <text
-              x={textX} y={profitCenterY + 12}
-              textAnchor="middle" fill={profitColor}
-              fontSize={11} opacity={0.5}
-              fontFamily="var(--font-mono), monospace"
-            >
-              RR {rr.toFixed(2)}
-            </text>
+      {/* Stats block */}
+      {showStats && (
+        <g style={{ pointerEvents: "none" }} fontFamily="var(--font-mono), monospace">
+          {compact ? (
+            <>
+              {entryRowSegments.length > 0 && (
+                <EntryRowText x={textX} y={yEntry - 4} fontSize={textSize} segments={entryRowSegments} gap="  " />
+              )}
+              {targetRowParts.length > 0 && profitZoneH > 14 && (
+                <text x={textX} y={profitCenterY + 4} textAnchor="middle" fill={profitColor} fontSize={textSize} fontWeight="700">
+                  {targetRowParts.join("  ")}
+                </text>
+              )}
+              {stopRowParts.length > 0 && lossZoneH > 14 && (
+                <text x={textX} y={lossCenterY + 4} textAnchor="middle" fill={lossColor} fontSize={textSize} fontWeight="700">
+                  {stopRowParts.join("  ")}
+                </text>
+              )}
+            </>
+          ) : (
+            <>
+              {entryRowSegments.length > 0 && (
+                <EntryRowText x={textX} y={yEntry - 4} fontSize={textSize} segments={entryRowSegments} gap="   " />
+              )}
+              {targetRowParts.length > 0 && profitZoneH > 32 && (
+                <text x={textX} y={profitCenterY + (profitZoneH > 56 ? -2 : 4)} textAnchor="middle" fill={profitColor} fontSize={textSize} fontWeight="700" opacity={0.9}>
+                  {targetRowParts.join("   ")}
+                </text>
+              )}
+              {stopRowParts.length > 0 && lossZoneH > 32 && (
+                <text x={textX} y={lossCenterY + (lossZoneH > 56 ? -2 : 4)} textAnchor="middle" fill={lossColor} fontSize={textSize} fontWeight="700" opacity={0.9}>
+                  {stopRowParts.join("   ")}
+                </text>
+              )}
+            </>
           )}
-        </g>
-      )}
-      {selected && lossZoneH > 32 && (
-        <g style={{ pointerEvents: "none" }}>
-          <text
-            x={textX} y={lossCenterY + 4}
-            textAnchor="middle" fill={lossColor}
-            fontSize={13} fontWeight="700"
-            fontFamily="var(--font-mono), monospace"
-            opacity={0.85}
-          >
-            {isLong ? "-" : "+"}{pctLoss.toFixed(2)}%
-          </text>
         </g>
       )}
 
@@ -360,18 +556,37 @@ export function PositionDraw({
           otherwise need to land first for the handle to exist to click on.
           Only their visibility is hover/selection-gated. */}
       <g style={{ opacity: hovered || selected ? 1 : 0, transition: "opacity 80ms" }}>
-        <DrawHandle x={left} y={yEntry} color={entryColor} selected={selected} onMouseDown={makeYDrag("entry")} />
-        <DrawHandle x={left} y={yStop} color={lossColor} selected={selected} shape="square" onMouseDown={makeYDrag("stop")} />
-        <DrawHandle x={left} y={yTarget} color={profitColor} selected={selected} shape="square" onMouseDown={makeYDrag("target")} />
+        <DrawHandle x={left} y={yEntry} color={entryColor} selected={selected} onPointerDown={makeYDrag("entry")} />
+        <DrawHandle x={left} y={yStop} color={lossColor} selected={selected} shape="square" onPointerDown={makeYDrag("stop")} />
+        <DrawHandle x={left} y={yTarget} color={profitColor} selected={selected} shape="square" onPointerDown={makeYDrag("target")} />
         <DrawHandle
           x={xB}
           y={(Math.min(profitY1, lossY1) + Math.max(profitY2, lossY2)) / 2}
           color={entryColor}
           selected={selected}
           shape="square"
-          onMouseDown={onRightHandleDrag}
+          onPointerDown={onRightHandleDrag}
         />
       </g>
     </g>
+  );
+}
+
+/** Entry stats row: each segment keeps its own color (Open P&L is
+ *  movement-colored; qty/R:R stay neutral) inside one centered text run. */
+function EntryRowText({
+  x, y, fontSize, segments, gap,
+}: {
+  x: number; y: number; fontSize: number; segments: { text: string; color: string }[]; gap: string;
+}) {
+  return (
+    <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fontWeight="700">
+      {segments.map((s, i) => (
+        <tspan key={i} fill={s.color}>
+          {i > 0 ? gap : ""}
+          {s.text}
+        </tspan>
+      ))}
+    </text>
   );
 }

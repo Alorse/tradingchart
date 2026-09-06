@@ -104,30 +104,79 @@ export interface DateRangeDrawing extends BaseDrawing {
   timeB: number;
 }
 
-export interface LongPositionDrawing extends BaseDrawing {
+/** Which stats-block rows/cells can be toggled off individually. */
+export type PositionStatKey =
+  | "openPnl"
+  | "qty"
+  | "rr"
+  | "profitLoss"
+  | "pct"
+  | "ticks"
+  | "balance";
+
+/**
+ * Fields shared by long/short position drawings beyond the geometry
+ * (entry/stop/target/timeA/timeB, still the source of truth for price/time).
+ * Everything here is optional and backwards-compatible: a drawing created
+ * before these existed simply falls back to the renderer's defaults.
+ */
+interface PositionExtraFields {
+  stopColor?: string;
+  targetColor?: string;
+  textColor?: string;
+  /** Font size (px) for stats/pill text. */
+  textSize?: number;
+  showLabels?: boolean;
+  /** Stop line width/style — entry uses the inherited color/lineWidth/lineStyle. */
+  stopLineWidth?: number;
+  stopLineStyle?: 0 | 1 | 2;
+  targetLineWidth?: number;
+  targetLineStyle?: 0 | 1 | 2;
+
+  // ── Sizing inputs (Inputs tab). Money/qty stats hide when accountSize or
+  // risk is unset — see src/lib/drawings/position-math.ts. ──
+  accountSize?: number;
+  risk?: number;
+  riskIsPercent?: boolean;
+  leverage?: number;
+  /** Contract size (base units per lot); defaults to 1 (spot/linear perp). */
+  lotSize?: number;
+  /** Decimal places to display computed qty at. */
+  qtyPrecision?: number;
+  /** Tick-denominated target/stop offsets, kept in sync with entry/target/stop
+   *  by the settings dialog's paired price+ticks fields. */
+  ticksTarget?: number;
+  ticksStop?: number;
+
+  // ── Display ──
+  /** Always render the stats block, instead of only on hover/selection. */
+  alwaysShowStats?: boolean;
+  /** Render the stats block's compact single-line form. */
+  compactStats?: boolean;
+  /** Per-stat visibility; unset = show. */
+  statsOverrides?: Partial<Record<PositionStatKey, boolean>>;
+  /** Draw small price-axis flags at entry/stop/target. */
+  priceLabels?: boolean;
+  /** Opt-in legacy 1R/2R/3R... guide lines + inner "RR x.xx" label. Default off. */
+  showRMultiples?: boolean;
+}
+
+export interface LongPositionDrawing extends BaseDrawing, PositionExtraFields {
   kind: "long";
   entry: number;
   stop: number;
   target: number;
   timeA: number;
   timeB: number;
-  stopColor?: string;
-  targetColor?: string;
-  textColor?: string;
-  showLabels?: boolean;
 }
 
-export interface ShortPositionDrawing extends BaseDrawing {
+export interface ShortPositionDrawing extends BaseDrawing, PositionExtraFields {
   kind: "short";
   entry: number;
   stop: number;
   target: number;
   timeA: number;
   timeB: number;
-  stopColor?: string;
-  targetColor?: string;
-  textColor?: string;
-  showLabels?: boolean;
 }
 
 export interface BrushDrawing extends BaseDrawing {

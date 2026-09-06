@@ -6,6 +6,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
+import { useIsMobile } from "@/hooks/useIsMobile"
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -46,13 +47,21 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  mobileFullScreen = false,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /** Fill the viewport on small screens instead of the default centered,
+   *  draggable card — dragging a full-screen sheet makes no sense, so this
+   *  also disables the mousedown-drag handler below on mobile. Desktop is
+   *  untouched (the prop only changes anything under the `sm` breakpoint). */
+  mobileFullScreen?: boolean
 }) {
+  const isMobile = useIsMobile()
   const [offset, setOffset] = React.useState({ x: 0, y: 0 })
   const drag = React.useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
   const isDragging = React.useRef(false)
+  const fullScreen = mobileFullScreen && isMobile
 
   function onMouseDown(e: React.MouseEvent<HTMLDivElement>) {
     const tag = (e.target as HTMLElement).tagName.toLowerCase()
@@ -86,12 +95,18 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] cursor-move gap-4 rounded-xl bg-tv-popup p-4 text-sm text-popover-foreground ring-1 ring-tv-border-strong outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+          mobileFullScreen &&
+            "max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-screen max-sm:max-w-none max-sm:cursor-default max-sm:overflow-y-auto max-sm:rounded-none",
           className
         )}
-        style={{
-          transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
-        }}
-        onMouseDown={onMouseDown}
+        style={
+          fullScreen
+            ? undefined
+            : {
+                transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+              }
+        }
+        onMouseDown={fullScreen ? undefined : onMouseDown}
         {...props}
       >
         {children}

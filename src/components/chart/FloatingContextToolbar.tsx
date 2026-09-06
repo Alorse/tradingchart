@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Bookmark, BookmarkPlus, Check, Copy, Eye, EyeOff, Lock, Pin, RotateCcw, Settings2, Trash2, TrendingUp, Unlock, X } from "lucide-react";
+import { Bookmark, BookmarkPlus, Check, Copy, Eye, EyeOff, Lock, Pin, RotateCcw, Settings2, SlidersHorizontal, Trash2, TrendingUp, Unlock, X } from "lucide-react";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useChartStore, type DrawingTool } from "@/lib/store/chart-store";
@@ -143,28 +143,13 @@ export function FloatingContextToolbar({ containerSize, onOpenSettings }: Props)
         </>
       )}
 
-      {/* Position drawings: E / S / T color pickers */}
       {isPosition && (
-        <Seg gap>
-          <MiniColorLabel label="E">
-            <SwatchPicker
-              value={drawing.color ?? TV_PINE.neutral}
-              onChange={(c) => patch({ color: c })}
-            />
-          </MiniColorLabel>
-          <MiniColorLabel label="S">
-            <SwatchPicker
-              value={(drawing as { stopColor?: string }).stopColor ?? TV_PINE.red}
-              onChange={(c) => patch({ stopColor: c } as Partial<Drawing>)}
-            />
-          </MiniColorLabel>
-          <MiniColorLabel label="T">
-            <SwatchPicker
-              value={(drawing as { targetColor?: string }).targetColor ?? TV_PINE.green}
-              onChange={(c) => patch({ targetColor: c } as Partial<Drawing>)}
-            />
-          </MiniColorLabel>
-        </Seg>
+        <>
+          <Sep />
+          <Seg>
+            <PositionLineStyleMenu drawing={drawing} onPatch={patch} />
+          </Seg>
+        </>
       )}
 
       <Sep />
@@ -258,15 +243,6 @@ function LockBtn({ drawing, onPatch }: { drawing: Drawing; onPatch: (p: Partial<
     >
       {locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
     </button>
-  );
-}
-
-function MiniColorLabel({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col items-center gap-px">
-      <span className="text-[7px] font-bold uppercase tracking-wider text-tv-text-muted/60">{label}</span>
-      {children}
-    </div>
   );
 }
 
@@ -438,6 +414,104 @@ function TemplatesButton({
  *
  * If no API credentials are set we disable the button and prompt to connect.
  */
+type PositionLine = "entry" | "stop" | "target";
+
+const LINE_FIELD: Record<PositionLine, { width: string; style: string }> = {
+  entry: { width: "lineWidth", style: "lineStyle" },
+  stop: { width: "stopLineWidth", style: "stopLineStyle" },
+  target: { width: "targetLineWidth", style: "targetLineStyle" },
+};
+
+/**
+ * Compact width+style editor for the position tool's three lines, picked
+ * one at a time (Entry/Stop/Target) — the E/S/T color swatches next to this
+ * button already cover color, so this only needs to add the two fields
+ * they don't: line width and dash style, per line.
+ */
+function PositionLineStyleMenu({
+  drawing,
+  onPatch,
+}: {
+  drawing: Drawing;
+  onPatch: (p: Partial<Drawing>) => void;
+}) {
+  const [line, setLine] = useState<PositionLine>("entry");
+  const d = drawing as unknown as Record<string, unknown>;
+  const fields = LINE_FIELD[line];
+  const width = (d[fields.width] as number | undefined) ?? 1.5;
+  const style = (d[fields.style] as 0 | 1 | 2 | undefined) ?? 0;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        title="Line width & style"
+        className="flex h-5 w-5 items-center justify-center rounded text-tv-text-muted transition-colors hover:bg-tv-panel-hover hover:text-tv-text"
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-52 bg-tv-panel p-2">
+        <div className="flex items-center gap-1 pb-2">
+          {(["entry", "stop", "target"] as PositionLine[]).map((l) => (
+            <button
+              key={l}
+              onClick={() => setLine(l)}
+              className={cn(
+                "flex-1 rounded px-2 py-1 text-[10px] font-semibold uppercase",
+                line === l
+                  ? "bg-tv-blue/20 text-tv-blue-text"
+                  : "text-tv-text-muted hover:bg-tv-panel-hover",
+              )}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-2 px-1 pb-1">
+          <div className="flex items-center gap-1">
+            {[1, 1.5, 2, 3].map((w) => (
+              <button
+                key={w}
+                onClick={() => onPatch({ [fields.width]: w } as Partial<Drawing>)}
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded border text-[10px]",
+                  width === w
+                    ? "border-tv-blue bg-tv-blue/15 text-tv-blue-text"
+                    : "border-tv-border text-tv-text-muted hover:bg-tv-panel-hover",
+                )}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            {([0, 1, 2] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => onPatch({ [fields.style]: s } as Partial<Drawing>)}
+                title={s === 0 ? "Solid" : s === 1 ? "Dashed" : "Dotted"}
+                className={cn(
+                  "flex h-6 w-9 items-center justify-center rounded border",
+                  style === s
+                    ? "border-tv-blue bg-tv-blue/15"
+                    : "border-tv-border hover:bg-tv-panel-hover",
+                )}
+              >
+                <svg width="22" height="2" viewBox="0 0 22 2">
+                  <line
+                    x1="0" y1="1" x2="22" y2="1"
+                    stroke="currentColor" strokeWidth="2"
+                    strokeDasharray={s === 1 ? "6 3" : s === 2 ? "2 3" : "none"}
+                  />
+                </svg>
+              </button>
+            ))}
+          </div>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function LimitOrderButton({ drawing }: { drawing: Drawing }) {
   const apiKey = useTradingStore((s) => s.apiKey);
   const apiSecret = useTradingStore((s) => s.apiSecret);

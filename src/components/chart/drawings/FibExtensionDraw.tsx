@@ -108,8 +108,8 @@ export function FibExtensionDraw({
         strokeWidth={selected ? 1.5 : 1}
         strokeDasharray="4 3"
         className="drawing-hit"
-        style={{ pointerEvents: "stroke", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={(e) => {
+        style={{ pointerEvents: "stroke", cursor: selected ? "move" : "pointer", touchAction: "none" }}
+        onPointerDown={(e) => {
           if (selected) {
             dragShape(e);
           } else {
@@ -151,9 +151,9 @@ export function FibExtensionDraw({
       })}
       {selected && (
         <>
-          <DrawHandle x={ax} y={ay} color={TV_PINE.blue} selected onMouseDown={dragA} />
-          <DrawHandle x={bx} y={by} color={TV_PINE.blue} selected onMouseDown={dragB} />
-          <DrawHandle x={cx} y={cy} color={TV_PINE.blue} selected onMouseDown={dragC} />
+          <DrawHandle x={ax} y={ay} color={TV_PINE.blue} selected onPointerDown={dragA} />
+          <DrawHandle x={bx} y={by} color={TV_PINE.blue} selected onPointerDown={dragB} />
+          <DrawHandle x={cx} y={cy} color={TV_PINE.blue} selected onPointerDown={dragC} />
         </>
       )}
     </g>

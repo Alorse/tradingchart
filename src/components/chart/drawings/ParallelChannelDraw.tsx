@@ -101,8 +101,8 @@ export function ParallelChannelDraw({
         points={`${ax},${ay} ${bx},${by} ${b2x},${b2y} ${a2x},${a2y}`}
         fill={fill}
         className="drawing-hit"
-        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={(e) => {
+        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer", touchAction: "none" }}
+        onPointerDown={(e) => {
           if (selected) {
             dragShape(e);
           } else {
@@ -116,9 +116,9 @@ export function ParallelChannelDraw({
       <line x1={a2x} x2={b2x} y1={a2y} y2={b2y} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={strokeDasharray} style={{ pointerEvents: "none" }} />
       {selected && (
         <>
-          <DrawHandle x={ax} y={ay} color={color} selected onMouseDown={dragA} />
-          <DrawHandle x={bx} y={by} color={color} selected onMouseDown={dragB} />
-          <DrawHandle x={cx} y={cy} color={color} selected onMouseDown={dragC} />
+          <DrawHandle x={ax} y={ay} color={color} selected onPointerDown={dragA} />
+          <DrawHandle x={bx} y={by} color={color} selected onPointerDown={dragB} />
+          <DrawHandle x={cx} y={cy} color={color} selected onPointerDown={dragC} />
         </>
       )}
     </g>

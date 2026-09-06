@@ -153,8 +153,8 @@ export function CalloutDraw({
 
       {selected && !editing && (
         <>
-          <DrawHandle x={anchorX} y={anchorY} color={color} selected onMouseDown={dragAnchor} />
-          <DrawHandle x={targetX} y={targetY} color={color} selected onMouseDown={dragTarget} />
+          <DrawHandle x={anchorX} y={anchorY} color={color} selected onPointerDown={dragAnchor} />
+          <DrawHandle x={targetX} y={targetY} color={color} selected onPointerDown={dragTarget} />
         </>
       )}
     </g>
