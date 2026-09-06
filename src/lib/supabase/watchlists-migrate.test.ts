@@ -4,7 +4,6 @@ import {
   sanitizeItems,
   sanitizeLists,
   legacyToWatchlists,
-  resolveActiveId,
   rowToWatchlists,
   type IdFactory,
 } from "./watchlists-migrate";
@@ -157,30 +156,6 @@ describe("legacyToWatchlists", () => {
   });
 });
 
-describe("resolveActiveId", () => {
-  const lists = [
-    { id: "w1", name: "One", items: [] },
-    { id: "w2", name: "Two", items: [] },
-  ];
-
-  it("keeps a stored id that still names a list", () => {
-    expect(resolveActiveId(lists, "w2")).toBe("w2");
-  });
-
-  it("falls back to the first list when the stored id is gone", () => {
-    expect(resolveActiveId(lists, "deleted-elsewhere")).toBe("w1");
-  });
-
-  it("falls back to the first list when there is no stored id", () => {
-    expect(resolveActiveId(lists, null)).toBe("w1");
-    expect(resolveActiveId(lists, 7)).toBe("w1");
-  });
-
-  it("is null with no lists at all", () => {
-    expect(resolveActiveId([], "w1")).toBeNull();
-  });
-});
-
 describe("rowToWatchlists", () => {
   it("adopts a migration-06 row as-is", () => {
     expect(
@@ -255,6 +230,16 @@ describe("rowToWatchlists", () => {
       counterId(),
     );
     expect(out?.activeId).toBe("w1");
+  });
+
+  it("falls back to the first list when active_id is missing or not a string", () => {
+    const lists = [
+      { id: "w1", name: "One", items: [] },
+      { id: "w2", name: "Two", items: [] },
+    ];
+    expect(rowToWatchlists({ lists }, counterId())?.activeId).toBe("w1");
+    expect(rowToWatchlists({ lists, active_id: null }, counterId())?.activeId).toBe("w1");
+    expect(rowToWatchlists({ lists, active_id: 7 }, counterId())?.activeId).toBe("w1");
   });
 
   it("is null for a row with no watchlist data in any generation", () => {

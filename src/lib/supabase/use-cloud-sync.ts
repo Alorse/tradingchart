@@ -104,7 +104,7 @@ export function useCloudSync() {
       if (wl) {
         useChartStore.setState({
           watchlists: wl.lists,
-          ...(wl.activeId && { activeWatchlistId: wl.activeId }),
+          activeWatchlistId: wl.activeId,
         });
       } else {
         // No watchlist data in the cloud at all (first sign-in on this
