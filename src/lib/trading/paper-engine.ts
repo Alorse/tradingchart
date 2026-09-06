@@ -915,7 +915,7 @@ export function evaluateTick(
   if (!isPositive(price)) return { account, events: [] };
 
   let acc = account;
-  let events: PaperEvent[] = [];
+  const events: PaperEvent[] = [];
 
   // The position on this symbol as it stood *before* this tick's limit
   // fills, id *and* brackets. Positions net per symbol, so there is at most
@@ -962,11 +962,11 @@ export function evaluateTick(
       // unchanged: the reserve is already back in `balance` and the order
       // already dropped from `orders`.
       acc = res.account;
-      events = [...events, ...res.events, { type: "cancel", orderId: order.id, symbol: order.symbol }];
+      events.push(...res.events, { type: "cancel", orderId: order.id, symbol: order.symbol });
       continue;
     }
     acc = res.account;
-    events = [...events, ...res.events];
+    events.push(...res.events);
   }
 
   // Then brackets and liquidation, at most one trigger per position — but
@@ -990,7 +990,7 @@ export function evaluateTick(
     if (exit) {
       const res = closePosition(acc, symbol, exit.price, now, undefined, exit.reason);
       acc = res.account;
-      events = [...events, ...res.events];
+      events.push(...res.events);
     }
   }
 
