@@ -25,30 +25,19 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // `getClaims()` verifies the session JWT locally (falling back to a network
-  // call only when it genuinely can't, e.g. an expired token that needs a
-  // refresh), whereas `getUser()` always round-trips to Supabase's auth
-  // server. At one middleware run per request that round trip dominated the
-  // wall-clock — and therefore the billed compute — of every single request.
-  // Any unexpected failure is treated as "not authenticated", so the worst
-  // case is a redirect to /login rather than an open door.
-  let authenticated = false;
+  // The app is guest-accessible (see LoginDialog / Header) — this no longer
+  // gates access. `getClaims()` verifies the session JWT locally (falling
+  // back to a network call only when it genuinely can't, e.g. an expired
+  // token that needs a refresh), whereas `getUser()` always round-trips to
+  // Supabase's auth server; at one middleware run per request that round trip
+  // dominated the wall-clock — and therefore the billed compute — of every
+  // request. The call is kept (result unused) purely so an expiring session
+  // cookie still gets refreshed via `setAll` above on every request; any
+  // failure is harmless now that nothing is gated on it.
   try {
-    const { data, error } = await supabase.auth.getClaims();
-    authenticated = !error && !!data?.claims?.sub;
+    await supabase.auth.getClaims();
   } catch {
-    authenticated = false;
-  }
-
-  // Redirect to /login unless authenticated or already on /login or /auth/*
-  if (
-    !authenticated &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    // no-op — see comment above
   }
 
   return supabaseResponse;
