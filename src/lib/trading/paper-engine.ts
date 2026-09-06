@@ -407,7 +407,7 @@ export function sanitizePersistedSettings(raw: unknown): Partial<PaperSettings> 
  * `merge`) — a key that fails validation is silently dropped rather than
  * thrown: this runs off a live settings form, and one bad field (a stray
  * "-" mid-edit, a paste gone wrong) shouldn't discard the rest of an
- * otherwise-valid patch or blow up the form (adversarial re-audit finding 5).
+ * otherwise-valid patch or blow up the form.
  */
 export function updateSettings(
   account: PaperAccount,
@@ -874,8 +874,7 @@ export function reversePosition(
  * tick; falls back to the position's own entry price when no mark is
  * available yet, e.g. right after a reload before the socket connects) so a
  * bracket typed in on the wrong side of the market is dropped rather than
- * left to fire an instant phantom-gain stop-out (adversarial re-audit
- * finding 2).
+ * left to fire an instant phantom-gain stop-out.
  */
 export function setBrackets(
   account: PaperAccount,
@@ -978,8 +977,7 @@ export function evaluateTick(
       // the tick is on the fill side of the limit, so filling at the tick is
       // the no-look-ahead choice — the order's own price could be wildly
       // stale (e.g. a limit resting far through the current market), and
-      // filling there books a phantom gain or loss the market never offered
-      // (adversarial re-audit finding 1).
+      // filling there books a phantom gain or loss the market never offered.
       price,
       leverage: order.leverage,
       feeRate: acc.settings.makerFeeRate,
@@ -1011,7 +1009,7 @@ export function evaluateTick(
   // same-side merge just changed on this tick (the id survives a merge,
   // unlike an open/flip) — that bracket was only just set, relative to this
   // same tick's price, so it must wait for the next tick too, exactly like a
-  // fresh position's (adversarial re-audit finding 3).
+  // fresh position's.
   const position = acc.positions.find((p) => p.symbol === symbol);
   const bracketsUnchangedThisTick =
     position !== undefined &&

@@ -125,7 +125,7 @@ describe("paper-trading-store actions", () => {
     expect(st().account.history[0].reason).toBe("TP");
   });
 
-  it("setBrackets drops a wrong-side stop using the symbol's last mark as reference (adversarial re-audit finding 2)", () => {
+  it("setBrackets drops a wrong-side stop using the symbol's last mark as reference", () => {
     st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
     // The mark has since fallen to 19_500 (a live tick, still above the
     // 18_100 liquidation price so nothing else fires). A stop at 19_700 is
@@ -165,12 +165,12 @@ describe("paper-trading-store actions", () => {
     expect(st().marks).toEqual({});
   });
 
-  it("placing an order built from a decorated symbol records the canonical key (adversarial review finding 3)", () => {
+  it("placing an order built from a decorated symbol records the canonical key", () => {
     const form = { ...defaultPaperOrderForm(10), qty: "1" };
     const req = paperFormToMarketRequest(form, "BYBIT:SOLUSDT.P");
     st().placeOrder(req, 100);
     expect(st().account.positions).toHaveLength(1);
-    // Venue prefix stripped, `.P` kept — see holistic review finding 4.
+    // Venue prefix stripped, `.P` kept: spot and perp must not net together.
     expect(st().account.positions[0].symbol).toBe("SOLUSDT.P");
     expect(st().marks["SOLUSDT.P"]).toBe(100);
 
@@ -181,7 +181,7 @@ describe("paper-trading-store actions", () => {
     expect(st().marks["SOLUSDT.P"]).toBe(110);
   });
 
-  it("keeps a spot position and a perp position on the same ticker separate (holistic review finding 4)", () => {
+  it("keeps a spot position and a perp position on the same ticker separate", () => {
     // Sized to fit the seed balance: the spot leg is forced to 1x, so its
     // margin is the full notional.
     const form = { ...defaultPaperOrderForm(10), qty: "0.1" };
@@ -281,7 +281,7 @@ describe("paper-trading-store persistence", () => {
     expect(st().account.positions).toHaveLength(0);
   });
 
-  it("rehydrating orders:null or a non-array history falls back to defaults instead of corrupting the account (adversarial review finding 8)", async () => {
+  it("rehydrating orders:null or a non-array history falls back to defaults instead of corrupting the account", async () => {
     localStorage.setItem(
       PAPER_STORAGE_KEY,
       JSON.stringify({
@@ -319,7 +319,7 @@ describe("paper-trading-store persistence", () => {
   });
 });
 
-describe("persist merge validation (adversarial re-audit finding 4)", () => {
+describe("persist merge validation", () => {
   it("rejects a NaN balance instead of accepting it (typeof NaN === 'number', so a naive check passes it)", async () => {
     localStorage.setItem(
       PAPER_STORAGE_KEY,
@@ -449,7 +449,7 @@ describe("sanitizePaperAccount (shared by localStorage merge and cloud sync)", (
   });
 });
 
-describe("sanitizePaperAccount rejection classes (holistic review finding 3)", () => {
+describe("sanitizePaperAccount rejection classes", () => {
   function sanitized(patch: Record<string, unknown>) {
     return sanitizePaperAccount({
       positions: [], orders: [], history: [], balance: 1_000, ...patch,
@@ -532,7 +532,7 @@ describe("setAccount (cloud-adoption path)", () => {
   });
 });
 
-describe("persist write skipping (adversarial review finding 7)", () => {
+describe("persist write skipping", () => {
   it("does not re-write localStorage on a tick that only moves the mark", () => {
     st().placeOrder({ symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 20_000);
     const rawAfterOpen = localStorage.getItem(PAPER_STORAGE_KEY);

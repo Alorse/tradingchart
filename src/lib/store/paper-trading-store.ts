@@ -180,15 +180,14 @@ const PAPER_ORDER_STATUSES: ReadonlySet<unknown> = new Set(["NEW", "FILLED", "CA
  * anything else (a stray `null` from a corrupted write, a field that lost its
  * type across a schema change) would crash `equity()`/`usedMargin()`, which
  * reduce over these arrays unconditionally, or silently rehydrate NaN
- * margin/fees into every calculation downstream (adversarial re-audit
- * finding 4).
+ * margin/fees into every calculation downstream.
  *
  * Every field the engine or a table actually *reads* is checked, not just the
  * headline numbers: a `qty <= 0` position is untradeable and un-closeable
  * (`closeSlice` divides by it), a `side` outside the direction enum inverts
  * every P&L sign through `pnlAtExit`, and a `reserved` that survived as a
  * string turns `usedMargin`'s `+` into string concatenation, poisoning equity
- * for the whole session (holistic review finding 3).
+ * for the whole session.
  */
 function isValidPersistedPosition(p: unknown): p is PaperPosition {
   if (!isRecord(p)) return false;
@@ -337,8 +336,8 @@ export const usePaperTradingStore = create<PaperTradingState>()(
         const { account, marks } = get();
         // The last live tick, so a bracket typed in on the wrong side of the
         // *current* market is dropped, not just the wrong side of a stale
-        // entry price (adversarial re-audit finding 2). Falls back to entry
-        // inside the engine when no tick has arrived yet.
+        // entry price. Falls back to entry inside the engine when no tick
+        // has arrived yet.
         const next = engineSetBrackets(account, symbol, brackets, marks[symbol]);
         set({ account: next });
       },
@@ -406,8 +405,8 @@ export const usePaperTradingStore = create<PaperTradingState>()(
        * corrupted one) must not leave the account half-built, since every fee
        * and margin calculation reads off `settings`. Beyond the top-level
        * shape, every array item and every settings value is validated
-       * individually (adversarial re-audit finding 4) — a single bad
-       * position/order/setting is dropped rather than sinking the whole
+       * individually — a single bad position/order/setting is dropped
+       * rather than sinking the whole
        * account back to `current`, since the rest of a mostly-intact blob is
        * still worth keeping. A `pnlDisplayMode` outside the known enum (a
        * stale value from before a mode was renamed, or a hand-edited blob)

@@ -482,7 +482,7 @@ describe("per-tick bracket triggers", () => {
   });
 });
 
-describe("same-side merge liquidation (adversarial review finding 1)", () => {
+describe("same-side merge liquidation", () => {
   it("prices liquidation from the margin actually locked, not the last fill's leverage", () => {
     // A 2x core is overwhelmingly well-margined; adding a tiny 125x slice must
     // not drag its liquidation up near entry just because 125x was the *last*
@@ -529,7 +529,7 @@ describe("same-side merge liquidation (adversarial review finding 1)", () => {
   });
 });
 
-describe("liquidation buffer clamp (adversarial review finding 5)", () => {
+describe("liquidation buffer clamp", () => {
   it("clamps a negative buffer instead of putting liquidation on the wrong side of entry", () => {
     // maintMarginRate (0.01) exceeds 1/leverage (1/125 = 0.008): an
     // unclamped buffer would put a LONG's liquidation above entry (instant
@@ -539,7 +539,7 @@ describe("liquidation buffer clamp (adversarial review finding 5)", () => {
   });
 });
 
-describe("bracket normalization on open (adversarial review finding 6)", () => {
+describe("bracket normalization on open", () => {
   it("drops a stop-loss above entry and a take-profit below entry on a fresh LONG", () => {
     const a = fillMarketOrder(
       acct(),
@@ -565,16 +565,15 @@ describe("bracket normalization on open (adversarial review finding 6)", () => {
   });
 });
 
-describe("same-tick bracket evaluation (adversarial review finding 4)", () => {
+describe("same-tick bracket evaluation", () => {
   it("does not evaluate a freshly-opened position's liquidation on the tick that opened it", () => {
     // maintMarginRate == 1/leverage clamps the liquidation buffer to zero, so
     // liquidationPrice lands exactly on the entry price — the position opens
     // already "at" its own liquidation level. (A tp/sl can't set up this
-    // same-tick edge case any more: since adversarial re-audit finding 1,
-    // a crossing limit fills at the tick price, and open-time bracket
-    // normalization checks against that same price, so a bracket that
-    // survives normalization can never immediately trigger — see the
-    // re-audit finding 1/3 tests below. Liquidation has no such
+    // same-tick edge case any more: a crossing limit fills at the tick
+    // price, and open-time bracket normalization checks against that same
+    // price, so a bracket that survives normalization can never immediately
+    // trigger — see the two describe blocks below. Liquidation has no such
     // normalization, so this is the one case left where "just opened" still
     // matters.)
     let a = createAccount({ maintMarginRate: 0.1 });
@@ -600,9 +599,9 @@ describe("same-tick bracket evaluation (adversarial review finding 4)", () => {
   });
 });
 
-describe("rejected crossing orders (adversarial review finding 2)", () => {
-  // Rewritten for adversarial re-audit finding 1: a crossing limit now fills
-  // at the tick price rather than its own resting price (see the
+describe("rejected crossing orders", () => {
+  // Rewritten once a crossing limit started filling at the tick price
+  // rather than at its own resting price (see the
   // "crossing limit fills at the tick price" describe block below), so the
   // original version of this test — a SELL resting at 1 that "force-closed"
   // an unrelated LONG at exactly 1 — no longer demonstrates an overdraw at
@@ -639,7 +638,7 @@ describe("rejected crossing orders (adversarial review finding 2)", () => {
   });
 });
 
-describe("crossing limit fills at the tick price (adversarial re-audit finding 1)", () => {
+describe("crossing limit fills at the tick price", () => {
   it("fills a crossing limit at the tick price, not its own resting price", () => {
     // A SELL limit resting well below market, as if mistaken for a stop.
     // Before this fix it filled at its own 15_000, booking a $5,000 phantom
@@ -695,7 +694,7 @@ describe("crossing limit fills at the tick price (adversarial re-audit finding 1
   });
 });
 
-describe("wrong-side brackets on a merge (adversarial re-audit finding 2)", () => {
+describe("wrong-side brackets on a merge", () => {
   it("drops a merge's blended-in stop that sits on the wrong side of the fill price", () => {
     let a = openLong(acct(), 20_000, 1, 10);
     // Adding to the LONG with an SL *above* the fill price books a gain the
@@ -714,7 +713,7 @@ describe("wrong-side brackets on a merge (adversarial re-audit finding 2)", () =
   });
 });
 
-describe("same-tick bracket evaluation for a merge (adversarial re-audit finding 3)", () => {
+describe("same-tick bracket evaluation for a merge", () => {
   it("does not evaluate a merge's newly-set bracket against the tick that just set it", () => {
     let a = openLong(acct(), 20_000, 1, 10);
     a = placeLimitOrder(
@@ -747,7 +746,7 @@ describe("same-tick bracket evaluation for a merge (adversarial re-audit finding
   // a carried-over value), not something a same-tick test can observe today.
 });
 
-describe("event payloads and flips against a resting order (adversarial review finding 11)", () => {
+describe("event payloads and flips against a resting order", () => {
   it("a market fill's event carries a null orderId and a taker fee proportional to qty*price*rate", () => {
     const res = fillMarketOrder(
       acct(),
@@ -800,7 +799,7 @@ describe("event payloads and flips against a resting order (adversarial review f
   });
 });
 
-describe("setBrackets reference-price validation (adversarial re-audit finding 2)", () => {
+describe("setBrackets reference-price validation", () => {
   it("drops a setBrackets stop that sits on the wrong side of the reference price", () => {
     let a = openLong(acct(), 20_000, 1, 10);
     a = setBrackets(a, "BTCUSDT", { sl: 30_000 }, 20_000);
@@ -822,7 +821,7 @@ describe("setBrackets reference-price validation (adversarial re-audit finding 2
   });
 });
 
-describe("updateSettings validation (adversarial re-audit finding 5)", () => {
+describe("updateSettings validation", () => {
   it("ignores a negative fee rate, keeping the previous value", () => {
     const a = updateSettings(acct(), { takerFeeRate: -1 });
     expect(a.settings.takerFeeRate).toBe(S.takerFeeRate);
@@ -866,7 +865,7 @@ describe("updateSettings validation (adversarial re-audit finding 5)", () => {
   });
 });
 
-describe("fill event fee semantics and ordering (adversarial re-audit finding 6)", () => {
+describe("fill event fee semantics and ordering", () => {
   it("reports zero fee on a fill event for a pure reduce, since the exit fee is already in the close's trade.fees", () => {
     const a = openLong(acct(), 20_000, 2, 10);
     const res = fillMarketOrder(
@@ -913,7 +912,7 @@ describe("fill event fee semantics and ordering (adversarial re-audit finding 6)
   });
 });
 
-describe("floating-point dust after full netting (adversarial re-audit finding 7)", () => {
+describe("floating-point dust after full netting", () => {
   it("does not leave a dust-sized phantom position after netting to exactly flat", () => {
     let a = createAccount();
     a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 0.3, leverage: 10 }, 20_000, NOW)
