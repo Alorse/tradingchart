@@ -3354,19 +3354,24 @@ export function PriceChart({ symbol, timeframe }: Props) {
     return () => outer.removeEventListener("mousedown", onShiftCapture, { capture: true });
   }, []);
 
-  // Capture-phase mousedown: long/short placement. A plain click (no drag)
-  // keeps the old single-click fallback — default risk:reward + zone
-  // distance, fixed pixel width. A click-drag before mouseup instead sets
-  // the right edge (timeB) to the release point; stop/target are still
-  // sized from the same defaults, only the box's width comes from the drag.
-  // Runs at capture phase and stops propagation so the chart's own click
-  // detection never also fires for this gesture (same trick the
-  // shift-capture listener above uses for the measure tool).
+  // Capture-phase pointerdown: long/short placement. A plain tap/click (no
+  // drag) keeps the old single-click fallback — default risk:reward + zone
+  // distance, fixed pixel width. A drag before pointerup instead sets the
+  // right edge (timeB) to the release point; stop/target are still sized
+  // from the same defaults, only the box's width comes from the drag.
+  // Pointer events (not mouse) so this also fires on touch: the chart
+  // surface has `touch-action: none` for lightweight-charts' own pan/zoom,
+  // which suppresses synthesized compatibility mouse events, so a
+  // mousedown-only listener never sees a tap. Mirrors the pointer-capture
+  // pattern used by the Brush/Highlighter placement effect above. Runs at
+  // capture phase and stops propagation so the chart's own click detection
+  // never also fires for this gesture (same trick the shift-capture
+  // listener above uses for the measure tool).
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
-    function computePoint(e: MouseEvent): { time: number; price: number } | null {
+    function computePoint(e: PointerEvent): { time: number; price: number } | null {
       if (!containerRef.current || !chartRef.current || !candleSeriesRef.current) return null;
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -3437,7 +3442,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       setToolRef.current("cursor");
     }
 
-    function onMouseDown(e: MouseEvent) {
+    function onPointerDown(e: PointerEvent) {
       if (toolRef.current !== "long" && toolRef.current !== "short") return;
       if (!containerRef.current || !chartRef.current || !candleSeriesRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
@@ -3455,8 +3460,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
       const { stop, target } = defaultLevels(kind, entry.price);
       positionDragRef.current = { kind, entry, startClientX: e.clientX, moved: false };
       setPreviewState({ first: entry, extra: [], cursor: entry });
+      (outer as HTMLElement).setPointerCapture(e.pointerId);
 
-      function onMove(ev: MouseEvent) {
+      function onMove(ev: PointerEvent) {
         const drag = positionDragRef.current;
         if (!drag) return;
         if (Math.abs(ev.clientX - drag.startClientX) > 4) drag.moved = true;
@@ -3466,9 +3472,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         // only the time (width) tracks the actual drag.
         if (cursor) setPreviewState({ first: entry, extra: [], cursor: { time: cursor.time, price: target } });
       }
-      function onUp(ev: MouseEvent) {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+      function onUp(ev: PointerEvent) {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
         const drag = positionDragRef.current;
         positionDragRef.current = null;
         if (!drag) return;
@@ -3479,12 +3485,12 @@ export function PriceChart({ symbol, timeframe }: Props) {
         }
         finishPlacement(kind, entry, stop, target, timeB);
       }
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
     }
 
-    outer.addEventListener("mousedown", onMouseDown, { capture: true });
-    return () => outer.removeEventListener("mousedown", onMouseDown, { capture: true });
+    outer.addEventListener("pointerdown", onPointerDown, { capture: true });
+    return () => outer.removeEventListener("pointerdown", onPointerDown, { capture: true });
   }, []);
 
   // OHLC/Vol legend + native crosshair fallback: chart.subscribeCrosshairMove
