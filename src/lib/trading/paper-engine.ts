@@ -377,6 +377,30 @@ const SETTING_RANGES: Record<
 };
 
 /**
+ * Keep a persisted settings key only when it survives as a finite number — a
+ * string or NaN left in place would rehydrate straight into every fee and
+ * margin calculation that reads `settings`.
+ *
+ * Deliberately a weaker rule than `SETTING_RANGES` above, and it lives here so
+ * the difference is visible instead of split across two files: a value typed
+ * into the settings form is held to what a real venue could plausibly charge,
+ * while one already written to localStorage (or synced from the cloud) is only
+ * required to be a number. Tightening this to the ranges would silently
+ * rewrite existing accounts' settings, so it belongs in its own change with a
+ * persist version bump, not in a sanitizer.
+ */
+export function sanitizePersistedSettings(raw: unknown): Partial<PaperSettings> {
+  if (typeof raw !== "object" || raw === null) return {};
+  const settings = raw as Record<string, unknown>;
+  const out: Partial<PaperSettings> = {};
+  for (const key of Object.keys(DEFAULT_PAPER_SETTINGS) as (keyof PaperSettings)[]) {
+    const value = settings[key];
+    if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+  }
+  return out;
+}
+
+/**
  * Patch the account's settings, leaving its balance and open state alone.
  * Each key is validated independently against the range a real venue could
  * plausibly have, and — like a corrupted persisted blob (see the store's

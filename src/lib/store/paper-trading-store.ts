@@ -15,6 +15,7 @@ import {
   isPositive,
   placeLimitOrder as enginePlaceLimitOrder,
   reversePosition as engineReversePosition,
+  sanitizePersistedSettings,
   setBrackets as engineSetBrackets,
   updateSettings as engineUpdateSettings,
 } from "@/lib/trading/paper-engine";
@@ -232,20 +233,6 @@ function isValidPersistedTrade(t: unknown): t is PaperTrade {
     isFiniteNumber(trade.entryPrice) &&
     isFiniteNumber(trade.exitPrice)
   );
-}
-
-/** Keeps a persisted settings key only when it survives as a finite number — a
- *  string or NaN left in place would rehydrate straight into every fee/margin
- *  calculation that reads `settings` (adversarial re-audit finding 4). */
-function sanitizePersistedSettings(raw: unknown): Partial<PaperSettings> {
-  if (!isRecord(raw)) return {};
-  const settings = raw as Record<string, unknown>;
-  const out: Partial<PaperSettings> = {};
-  for (const key of Object.keys(DEFAULT_PAPER_SETTINGS) as (keyof PaperSettings)[]) {
-    const value = settings[key];
-    if (isFiniteNumber(value)) out[key] = value;
-  }
-  return out;
 }
 
 /** True while the account still looks exactly as it was seeded. */
