@@ -30,7 +30,7 @@ export function Header() {
       <div className="flex items-center gap-1">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/logo.svg"
+          src="/logo.png"
           alt="Logo"
           width={28}
           height={28}
