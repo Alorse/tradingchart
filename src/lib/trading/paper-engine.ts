@@ -237,32 +237,20 @@ function feeFor(qty: number, price: number, rate: number): number {
 
 /**
  * Isolated-margin liquidation price: the mark at which the loss has eaten the
- * initial margin down to the maintenance requirement. Higher leverage puts it
- * closer to the entry, which is the whole point of showing it. The buffer is
- * clamped to zero — a maintenance rate at or above `1/leverage` would
- * otherwise put liquidation on the wrong side of entry, liquidating the
- * position on its very first tick.
- */
-export function liquidationPrice(
-  side: PaperDirection,
-  entry: number,
-  leverage: number,
-  maintMarginRate: number,
-): number {
-  if (!isPositive(entry) || leverage <= 0) return 0;
-  const buffer = Math.max(0, 1 / leverage - maintMarginRate);
-  const price = side === "LONG" ? entry * (1 - buffer) : entry * (1 + buffer);
-  return price > 0 ? price : 0;
-}
-
-/**
- * Liquidation price derived straight from the margin actually locked, rather
- * than from a single leverage figure. A same-side merge blends slices opened
- * at different leverages: summing their margins is correct, but a leverage
- * recomputed from the blended entry (or simply overwritten by the latest
- * fill's) does not describe what is actually backing the position, and can
- * put liquidation absurdly close to — or absurdly far from — entry. Buffer is
- * clamped to zero for the same reason as `liquidationPrice`.
+ * margin actually locked down to the maintenance requirement. More leverage
+ * means less margin behind the same quantity, which puts liquidation closer
+ * to the entry — the whole point of showing it.
+ *
+ * Derived from the margin rather than from a single leverage figure, because
+ * a same-side merge blends slices opened at different leverages: summing
+ * their margins is correct, but a leverage recomputed from the blended entry
+ * (or simply overwritten by the latest fill's) does not describe what is
+ * actually backing the position, and can put liquidation absurdly close to —
+ * or absurdly far from — entry.
+ *
+ * The buffer is clamped to zero: a maintenance rate at or above the position's
+ * margin ratio would otherwise put liquidation on the wrong side of entry,
+ * liquidating the position on its very first tick.
  */
 export function liquidationPriceFromMargin(
   side: PaperDirection,
@@ -361,8 +349,8 @@ interface SettingRange {
 /**
  * The range each numeric setting has to land in to be accepted. `maintMarginRate`
  * is capped *strictly* under 1/MAX_LEVERAGE: at exactly that value,
- * `liquidationPrice`'s buffer clamps to zero for a position at that same
- * leverage, liquidating it on its very first tick.
+ * `liquidationPriceFromMargin`'s buffer clamps to zero for a position at that
+ * same leverage, liquidating it on its very first tick.
  *
  * `defaultLeverage` isn't here — it clamps rather than drops (see below).
  */
@@ -683,10 +671,11 @@ function applyFill(
           tp,
           sl,
           feedSymbol: args.feedSymbol,
-          liquidationPrice: liquidationPrice(
+          liquidationPrice: liquidationPriceFromMargin(
             dir,
             price,
-            leverage,
+            openQty,
+            margin,
             account.settings.maintMarginRate,
           ),
           openedAt: now,

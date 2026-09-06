@@ -9,7 +9,7 @@ import {
   equity,
   evaluateTick,
   fillMarketOrder,
-  liquidationPrice,
+  liquidationPriceFromMargin,
   placeLimitOrder,
   positionRoi,
   resetAccount,
@@ -266,12 +266,12 @@ describe("leverage and margin", () => {
     expect(pos(lo).leverage).toBe(1);
   });
 
-  it("derives the isolated-margin liquidation price from leverage", () => {
-    // 20_000 * (1 - 1/10 + 0.005)
-    expect(liquidationPrice("LONG", 20_000, 10, 0.005)).toBeCloseTo(18_100, 6);
-    expect(liquidationPrice("SHORT", 20_000, 10, 0.005)).toBeCloseTo(21_900, 6);
-    // Higher leverage puts liquidation closer to the entry.
-    expect(liquidationPrice("LONG", 20_000, 50, 0.005)).toBeCloseTo(19_700, 6);
+  it("derives the isolated-margin liquidation price from the margin locked", () => {
+    // 1 unit at 20_000 on 10x locks 2_000 of margin: 20_000 * (1 - 1/10 + 0.005)
+    expect(liquidationPriceFromMargin("LONG", 20_000, 1, 2_000, 0.005)).toBeCloseTo(18_100, 6);
+    expect(liquidationPriceFromMargin("SHORT", 20_000, 1, 2_000, 0.005)).toBeCloseTo(21_900, 6);
+    // Less margin behind the same quantity puts liquidation closer to entry.
+    expect(liquidationPriceFromMargin("LONG", 20_000, 1, 400, 0.005)).toBeCloseTo(19_700, 6);
   });
 });
 
@@ -469,11 +469,11 @@ describe("same-side merge liquidation", () => {
 
 describe("liquidation buffer clamp", () => {
   it("clamps a negative buffer instead of putting liquidation on the wrong side of entry", () => {
-    // maintMarginRate (0.01) exceeds 1/leverage (1/125 = 0.008): an
-    // unclamped buffer would put a LONG's liquidation above entry (instant
-    // liquidation) and a SHORT's below entry.
-    expect(liquidationPrice("LONG", 20_000, 125, 0.01)).toBe(20_000);
-    expect(liquidationPrice("SHORT", 20_000, 125, 0.01)).toBe(20_000);
+    // maintMarginRate (0.01) exceeds the position's margin ratio (160/20_000
+    // = 0.008, i.e. 125x): an unclamped buffer would put a LONG's liquidation
+    // above entry (instant liquidation) and a SHORT's below entry.
+    expect(liquidationPriceFromMargin("LONG", 20_000, 1, 160, 0.01)).toBe(20_000);
+    expect(liquidationPriceFromMargin("SHORT", 20_000, 1, 160, 0.01)).toBe(20_000);
   });
 });
 
