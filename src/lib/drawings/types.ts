@@ -120,7 +120,7 @@ export type PositionStatKey =
  * Everything here is optional and backwards-compatible: a drawing created
  * before these existed simply falls back to the renderer's defaults.
  */
-interface PositionExtraFields {
+export interface PositionExtraFields {
   stopColor?: string;
   targetColor?: string;
   textColor?: string;
