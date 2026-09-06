@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeftRight,
@@ -184,7 +184,15 @@ function AccountSummaryRow({
   const equity = usePaperTradingStore((s) => s.equity());
   const unrealized = totalUnrealizedPnl(account.positions, marks);
   const marginUsed = usedMargin(account);
-  const realized = account.history.reduce((s, t) => s + t.realizedPnl, 0);
+  // Realized P&L is a reduce over the whole (unbounded) trade history, and it
+  // depends on `account` alone — no mark anywhere in it. This row re-renders
+  // on every raw WS tick, since the Unrealized/Equity stats beside it are
+  // mark-driven by definition, so without the memo a long history was summed
+  // from scratch several times a second to produce the same number.
+  const realized = useMemo(
+    () => account.history.reduce((sum, t) => sum + t.realizedPnl, 0),
+    [account.history],
+  );
 
   return (
     <div className="flex items-center gap-6 border-b border-tv-border px-4 py-2 text-[11px]">
