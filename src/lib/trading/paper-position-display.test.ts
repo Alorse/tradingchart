@@ -3,6 +3,7 @@ import { expect } from "@/test-utils/expect";
 import { fillMarketOrder, createAccount } from "@/lib/trading/paper-engine";
 import {
   computePositionFigures,
+  positionFiguresAt,
   formatPnlDisplay,
   isLiquidationUrgent,
   pnlDisplayValue,
@@ -117,5 +118,21 @@ describe("computePositionFigures", () => {
     const figures = computePositionFigures(p, { BTCUSDT: 21_000 }, "MONEY", 0.1);
     expect(figures.displaySymbol).toBe("BYBIT:BTCUSDT.P");
     expect(figures.mark).toBe(21_000);
+  });
+});
+
+describe("positionFiguresAt", () => {
+  it("applies the same entry-price fallback for an undefined mark", () => {
+    const p = longAt(20_000);
+    expect(positionFiguresAt(p, undefined, "MONEY", 0.1)).toEqual(
+      computePositionFigures(p, {}, "MONEY", 0.1),
+    );
+  });
+
+  it("matches computePositionFigures for a symbol that has ticked", () => {
+    const p = longAt(20_000);
+    expect(positionFiguresAt(p, 21_000, "MONEY", 0.1)).toEqual(
+      computePositionFigures(p, { BTCUSDT: 21_000 }, "MONEY", 0.1),
+    );
   });
 });

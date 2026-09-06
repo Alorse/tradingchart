@@ -5,7 +5,7 @@ import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { stripExchangePrefix } from "@/lib/symbols/prefix";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
-import { computePositionFigures, formatPnlDisplay } from "@/lib/trading/paper-position-display";
+import { formatPnlDisplay, positionFiguresAt } from "@/lib/trading/paper-position-display";
 import type { PaperPositionFigures, PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { useSeriesPriceLines, type PriceLineLevel } from "@/lib/chart/price-lines";
 import {
@@ -57,18 +57,21 @@ export function PaperOrderLinesLayer({
   // pan/zoom, same as `OrderLinesLayer` — a price-scale rescale moves the
   // entry toolbar's y position without touching any of our own state.
   void renderTick;
+  // The key positions/orders are stored under: exchange prefix stripped,
+  // `.P` kept, so a spot chart never draws the perp position's lines.
+  const key = stripExchangePrefix(symbol);
   const orders = usePaperTradingStore((s) => s.account.orders);
   const positions = usePaperTradingStore((s) => s.account.positions);
-  const marks = usePaperTradingStore((s) => s.marks);
+  // Just this symbol's mark, not the whole map: `marks` gets a fresh identity
+  // whenever *any* exposed symbol ticks, so subscribing it re-rendered this
+  // layer (and re-ran the chip layout) for a position on another chart.
+  const mark = usePaperTradingStore((s) => s.marks[key]);
   const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
 
   const [editing, setEditing] = useState<PaperPosition | null>(null);
   const [closing, setClosing] = useState<PaperPosition | null>(null);
   const [reversing, setReversing] = useState<PaperPosition | null>(null);
 
-  // The key positions/orders are stored under: exchange prefix stripped,
-  // `.P` kept, so a spot chart never draws the perp position's lines.
-  const key = stripExchangePrefix(symbol);
   const chartedPosition = positions.find((p) => p.symbol === key) ?? null;
   const tickSize = useSymbolInfo(symbol).tickSize;
 
@@ -125,9 +128,8 @@ export function PaperOrderLinesLayer({
 
   if (!chart || !candleSeries || !chartedPosition) return null;
 
-  // Same figures the positions panel renders, from the same helper — the
-  // `marks[symbol] ?? entryPrice` fallback lives there, not at each call site.
-  const figures = computePositionFigures(chartedPosition, marks, pnlDisplayMode, tickSize);
+  // Same figures the positions panel renders, from the same helper.
+  const figures = positionFiguresAt(chartedPosition, mark, pnlDisplayMode, tickSize);
   const y = candleSeries.priceToCoordinate(chartedPosition.entryPrice);
   const plotW = chart.timeScale().width() || width;
 

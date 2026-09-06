@@ -74,19 +74,38 @@ export interface PaperPositionFigures {
   liquidationUrgent: boolean;
 }
 
+/**
+ * As `computePositionFigures`, for a caller that already holds this symbol's
+ * mark. `undefined` means the symbol hasn't ticked yet and falls back to the
+ * entry price — a position that has never ticked is worth what it cost — so
+ * that rule stays here rather than at each call site.
+ *
+ * Exists so a consumer of a *single* position (the chart's order-line layer)
+ * can subscribe to just its own mark instead of the whole `marks` map, which
+ * gets a new identity whenever any other symbol ticks.
+ */
+export function positionFiguresAt(
+  position: PaperPosition,
+  mark: number | undefined,
+  mode: PnlDisplayMode,
+  tickSize: number,
+): PaperPositionFigures {
+  const at = mark ?? position.entryPrice;
+  return {
+    mark: at,
+    pnl: unrealizedPnl(position, at),
+    displayPnl: pnlDisplayValue(position, at, mode, tickSize),
+    roe: positionRoi(position, at) * 100,
+    displaySymbol: position.feedSymbol ?? position.symbol,
+    liquidationUrgent: isLiquidationUrgent(position, at),
+  };
+}
+
 export function computePositionFigures(
   position: PaperPosition,
   marks: Record<string, number>,
   mode: PnlDisplayMode,
   tickSize: number,
 ): PaperPositionFigures {
-  const mark = marks[position.symbol] ?? position.entryPrice;
-  return {
-    mark,
-    pnl: unrealizedPnl(position, mark),
-    displayPnl: pnlDisplayValue(position, mark, mode, tickSize),
-    roe: positionRoi(position, mark) * 100,
-    displaySymbol: position.feedSymbol ?? position.symbol,
-    liquidationUrgent: isLiquidationUrgent(position, mark),
-  };
+  return positionFiguresAt(position, marks[position.symbol], mode, tickSize);
 }
