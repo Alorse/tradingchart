@@ -23,8 +23,7 @@ import { bracketEditReason } from "@/lib/trading/paper-brackets";
 import { describePaperEvent, formatDuration, reasonLabel } from "@/lib/trading/paper-format";
 import {
   formatPnlDisplay,
-  isLiquidationUrgent,
-  pnlDisplayValue,
+  positionFiguresAt,
   PNL_DISPLAY_MODES,
 } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
@@ -400,13 +399,11 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ position, mark, pnl, roe }) => (
+          {rows.map(({ position, mark }) => (
             <PositionRow
               key={position.id}
               position={position}
               mark={mark}
-              pnl={pnl}
-              roe={roe}
               pnlDisplayMode={pnlDisplayMode}
               onEdit={() => setEditing(position)}
               onClose={() => setClosing({ position, initialQty: position.qty })}
@@ -483,12 +480,10 @@ export function useRowMenuTrigger(open: (x: number, y: number) => void) {
 }
 
 function PositionRow({
-  position, mark, pnl, roe, pnlDisplayMode, onEdit, onClose, onReverse, onMenu,
+  position, mark, pnlDisplayMode, onEdit, onClose, onReverse, onMenu,
 }: {
   position: PaperPosition;
   mark: number;
-  pnl: number;
-  roe: number;
   pnlDisplayMode: PnlDisplayMode;
   onEdit: () => void;
   onClose: () => void;
@@ -497,9 +492,15 @@ function PositionRow({
 }) {
   const displaySymbol = position.feedSymbol ?? position.symbol;
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
-  const displayPnl = pnlDisplayValue(position, mark, pnlDisplayMode, tickSize);
+  // Same helper the chart's order-line layer and the mobile card derive their
+  // figures from, so the three surfaces can't disagree about one position.
+  const { pnl, roe, displayPnl, liquidationUrgent } = positionFiguresAt(
+    position,
+    mark,
+    pnlDisplayMode,
+    tickSize,
+  );
   const pnlColor = pnl >= 0 ? "text-tv-green" : "text-tv-red";
-  const liquidationUrgent = isLiquidationUrgent(position, mark);
   const menuTrigger = useRowMenuTrigger(onMenu);
 
   return (
