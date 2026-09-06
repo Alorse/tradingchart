@@ -612,7 +612,7 @@ describe("same-tick bracket evaluation for a merge", () => {
     // Fills the merge and, if brackets were evaluated on this same tick,
     // would also blow through the just-set 19_200 stop — except 19_200 sits
     // on the wrong side of the 19_000 fill price for a LONG (it's already
-    // behind where the price just was), so re-audit finding 2 drops it
+    // behind where the price just was), so `normalizeBrackets` drops it
     // before this pass ever runs.
     const res = evaluateTick(a, "BTCUSDT", 19_000, NOW + 1);
     expect(res.account.positions).toHaveLength(1);
@@ -621,7 +621,7 @@ describe("same-tick bracket evaluation for a merge", () => {
   });
 
   // There is deliberately no "a merge's untouched, still-live bracket fires
-  // on the same tick" counterpart here: since re-audit finding 2 also
+  // on the same tick" counterpart here: since `normalizeBrackets` also
   // re-validates a *carried-over* sl/tp (not just a newly-supplied one)
   // against the fill price, any bracket a merge keeps is, by construction,
   // valid relative to that same price — and `triggeredExit`'s trigger

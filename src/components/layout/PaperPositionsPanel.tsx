@@ -57,8 +57,8 @@ import type { PaperAccount, PaperEvent, PaperOrder, PaperPosition, PaperTrade } 
  * `equity()`. Marks change on every raw WS tick (Bybit's feed is uncapped,
  * several a second), so subscribing here re-rendered the panel on every tick
  * even while collapsed to a 32px bar, or mounted-but-null in live mode, with
- * nothing on screen that could show the new number (holistic review finding
- * 7). The mark-driven subscriptions live in `AccountSummaryRow`/`PositionsTable`
+ * nothing on screen that could show the new number. The mark-driven
+ * subscriptions live in `AccountSummaryRow`/`PositionsTable`
  * below, which only mount once the panel is expanded onto the relevant tab.
  *
  * The Notifications log (below) intentionally accumulates from `lastEvents`
@@ -184,7 +184,7 @@ export function PaperPositionsPanel() {
 
 /** The mark-driven figures making up the always-visible summary row, split
  *  out of the shell so the tick-rate subscriptions only exist while the
- *  panel is open (holistic review finding 7). */
+ *  panel is open. */
 function AccountSummaryRow({
   account, onReset,
 }: { account: PaperAccount; onReset: () => void }) {
@@ -316,7 +316,7 @@ function sortRows(rows: PositionRow[], sort: SortState | null): PositionRow[] {
 function PositionsTable({ positions }: { positions: PaperPosition[] }) {
   // Subscribed here rather than passed down from the shell: this table is the
   // only thing that renders a per-tick mark, and it only exists while the
-  // Positions tab is open (holistic review finding 7).
+  // Positions tab is open.
   const marks = usePaperTradingStore((s) => s.marks);
   const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
   const setPnlDisplayMode = usePaperTradingStore((s) => s.setPnlDisplayMode);

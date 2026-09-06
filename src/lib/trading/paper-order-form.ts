@@ -81,8 +81,8 @@ function bracket(enabled: boolean, value: string): number | null {
  * `cleanSym` here (which also drops `.P`) collapsed spot and perp into a
  * single netted position, so a `BTCUSDT` spot long and a `BTCUSDT.P` perp
  * short — different instruments with different prices and no netting
- * relationship on any real venue — silently closed each other out (holistic
- * review finding 4). `BYBIT:SOLUSDT.P` and `SOLUSDT.P` do still share a key:
+ * relationship on any real venue — silently closed each other out.
+ * `BYBIT:SOLUSDT.P` and `SOLUSDT.P` do still share a key:
  * that's one instrument charted from two venues, which should net.
  *
  * `isPerp` needs the undecorated symbol (the suffix is what it reads), so it
@@ -90,7 +90,7 @@ function bracket(enabled: boolean, value: string): number | null {
  *
  * Leverage only means anything for a perp — `LeverageSlider` is hidden for
  * spot symbols, so a spot order forces 1x rather than silently inheriting
- * whatever `form.leverage` was left at (adversarial review finding 8).
+ * whatever `form.leverage` was left at.
  */
 export function paperFormToMarketRequest(
   form: PaperOrderForm,
@@ -126,8 +126,7 @@ export function paperFormToLimitRequest(
  * `normalizeBrackets` enforces) phrased against the order ticket, so the
  * panel can block a submission the engine would otherwise silently drop
  * instead of leaving the user to notice a missing TP/SL only after the fill
- * (adversarial review finding 7). `null` means the brackets (if any) are
- * fine to submit.
+ * itself. `null` means the brackets (if any) are fine to submit.
  */
 export function invalidBracketReason(form: PaperOrderForm, referencePrice: number): string | null {
   return bracketSideReason(

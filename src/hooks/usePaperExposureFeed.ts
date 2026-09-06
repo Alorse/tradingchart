@@ -11,8 +11,8 @@ import { paperFeedExposure } from "@/lib/trading/paper-feed";
  * Drives the paper engine off every symbol the account actually has exposure
  * to — an open position or a resting order — not just whatever happens to be
  * charted. A position on BTC used to go stale the moment the user charted
- * ETH (adversarial re-audit finding 10); this replaces the old per-symbol
- * `usePaperPriceFeed` that was mounted inside `PriceChart`. Mounted once in
+ * ETH; this replaces the old per-symbol `usePaperPriceFeed` that was mounted
+ * inside `PriceChart`. Mounted once in
  * `providers.tsx`, alongside the other cross-cutting hooks.
  *
  * `getBinanceWS`/`getBybitWS` are process-wide singletons — this opens no new
@@ -30,7 +30,7 @@ import { paperFeedExposure } from "@/lib/trading/paper-feed";
  * tick's `symbol` is still the decorated feedSymbol — `stripExchangePrefix`
  * (not `cleanSym`) turns it into the key positions and orders are stored
  * under, keeping `.P` so a perp's ticks can't be applied to a spot position
- * of the same ticker (holistic review finding 4).
+ * of the same ticker.
  */
 export function usePaperExposureFeed() {
   // One selector reading a reference, not two that each rebuild the exposure.

@@ -324,7 +324,7 @@ export function createAccount(settings?: Partial<PaperSettings>): PaperAccount {
 /** A fee rate above 1% is not a real venue's, and a negative one pays the trader to trade. */
 const MAX_FEE_RATE = 0.01;
 
-/** Inclusive on both ends. */
+/** Inclusive on both ends unless the range marks a bound exclusive. */
 function isFiniteInRange(
   n: unknown,
   { min, max, exclusiveMin, exclusiveMax }: SettingRange,
