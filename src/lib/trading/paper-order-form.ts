@@ -1,6 +1,7 @@
 import type { SizingMode, SlMode } from "@/lib/binance/trading-types";
 import { isPerp } from "@/lib/binance/rest";
 import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { bracketSideReason } from "@/lib/trading/paper-brackets";
 import type {
   LimitOrderRequest,
   MarketOrderRequest,
@@ -121,22 +122,19 @@ export function paperFormToLimitRequest(
 }
 
 /**
- * Mirrors the engine's own bracket-side rule (`normalizeBrackets` in
- * paper-engine.ts: long TP > price > SL, short the other way) so the panel
- * can block a submission the engine would otherwise silently drop instead of
- * leaving the user to notice a missing TP/SL only after the fill (adversarial
- * review finding 7). `null` means the brackets (if any) are fine to submit.
+ * The shared bracket-side rule (`paper-brackets.ts`, which the engine's
+ * `normalizeBrackets` enforces) phrased against the order ticket, so the
+ * panel can block a submission the engine would otherwise silently drop
+ * instead of leaving the user to notice a missing TP/SL only after the fill
+ * (adversarial review finding 7). `null` means the brackets (if any) are
+ * fine to submit.
  */
 export function invalidBracketReason(form: PaperOrderForm, referencePrice: number): string | null {
-  if (!isFinite(referencePrice) || referencePrice <= 0) return null;
-  const long = form.side === "BUY";
-  const tp = bracket(form.tpEnabled, form.tp);
-  const sl = bracket(form.slEnabled, form.sl);
-  if (tp !== null && (long ? tp <= referencePrice : tp >= referencePrice)) {
-    return `Take-profit must be ${long ? "above" : "below"} the current price`;
-  }
-  if (sl !== null && (long ? sl >= referencePrice : sl <= referencePrice)) {
-    return `Stop-loss must be ${long ? "below" : "above"} the current price`;
-  }
-  return null;
+  return bracketSideReason(
+    form.side === "BUY" ? "LONG" : "SHORT",
+    referencePrice,
+    bracket(form.tpEnabled, form.tp),
+    bracket(form.slEnabled, form.sl),
+    "price",
+  );
 }

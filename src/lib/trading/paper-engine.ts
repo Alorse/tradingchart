@@ -1,3 +1,4 @@
+import { bracketSidesValid } from "@/lib/trading/paper-brackets";
 import { pnlAtExit } from "@/lib/trading/sizing";
 
 /**
@@ -472,10 +473,9 @@ function closeSlice(
 }
 
 /**
- * Drop a bracket that sits on the wrong side of `price` — an SL above entry
- * on a LONG (or below entry on a SHORT) doesn't protect against a loss, it
- * just books a gain the moment price moves at all and mislabels it as a
- * stop-out; TP mirrors it the other way. Called on every fill that can carry
+ * Drop a bracket that sits on the wrong side of `price`, per the shared rule
+ * in `paper-brackets.ts` (which the order ticket and the position editor use
+ * to *explain* the same constraint). Called on every fill that can carry
  * brackets: a fresh open/flip (checked against the fill price, which *is*
  * entry there) and a same-side merge (checked against the fill price again,
  * not the blended entry, since a merge's incoming `args.tp`/`args.sl` — or
@@ -489,10 +489,8 @@ function normalizeBrackets(
   tp: number | null,
   sl: number | null,
 ): { tp: number | null; sl: number | null } {
-  const long = dir === "LONG";
-  const validSl = sl === null || (long ? sl < price : sl > price);
-  const validTp = tp === null || (long ? tp > price : tp < price);
-  return { tp: validTp ? tp : null, sl: validSl ? sl : null };
+  const valid = bracketSidesValid(dir, price, tp, sl);
+  return { tp: valid.tp ? tp : null, sl: valid.sl ? sl : null };
 }
 
 /**
