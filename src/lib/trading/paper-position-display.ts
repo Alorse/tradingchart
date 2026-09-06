@@ -101,14 +101,13 @@ export interface PaperPositionFigures {
 }
 
 /**
- * As `computePositionFigures`, for a caller that already holds this symbol's
- * mark. `undefined` means the symbol hasn't ticked yet and falls back to the
- * entry price — a position that has never ticked is worth what it cost — so
- * that rule stays here rather than at each call site.
+ * Everything a row renders for one position, valued at `mark`. `undefined`
+ * means the symbol hasn't ticked yet and falls back to the entry price via
+ * `markOf`'s rule, so no call site repeats it.
  *
- * Exists so a consumer of a *single* position (the chart's order-line layer)
- * can subscribe to just its own mark instead of the whole `marks` map, which
- * gets a new identity whenever any other symbol ticks.
+ * Takes the single mark rather than the whole `marks` map so a consumer of one
+ * position (the chart's order-line layer) can subscribe to just its own price,
+ * which changes identity far less often than the map does.
  */
 export function positionFiguresAt(
   position: PaperPosition,
@@ -127,11 +126,3 @@ export function positionFiguresAt(
   };
 }
 
-export function computePositionFigures(
-  position: PaperPosition,
-  marks: Record<string, number>,
-  mode: PnlDisplayMode,
-  tickSize: number,
-): PaperPositionFigures {
-  return positionFiguresAt(position, marks[position.symbol], mode, tickSize);
-}

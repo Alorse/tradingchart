@@ -23,9 +23,9 @@ import { cn } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import {
-  computePositionFigures,
   formatPnlDisplay,
   paperDisplaySymbol,
+  positionFiguresAt,
 } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { totalUnrealizedPnl } from "@/lib/trading/paper-engine";
@@ -394,7 +394,7 @@ function PaperPositionCard({
 }: { position: PaperPosition; mark: number; pnlDisplayMode: PnlDisplayMode }) {
   const displaySymbol = paperDisplaySymbol(position);
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
-  const figures = computePositionFigures(position, { [position.symbol]: mark }, pnlDisplayMode, tickSize);
+  const figures = positionFiguresAt(position, mark, pnlDisplayMode, tickSize);
 
   const [editing, setEditing] = useState(false);
   const [closingQty, setClosingQty] = useState<number | null>(null);
