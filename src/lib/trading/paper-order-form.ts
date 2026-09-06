@@ -1,6 +1,6 @@
 import type { SizingMode, SlMode } from "@/lib/binance/trading-types";
 import { isPerp } from "@/lib/binance/rest";
-import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { paperSymbolKey } from "@/lib/trading/paper-symbol";
 import { bracketSideReason } from "@/lib/trading/paper-brackets";
 import type {
   LimitOrderRequest,
@@ -98,7 +98,7 @@ export function paperFormToMarketRequest(
 ): MarketOrderRequest {
   const perp = isPerp(symbol);
   return {
-    symbol: stripExchangePrefix(symbol),
+    symbol: paperSymbolKey(symbol),
     side: form.side,
     qty: parseFloat(form.qty) || 0,
     leverage: perp ? form.leverage : 1,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { getBinanceWS } from "@/lib/binance/ws";
-import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { paperSymbolKey } from "@/lib/trading/paper-symbol";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { paperFeedExposure } from "@/lib/trading/paper-feed";
@@ -27,10 +27,8 @@ import { paperFeedExposure } from "@/lib/trading/paper-feed";
  * a position opening, closing, or an order filling/cancelling does.
  *
  * Both sockets echo back the exact symbol they were subscribed with, so a
- * tick's `symbol` is still the decorated feedSymbol — `stripExchangePrefix`
- * (not `cleanSym`) turns it into the key positions and orders are stored
- * under, keeping `.P` so a perp's ticks can't be applied to a spot position
- * of the same ticker.
+ * tick's `symbol` is still the decorated feedSymbol, so `paperSymbolKey`
+ * turns it into the key positions and orders are stored under.
  */
 export function usePaperExposureFeed() {
   // One selector reading a reference, not two that each rebuild the exposure.
@@ -66,7 +64,7 @@ function useVenueFeed(getWS: () => MiniTickerSource, symbols: string[]) {
     if (!key) return;
     const evaluateTick = usePaperTradingStore.getState().evaluateTick;
     return getWS().subscribeMiniTickers(key.split(","), (t) =>
-      evaluateTick(stripExchangePrefix(t.symbol), t.close),
+      evaluateTick(paperSymbolKey(t.symbol), t.close),
     );
   }, [key, getWS]);
 }

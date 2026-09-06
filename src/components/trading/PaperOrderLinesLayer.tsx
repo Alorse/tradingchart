@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
-import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { paperSymbolKey } from "@/lib/trading/paper-symbol";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { formatPnlDisplay, positionFiguresAt } from "@/lib/trading/paper-position-display";
 import type { PaperPositionFigures, PnlDisplayMode } from "@/lib/trading/paper-position-display";
@@ -57,9 +57,7 @@ export function PaperOrderLinesLayer({
   // pan/zoom, same as `OrderLinesLayer` — a price-scale rescale moves the
   // entry toolbar's y position without touching any of our own state.
   void renderTick;
-  // The key positions/orders are stored under: exchange prefix stripped,
-  // `.P` kept, so a spot chart never draws the perp position's lines.
-  const key = stripExchangePrefix(symbol);
+  const key = paperSymbolKey(symbol);
   const orders = usePaperTradingStore((s) => s.account.orders);
   const positions = usePaperTradingStore((s) => s.account.positions);
   // Just this symbol's mark, not the whole map: `marks` gets a fresh identity

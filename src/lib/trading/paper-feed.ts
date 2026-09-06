@@ -1,5 +1,5 @@
 import { sourceKindOf } from "@/lib/symbols/source";
-import { stripExchangePrefix } from "@/lib/symbols/prefix";
+import { paperSymbolKey } from "@/lib/trading/paper-symbol";
 import type { PaperAccount } from "./paper-engine";
 
 /**
@@ -35,7 +35,7 @@ export interface PaperFeedExposure {
  * feedless symbol today. `typeof` guards against a corrupted persisted value
  * of the wrong type reaching `sourceKindOf`, which assumes a string.
  *
- * Keyed by `stripExchangePrefix` rather than the decorated feedSymbol itself,
+ * Keyed by `paperSymbolKey` rather than the decorated feedSymbol itself,
  * and with the exact same key the engine stores on a position/order (see
  * `paperFormToMarketRequest`): `evaluateTick` (in `paper-trading-store.ts`)
  * matches positions/orders by that key, so `BYBIT:SOLUSDT.P` and `SOLUSDT.P`
@@ -60,7 +60,7 @@ export function paperFeedExposure(account: PaperAccount): PaperFeedExposure {
   ];
   for (const row of exposed) {
     if (typeof row.feedSymbol !== "string" || !row.feedSymbol) continue;
-    const key = stripExchangePrefix(row.feedSymbol);
+    const key = paperSymbolKey(row.feedSymbol);
     if (!owners.has(key)) owners.set(key, row.feedSymbol);
   }
 
