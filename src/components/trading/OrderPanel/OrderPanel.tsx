@@ -194,9 +194,7 @@ export function OrderPanel() {
         <SizingControl
           mode={form.sizingMode}
           input={form.sizingInput}
-          qtyNum={qtyNum}
           derived={derived}
-          ctx={ctx}
           baseAsset={baseAsset}
           onChangeMode={(mode) => {
             // Recompute the visible input from canonical qty so it stays consistent.

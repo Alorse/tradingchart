@@ -207,9 +207,7 @@ export function PaperOrderPanel() {
         <SizingControl
           mode={form.sizingMode}
           input={form.sizingInput}
-          qtyNum={qtyNum}
           derived={derived}
-          ctx={ctx}
           baseAsset={baseAsset}
           onChangeMode={(mode) => {
             patchForm({

@@ -34,6 +34,20 @@ export const SIZING_LABELS: Record<SizingMode, string> = {
   RISK_PCT: "Risk, % balance",
 };
 
+/** Unit shown inside the sizing input; `null` means "the symbol's base asset". */
+const SIZING_UNITS: Record<SizingMode, string | null> = {
+  AMOUNT: null,
+  MARGIN_USD: "USD",
+  PCT_BALANCE: "%",
+  RISK_USD: "USD",
+  RISK_PCT: "%",
+};
+
+/** `SIZING_LABELS`, with the Amount row naming the symbol it is denominated in. */
+function sizingLabel(mode: SizingMode, baseAsset: string): string {
+  return mode === "AMOUNT" ? `Amount (${baseAsset})` : SIZING_LABELS[mode];
+}
+
 export const SL_MODE_LABELS: Record<SlMode, string> = {
   PRICE: "price",
   PCT_PRICE: "% price",
@@ -54,11 +68,9 @@ export function trimNum(n: number, decimals: number): string {
   return String(parseFloat(n.toFixed(decimals)));
 }
 
-export function formatForMode(n: number, mode: SizingMode): string {
+function formatForMode(n: number, mode: SizingMode): string {
   if (!isFinite(n) || n <= 0) return "";
-  if (mode === "AMOUNT") return n.toFixed(6).replace(/\.?0+$/, "");
-  if (mode === "PCT_BALANCE" || mode === "RISK_PCT") return n.toFixed(2);
-  return n.toFixed(2);
+  return mode === "AMOUNT" ? n.toFixed(6).replace(/\.?0+$/, "") : n.toFixed(2);
 }
 
 /**
@@ -244,13 +256,11 @@ export function PriceInput({
 }
 
 export function SizingControl({
-  mode, input, qtyNum, derived, ctx, baseAsset, onChangeMode, onChangeInput,
+  mode, input, derived, baseAsset, onChangeMode, onChangeInput,
 }: {
   mode: SizingMode;
   input: string;
-  qtyNum: number;
   derived: Record<SizingMode, number>;
-  ctx: SizingCtx;
   /** Base asset of the current symbol, shown as the Amount unit. */
   baseAsset: string;
   onChangeMode: (m: SizingMode) => void;
@@ -258,15 +268,6 @@ export function SizingControl({
 }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
-  void qtyNum;
-  void ctx;
-
-  function suffix(m: SizingMode): string {
-    if (m === "AMOUNT") return baseAsset;
-    if (m === "MARGIN_USD") return "USD";
-    if (m === "RISK_USD") return "USD";
-    return "%";
-  }
 
   return (
     <div ref={anchorRef} className="space-y-1">
@@ -275,7 +276,7 @@ export function SizingControl({
           onClick={() => setOpen((o) => !o)}
           className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-tv-text-muted hover:text-tv-text"
         >
-          {mode === "AMOUNT" ? `Amount (${baseAsset})` : SIZING_LABELS[mode]}
+          {sizingLabel(mode, baseAsset)}
           {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
       </div>
@@ -289,7 +290,7 @@ export function SizingControl({
           className="w-full rounded border border-tv-border bg-tv-bg px-2 py-1.5 pr-10 font-mono text-xs text-tv-text tabular-nums outline-none focus:border-tv-blue"
         />
         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-tv-text-muted">
-          {suffix(mode)}
+          {SIZING_UNITS[mode] ?? baseAsset}
         </span>
       </div>
       <FloatingMenu open={open} onClose={() => setOpen(false)} anchorRef={anchorRef}>
@@ -305,7 +306,7 @@ export function SizingControl({
             )}
           >
             <span className="whitespace-nowrap">
-              {m === "AMOUNT" ? `Amount (${baseAsset})` : SIZING_LABELS[m]}
+              {sizingLabel(m, baseAsset)}
             </span>
             <span className="font-mono tabular-nums">
               {derived[m] > 0 ? derived[m].toFixed(m === "AMOUNT" ? 6 : 2) : "—"}
