@@ -20,6 +20,7 @@ import {
 import { fetchTickers24h, cleanSym } from "@/lib/binance/rest";
 import { fetchBybitTickers24h } from "@/lib/bybit/public";
 import { sortWatchlistItems, cycleSort } from "@/lib/watchlist/sort";
+import { getDailyOpens } from "@/lib/watchlist/daily-open";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { resolveSource } from "@/lib/symbols/source";
@@ -35,7 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatPrice, formatPct } from "@/lib/format";
+import { formatPrice, formatPct, formatChangeAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBatchedTicks } from "@/hooks/useBatchedTicks";
 import { CoinIcon, getBaseAsset } from "./CoinIcon";
@@ -98,6 +99,10 @@ export function Watchlist() {
   const [rows, setRows] = useState<Record<string, Row>>({});
   const [flash, setFlash] = useState<Record<string, "up" | "down" | null>>({});
   const applyTick = useBatchedTicks(setRows, setFlash);
+  // UTC-midnight open per symbol — the baseline for the daily "Chg" column.
+  // Kept separate from `rows` (live price/flash) since it only changes once a
+  // day; see src/lib/watchlist/daily-open.ts for the caching strategy.
+  const [dailyOpens, setDailyOpens] = useState<Record<string, number>>({});
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -176,6 +181,25 @@ export function Watchlist() {
     return () => {
       cancelled = true;
       unsubs.forEach((u) => u());
+    };
+  }, [symbols.join(",")]);
+
+  // Daily open per symbol. `getDailyOpens` caches by UTC date internally, so
+  // this periodic re-invoke costs nothing until the date actually rolls over
+  // — no N-call fan-out on every tick, just a once-a-day refetch.
+  useEffect(() => {
+    if (symbols.length === 0) return;
+    let cancelled = false;
+    function load() {
+      getDailyOpens(symbols).then((opens) => {
+        if (!cancelled) setDailyOpens((prev) => ({ ...prev, ...opens }));
+      });
+    }
+    load();
+    const interval = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
     };
   }, [symbols.join(",")]);
 
@@ -280,10 +304,23 @@ export function Watchlist() {
     });
   }, [items, collapsed]);
 
+  // Sort input: price straight from `rows`, but "change" is the daily pct
+  // (price vs UTC-midnight open) rather than `rows`' own field, so a symbol
+  // whose daily open hasn't loaded yet is treated as missing (sorted last)
+  // instead of by a rolling-24h number it no longer displays.
+  const sortRows = useMemo(() => {
+    const out: Record<string, { price: number; pct: number }> = {};
+    for (const [sym, r] of Object.entries(rows)) {
+      const open = dailyOpens[sym];
+      out[sym] = { price: r.price, pct: open ? ((r.price - open) / open) * 100 : NaN };
+    }
+    return out;
+  }, [rows, dailyOpens]);
+
   // Apply active sort (manual = unchanged; price/change = flat sorted symbols).
   const displayItems = useMemo(
-    () => sortWatchlistItems(visibleItems, rows, sort),
-    [visibleItems, rows, sort],
+    () => sortWatchlistItems(visibleItems, sortRows, sort),
+    [visibleItems, sortRows, sort],
   );
   const isSorted = sort.key !== "manual";
 
@@ -422,7 +459,7 @@ export function Watchlist() {
           onClick={() => setWatchlistSort(cycleSort(sort, "price"))}
         />
         <SortHeader
-          label="24h"
+          label="Chg"
           active={sort.key === "change"}
           dir={sort.dir}
           onClick={() => setWatchlistSort(cycleSort(sort, "change"))}
@@ -710,30 +747,27 @@ export function Watchlist() {
                 >
                   {row ? formatPrice(row.price) : "—"}
                 </span>
-                <div className="flex items-center justify-end gap-1">
-                  <span
-                    className={cn(
-                      "tabular-nums",
-                      row
-                        ? row.pct >= 0
-                          ? "text-tv-green"
-                          : "text-tv-red"
-                        : "text-tv-text-muted",
-                    )}
-                  >
-                    {row ? formatPct(row.pct) : "—"}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (active) removeWatchlistItem(active.id, item.id);
-                    }}
-                    className="invisible rounded p-0.5 text-tv-text-muted hover:bg-tv-bg hover:text-tv-red group-hover:visible"
-                    aria-label={`Remove ${s} from watchlist`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
+                {(() => {
+                  const open = dailyOpens[s];
+                  const price = row?.price;
+                  const daily = price !== undefined && open ? { amount: price - open, pct: ((price - open) / open) * 100 } : null;
+                  return (
+                    <div className="flex items-center justify-end gap-1">
+                      {daily ? (
+                        <>
+                          <span className={cn("tabular-nums", daily.amount >= 0 ? "text-tv-green" : "text-tv-red")}>
+                            {formatChangeAmount(daily.amount, price!)}
+                          </span>
+                          <span className={cn("tabular-nums", daily.amount >= 0 ? "text-tv-green" : "text-tv-red")}>
+                            {formatPct(daily.pct)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="tabular-nums text-tv-text-muted">—</span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
@@ -790,6 +824,21 @@ export function Watchlist() {
                       />
                     ))}
                   </>
+                );
+              })()}
+              {(() => {
+                const item = items.find((i) => i.id === contextMenu.itemId);
+                if (item?.type !== "symbol") return null;
+                return (
+                  <ContextItem
+                    icon={Trash2}
+                    label="Remove from watchlist"
+                    danger
+                    onClick={() => {
+                      removeWatchlistItem(active.id, contextMenu.itemId!);
+                      setContextMenu(null);
+                    }}
+                  />
                 );
               })()}
               <div className="my-1 h-px bg-tv-border" />
