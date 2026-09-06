@@ -56,7 +56,12 @@ interface MiniTickerSource {
 /** Feeds one venue's exposed symbols into the engine, resubscribing only when
  *  that symbol *set* changes rather than on every array identity. */
 function useVenueFeed(getWS: () => MiniTickerSource, symbols: string[]) {
-  const key = symbols.join(",");
+  // Sorted, so the key describes the *set* and not the order it was built in.
+  // `paperFeedExposure` emits positions before orders, so closing and
+  // reopening a position reordered an otherwise identical list — which tore
+  // down and rebuilt every stream on the venue for nothing, and on Bybit also
+  // dropped the cached last price each topic replays to new subscribers.
+  const key = [...symbols].sort().join(",");
   useEffect(() => {
     if (!key) return;
     const evaluateTick = usePaperTradingStore.getState().evaluateTick;
