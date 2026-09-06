@@ -196,37 +196,40 @@ class BinanceWSConn {
     symbols: string[],
     onTick: (s: { symbol: string; close: number; open: number; pct: number }) => void,
   ): () => void {
-    const streams = symbols.map(
-      (s) => `${cleanSym(s).toLowerCase()}@miniTicker`,
-    );
-    const listeners = streams.map((_, i) => ({ onTick, symbol: symbols[i] }));
+    // One entry per symbol carrying both its stream and its listener, rather
+    // than two index-aligned arrays that the subscribe and unsubscribe loops
+    // each have to index in step.
+    const subs = symbols.map((symbol) => ({
+      stream: `${cleanSym(symbol).toLowerCase()}@miniTicker`,
+      listener: { onTick, symbol },
+    }));
     const newStreams: string[] = [];
-    streams.forEach((stream, i) => {
+    for (const { stream, listener } of subs) {
       let set = this.tickerSubs.get(stream);
       if (!set) {
         set = new Set();
         this.tickerSubs.set(stream, set);
         newStreams.push(stream);
       }
-      set.add(listeners[i]);
-    });
+      set.add(listener);
+    }
     if (this.connected && newStreams.length > 0) {
       this.send({ method: "SUBSCRIBE", params: newStreams, id: this.nextId++ });
     } else if (!this.ws) {
       this.connect();
     }
     return () => {
-      streams.forEach((stream, i) => {
+      for (const { stream, listener } of subs) {
         const set = this.tickerSubs.get(stream);
-        if (!set) return;
-        set.delete(listeners[i]);
+        if (!set) continue;
+        set.delete(listener);
         if (set.size === 0) {
           this.tickerSubs.delete(stream);
           if (this.connected) {
             this.send({ method: "UNSUBSCRIBE", params: [stream], id: this.nextId++ });
           }
         }
-      });
+      }
     };
   }
 
