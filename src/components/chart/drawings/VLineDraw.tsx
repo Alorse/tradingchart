@@ -75,8 +75,9 @@ export function VLineDraw({
         style={{
           pointerEvents: "stroke",
           cursor: selected ? "ew-resize" : "pointer",
+          touchAction: "none",
         }}
-        onMouseDown={(e) => {
+        onPointerDown={(e) => {
           if (selected) {
             dragLine(e);
           } else {

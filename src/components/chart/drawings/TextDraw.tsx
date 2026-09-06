@@ -125,8 +125,8 @@ export function TextDraw({
         height={lines.length * fontSize * 1.2 + 4}
         fill="transparent"
         className="drawing-hit"
-        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={(e) => {
+        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer", touchAction: "none" }}
+        onPointerDown={(e) => {
           if (selected) {
             dragText(e);
           } else {

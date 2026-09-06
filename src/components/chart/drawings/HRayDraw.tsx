@@ -83,8 +83,9 @@ export function HRayDraw({
         style={{
           pointerEvents: "stroke",
           cursor: selected ? "move" : "pointer",
+          touchAction: "none",
         }}
-        onMouseDown={(e) => {
+        onPointerDown={(e) => {
           if (selected) {
             dragLine(e);
           } else {

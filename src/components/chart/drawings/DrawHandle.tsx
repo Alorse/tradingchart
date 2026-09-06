@@ -8,18 +8,18 @@ interface Props {
   selected?: boolean;
   /** "square" for handles with resize-only behavior; default "circle". */
   shape?: "circle" | "square";
-  onMouseDown: (e: React.MouseEvent) => void;
+  onPointerDown: (e: React.PointerEvent<SVGElement>) => void;
 }
 
 /** Small circle or square that the user can grab and drag. */
-export function DrawHandle({ x, y, color, selected, shape = "circle", onMouseDown }: Props) {
+export function DrawHandle({ x, y, color, selected, shape = "circle", onPointerDown }: Props) {
   const commonProps = {
     fill: TV_PINE.handleFill,
     stroke: TV_PINE.handleStroke,
     strokeWidth: 1.5,
     className: "drawing-hit",
-    style: { pointerEvents: "all" as const, cursor: "grab" },
-    onMouseDown,
+    style: { pointerEvents: "all" as const, cursor: "grab", touchAction: "none" as const },
+    onPointerDown,
   };
   if (shape === "square") {
     const size = 9;

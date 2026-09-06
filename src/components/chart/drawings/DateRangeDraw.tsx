@@ -89,8 +89,8 @@ export function DateRangeDraw({
         strokeWidth={1}
         strokeDasharray="4,3"
         className="drawing-hit"
-        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer" }}
-        onMouseDown={(e) => {
+        style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer", touchAction: "none" }}
+        onPointerDown={(e) => {
           if (selected) {
             dragShape(e);
           } else {
@@ -113,8 +113,8 @@ export function DateRangeDraw({
       </text>
       {selected && (
         <>
-          <DrawHandle x={xA} y={height / 2} color={color} selected onMouseDown={dragA} />
-          <DrawHandle x={xB} y={height / 2} color={color} selected onMouseDown={dragB} />
+          <DrawHandle x={xA} y={height / 2} color={color} selected onPointerDown={dragA} />
+          <DrawHandle x={xB} y={height / 2} color={color} selected onPointerDown={dragB} />
         </>
       )}
     </g>
