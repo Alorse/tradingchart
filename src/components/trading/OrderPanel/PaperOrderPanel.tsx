@@ -88,28 +88,28 @@ export function PaperOrderPanel() {
 
   const lastReject = lastEvents.find((e) => e.type === "reject");
 
-  // Blocks submission (and explains why) instead of leaving `submit()` to
-  // silently no-op on a feedless symbol (finding 6) or leaving a wrong-side
-  // TP/SL to be dropped by the engine with no feedback (finding 7).
+  // Blocks submission and says why, instead of leaving `submit()` to silently
+  // no-op: on a feedless symbol, on a wrong-side TP/SL the engine would drop,
+  // or — for a MARKET order, which fills at the live quote — while the symbol
+  // has a feed but the socket hasn't delivered its first tick yet. A LIMIT
+  // order carries its own price and needs no quote.
   //
-  // A MARKET order fills at the live quote, so it also has to wait for the
-  // socket to deliver one: the symbol *has* a feed, but until the first tick
-  // arrives `submit()` would return without placing anything and without
-  // saying why (holistic review finding 8). A LIMIT order carries its own
-  // price and needs no quote.
-  const marketQuote = form.side === "BUY" ? ask : bid;
-  const blockedReason =
-    feedSource === null
-      ? "No live feed for this symbol in paper mode"
-      : form.type === "MARKET" && !marketQuote
-        ? "Waiting for a live quote…"
-        : invalidBracketReason(form, referencePrice ?? 0);
+  // `referencePrice` is the quote a MARKET order fills at: `useOrderTicket`
+  // already derives it as `side === "BUY" ? ask : bid` for that form type, and
+  // re-deriving it here would be a second expression that has to agree with
+  // the one driving the sizing preview and bracket validation.
+  function blockedReasonFor(): string | null {
+    if (feedSource === null) return "No live feed for this symbol in paper mode";
+    if (form.type === "MARKET" && !referencePrice) return "Waiting for a live quote…";
+    return invalidBracketReason(form, referencePrice ?? 0);
+  }
+  const blockedReason = blockedReasonFor();
 
   function submit() {
     if (!isPaperOrderReady(form) || blockedReason !== null) return;
     if (form.type === "MARKET") {
-      if (!marketQuote) return;
-      placeOrder(paperFormToMarketRequest(form, symbol), marketQuote);
+      // Non-null whenever `blockedReason` is null, per the guard above.
+      if (referencePrice) placeOrder(paperFormToMarketRequest(form, symbol), referencePrice);
     } else {
       placeLimitOrder(paperFormToLimitRequest(form, symbol));
     }
