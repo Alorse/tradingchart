@@ -39,6 +39,19 @@ export function useCloudSync() {
    * split, and same reasoning, as `usePaperAccountSync`.
    */
   const loadedRef = useRef(false);
+  /**
+   * Id of the user the two refs above describe.
+   *
+   * The guards used to key on `user` merely being *present*, and the reset
+   * below only fired on `!user`. `onAuthStateChange` can hand us a new session
+   * with no intervening `null` — a direct account switch, or another tab's
+   * sign-in broadcast — and on that transition `initializedRef` stayed `true`,
+   * so user B's data was never loaded, while `loadedRef` stayed `true`, so B's
+   * very next store mutation debounce-upserted *A's* chart settings and all of
+   * A's watchlists into B's row. Keyed on the id instead, mirroring
+   * `usePaperAccountSync`'s `prevUserIdRef`.
+   */
+  const prevUserIdRef = useRef<string | null>(null);
 
   // ── Fields synced to the cloud ───────────────────────────────────────────
   const symbol = useChartStore((s) => s.symbol);
@@ -61,16 +74,35 @@ export function useCloudSync() {
   const setSymbol = useChartStore((s) => s.setSymbol);
   const setTimeframe = useChartStore((s) => s.setTimeframe);
 
-  // ── Carga inicial al hacer sign-in ────────────────────────────────────────
+  // ── Initial load on sign-in, reset on sign-out / user switch ─────────────
+  // One effect, not two: the reset has to run *ahead of* the load's early
+  // return. As a separate effect declared below this one it ran too late — on
+  // a direct A -> B switch the load effect had already bailed on the stale
+  // `initializedRef`, so B never loaded at all.
   useEffect(() => {
-    if (!user || initializedRef.current) return;
+    const userId = user?.id ?? null;
+    if (prevUserIdRef.current !== userId) {
+      prevUserIdRef.current = userId;
+      initializedRef.current = false;
+      loadedRef.current = false;
+    }
+
+    if (!userId || initializedRef.current) return;
     initializedRef.current = true;
+
+    /** The signed-in user changed while this load was in flight. Its result
+     *  describes whoever was signed in when it started, so applying it (or
+     *  flipping `loadedRef` off the back of it) would drop one user's cloud
+     *  state into another's session — and the switch has already queued a
+     *  fresh load for the current user. */
+    const isStale = () => prevUserIdRef.current !== userId;
 
     async function init() {
       const [settings, wl] = await Promise.all([
         loadChartSettings(),
         loadWatchlists(),
       ]);
+      if (isStale()) return;
 
       if (settings) {
         setSymbol(settings.symbol);
@@ -128,11 +160,12 @@ export function useCloudSync() {
 
     init()
       .then(() => {
+        if (isStale()) return;
         loadedRef.current = true;
       })
       .catch((err) => {
         // Leave `loadedRef` false so the debounced saves stay gated off for
-        // the rest of the session: better to sync nothing than to upsert
+        // the rest of this sign-in: better to sync nothing than to upsert
         // local state over a cloud row the load never actually read. An
         // unapplied migration 06 lands here — `loadWatchlists` selects
         // columns that don't exist yet.
@@ -143,14 +176,6 @@ export function useCloudSync() {
         );
       });
   }, [user, setSymbol, setTimeframe]);
-
-  // ── Reset al hacer sign-out ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) {
-      initializedRef.current = false;
-      loadedRef.current = false;
-    }
-  }, [user]);
 
   // ── Debounced settings sync (indicators + visual) ────────────────────────
   const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
