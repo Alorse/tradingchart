@@ -5,9 +5,8 @@ import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { stripExchangePrefix } from "@/lib/symbols/prefix";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
-import { unrealizedPnl } from "@/lib/trading/paper-engine";
-import { formatPnlDisplay, pnlDisplayValue } from "@/lib/trading/paper-position-display";
-import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
+import { computePositionFigures, formatPnlDisplay } from "@/lib/trading/paper-position-display";
+import type { PaperPositionFigures, PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { useSeriesPriceLines, type PriceLineLevel } from "@/lib/chart/price-lines";
 import {
   CHIP_HEIGHT,
@@ -126,7 +125,9 @@ export function PaperOrderLinesLayer({
 
   if (!chart || !candleSeries || !chartedPosition) return null;
 
-  const mark = marks[chartedPosition.symbol] ?? chartedPosition.entryPrice;
+  // Same figures the positions panel renders, from the same helper — the
+  // `marks[symbol] ?? entryPrice` fallback lives there, not at each call site.
+  const figures = computePositionFigures(chartedPosition, marks, pnlDisplayMode, tickSize);
   const y = candleSeries.priceToCoordinate(chartedPosition.entryPrice);
   const plotW = chart.timeScale().width() || width;
 
@@ -142,8 +143,7 @@ export function PaperOrderLinesLayer({
               y={y}
               width={plotW}
               position={chartedPosition}
-              mark={mark}
-              tickSize={tickSize}
+              figures={figures}
               pnlDisplayMode={pnlDisplayMode}
               onEdit={() => setEditing(chartedPosition)}
               onReverse={() => setReversing(chartedPosition)}
@@ -174,13 +174,12 @@ export function PaperOrderLinesLayer({
  * every action opening a dialog instead of manipulating the line directly.
  */
 function EntryToolbarRow({
-  y, width, position, mark, tickSize, pnlDisplayMode, onEdit, onReverse, onClose,
+  y, width, position, figures, pnlDisplayMode, onEdit, onReverse, onClose,
 }: {
   y: number;
   width: number;
   position: PaperPosition;
-  mark: number;
-  tickSize: number;
+  figures: PaperPositionFigures;
   pnlDisplayMode: PnlDisplayMode;
   onEdit: () => void;
   onReverse: () => void;
@@ -190,10 +189,8 @@ function EntryToolbarRow({
   const yTop = y - 10;
   const isLong = position.side === "LONG";
   const entryColor = entryLineColor(isLong);
-  const pnl = unrealizedPnl(position, mark);
-  const displayPnl = pnlDisplayValue(position, mark, pnlDisplayMode, tickSize);
-  const pnlColor = pnl >= 0 ? TP_COLOR : LIQ_COLOR;
-  const pnlStr = formatPnlDisplay(displayPnl, pnlDisplayMode);
+  const pnlColor = figures.pnl >= 0 ? TP_COLOR : LIQ_COLOR;
+  const pnlStr = formatPnlDisplay(figures.displayPnl, pnlDisplayMode);
 
   const chips: Chip[] = [];
 
