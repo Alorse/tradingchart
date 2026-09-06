@@ -505,6 +505,13 @@ interface ChartState {
   pillsCollapsed: boolean;
   /** When true, all sub-pane indicators (RSI/MACD/ADX/Squeeze/VuManChu/OBV) are hidden. */
   subPanesHidden: boolean;
+  /**
+   * Chart pane heights as ratios of the total (main first, then sub-panes,
+   * summing to 1) — captured when the user drags a pane separator. Ratios
+   * rather than pixels so the layout restores on any viewport. Null = never
+   * dragged, use the library's defaults.
+   */
+  paneRatios: number[] | null;
   /** Persistent OHLC snap — same effect as holding Ctrl/Cmd while dragging */
   magnetMode: boolean;
   /** Show the countdown to the current bar's close on the price axis. */
@@ -623,6 +630,7 @@ interface ChartState {
   setVisibleBars: (n: number) => void;
   setPillsCollapsed: (v: boolean) => void;
   setSubPanesHidden: (v: boolean) => void;
+  setPaneRatios: (v: number[] | null) => void;
   toggleSubPanesHidden: () => void;
   toggleMagnetMode: () => void;
   setShowBarCountdown: (v: boolean) => void;
@@ -754,6 +762,7 @@ export const useChartStore = create<ChartState>()(
       visibleBars: 150,
       pillsCollapsed: false,
       subPanesHidden: false,
+      paneRatios: null,
       magnetMode: false,
       showBarCountdown: true,
       indicatorOverlays: {},
@@ -1015,6 +1024,7 @@ export const useChartStore = create<ChartState>()(
       setVisibleBars: (visibleBars) => set({ visibleBars }),
       setPillsCollapsed: (pillsCollapsed) => set({ pillsCollapsed }),
       setSubPanesHidden: (subPanesHidden) => set({ subPanesHidden }),
+      setPaneRatios: (paneRatios) => set({ paneRatios }),
       toggleSubPanesHidden: () => set((s) => ({ subPanesHidden: !s.subPanesHidden })),
       toggleMagnetMode: () => set((s) => ({ magnetMode: !s.magnetMode })),
       setShowBarCountdown: (showBarCountdown) => set({ showBarCountdown }),
@@ -1338,7 +1348,7 @@ export const useChartStore = create<ChartState>()(
     }),
     {
       name: "tv-gratis-chart-state",
-      version: 8,
+      version: 9,
       migrate: (persisted, fromVersion) => {
         const p = persisted as Record<string, unknown>;
         if (fromVersion < 3 && Array.isArray(p.watchlist)) {
@@ -1417,6 +1427,12 @@ export const useChartStore = create<ChartState>()(
             squeezeStyle.squeezeOn = DEFAULT_SQUEEZE_STYLE.squeezeOn;
           }
         }
+        // v9: pane heights became persistent. Nothing to carry over — a
+        // pre-v9 state simply has no layout saved yet, and `null` means
+        // "use the library's defaults" rather than a broken zero layout.
+        if (fromVersion < 9 && p.paneRatios === undefined) {
+          p.paneRatios = null;
+        }
         return p;
       },
       partialize: (s) => ({
@@ -1439,6 +1455,7 @@ export const useChartStore = create<ChartState>()(
         visibleBars: s.visibleBars,
         pillsCollapsed: s.pillsCollapsed,
         subPanesHidden: s.subPanesHidden,
+        paneRatios: s.paneRatios,
         magnetMode: s.magnetMode,
         showBarCountdown: s.showBarCountdown,
         indicatorOverlays: s.indicatorOverlays,
