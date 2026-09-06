@@ -69,6 +69,7 @@ import { useReplayStore } from "@/lib/replay/replay-store";
 import { ReplayToolbar } from "./ReplayToolbar";
 import { candlesRef as globalCandlesRef } from "@/lib/chart/candles-ref";
 import { magnetSnap } from "@/lib/chart/magnet";
+import { normalizeRatios, adaptRatios } from "@/lib/chart/pane-layout";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { unifiedHistory, registerViewportApplier, isApplyingHistory } from "@/lib/history";
@@ -383,6 +384,45 @@ export function PriceChart({ symbol, timeframe }: Props) {
       return o;
     });
     setPaneOffsets(offsets);
+  }
+
+  /**
+   * Save the current pane layout as ratios of the total height. Called only
+   * from the separator drag-resize path — the ResizeObserver fires on
+   * container resize, where the library has already re-laid the panes out, so
+   * capturing there would overwrite the user's choice with a derived one.
+   */
+  function capturePaneRatios() {
+    if (!chartRef.current) return;
+    const panes = chartRef.current.panes();
+    // A single pane carries no layout, and saving [1] would poison the ratios
+    // for whenever a sub-pane indicator comes back.
+    if (panes.length < 2) return;
+    // Collapsed sub-panes sit at ~0px (stretch factor 0), so a layout captured
+    // now could never be expanded back.
+    if (useChartStore.getState().subPanesHidden) return;
+    const ratios = normalizeRatios(panes.map((p) => p.getHeight()));
+    if (!ratios) return;
+    const prev = useChartStore.getState().paneRatios;
+    const unchanged =
+      prev?.length === ratios.length && prev.every((r, i) => Math.abs(r - ratios[i]) < 0.005);
+    if (unchanged) return;
+    useChartStore.getState().setPaneRatios(ratios);
+  }
+
+  /**
+   * Restore the persisted layout. Stretch factors are relative, so feeding
+   * them the ratios directly reproduces the same proportions at any height.
+   */
+  function applyPaneRatios() {
+    if (!chartRef.current) return;
+    const state = useChartStore.getState();
+    // While collapsed the stretch factors belong to the collapse effect.
+    if (state.subPanesHidden) return;
+    const panes = chartRef.current.panes();
+    const ratios = adaptRatios(state.paneRatios, panes.length);
+    if (!ratios) return;
+    panes.forEach((p, i) => p.setStretchFactor(ratios[i]));
   }
 
   // Re-read each pane's actual autoScale flag off its series, so the "A"
@@ -1025,6 +1065,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     const onPaneMouseUp = () =>
       requestAnimationFrame(() => {
         recomputePaneOffsets();
+        capturePaneRatios();
         resyncAutoScaleStates();
       });
     containerRef.current.addEventListener("mouseup", onPaneMouseUp);
@@ -2745,11 +2786,18 @@ export function PriceChart({ symbol, timeframe }: Props) {
         // Recompute pane offsets in multiple frames: lightweight-charts needs
         // at least two render cycles after setData() to settle pane heights.
         // The setTimeout backup catches cases where the first frames are still early.
+        // Restoring the persisted layout rides the same frames: the sub-panes
+        // only exist once the indicator effects have run, so applying earlier
+        // (on mount, or before setData) would see a single pane.
         requestAnimationFrame(() => {
+          applyPaneRatios();
           recomputePaneOffsets();
           requestAnimationFrame(() => recomputePaneOffsets());
         });
-        setTimeout(() => recomputePaneOffsets(), 200);
+        setTimeout(() => {
+          applyPaneRatios();
+          recomputePaneOffsets();
+        }, 200);
 
         if (klines.length > 0) {
           const last = klines[klines.length - 1];
