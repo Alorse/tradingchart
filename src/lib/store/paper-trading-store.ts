@@ -27,7 +27,7 @@ import type {
   PaperSettings,
   PaperTrade,
 } from "@/lib/trading/paper-engine";
-import { PNL_DISPLAY_MODES } from "@/lib/trading/paper-position-display";
+import { isPnlDisplayMode } from "@/lib/trading/paper-position-display";
 import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 
 /**
@@ -167,9 +167,11 @@ function isFiniteOrNull(n: unknown): n is number | null {
   return n === null || isFiniteNumber(n);
 }
 
-const PAPER_DIRECTIONS = new Set(["LONG", "SHORT"]);
-const PAPER_ORDER_SIDES = new Set(["BUY", "SELL"]);
-const PAPER_ORDER_STATUSES = new Set(["NEW", "FILLED", "CANCELED"]);
+// Typed as `unknown` sets on purpose: they are handed fields off an unvalidated
+// blob, so `has` should accept whatever is there rather than force a cast.
+const PAPER_DIRECTIONS: ReadonlySet<unknown> = new Set(["LONG", "SHORT"]);
+const PAPER_ORDER_SIDES: ReadonlySet<unknown> = new Set(["BUY", "SELL"]);
+const PAPER_ORDER_STATUSES: ReadonlySet<unknown> = new Set(["NEW", "FILLED", "CANCELED"]);
 
 /**
  * A persisted position/order/trade needs its money-math fields intact —
@@ -197,7 +199,7 @@ function isValidPersistedPosition(p: unknown): p is PaperPosition {
     isFiniteNumber(pos.entryPrice) &&
     isFiniteNumber(pos.leverage) &&
     isFiniteNumber(pos.feesPaid) &&
-    PAPER_DIRECTIONS.has(pos.side as string) &&
+    PAPER_DIRECTIONS.has(pos.side) &&
     isFiniteOrNull(pos.tp) &&
     isFiniteOrNull(pos.sl)
   );
@@ -211,8 +213,8 @@ function isValidPersistedOrder(o: unknown): o is PaperOrder {
     isFiniteNumber(ord.qty) &&
     ord.qty > 0 &&
     isFiniteNumber(ord.reserved) &&
-    PAPER_ORDER_SIDES.has(ord.side as string) &&
-    PAPER_ORDER_STATUSES.has(ord.status as string)
+    PAPER_ORDER_SIDES.has(ord.side) &&
+    PAPER_ORDER_STATUSES.has(ord.status)
   );
 }
 
@@ -263,7 +265,7 @@ function isUntouched(account: PaperAccount): boolean {
  * this one over time.
  */
 export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (!isRecord(raw)) return null;
   const account = raw as Partial<PaperAccount>;
   if (
     !Array.isArray(account.positions) ||
@@ -277,9 +279,12 @@ export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
   ) {
     return null;
   }
+  // Built field by field rather than spread over a seed account: `PaperAccount`
+  // is closed and every one of its five fields is written here, so a spread
+  // only carried the blob's stray keys forward — which is exactly what forced
+  // the `as PaperAccount` cast that stopped TypeScript checking this return.
   return {
-    ...createAccount(),
-    ...account,
+    balance: account.balance,
     positions: account.positions.filter(isValidPersistedPosition),
     orders: account.orders.filter(isValidPersistedOrder),
     history: account.history.filter(isValidPersistedTrade),
@@ -287,7 +292,7 @@ export function sanitizePaperAccount(raw: unknown): PaperAccount | null {
       ...DEFAULT_PAPER_SETTINGS,
       ...sanitizePersistedSettings(account.settings),
     },
-  } as PaperAccount;
+  };
 }
 
 export const usePaperTradingStore = create<PaperTradingState>()(
@@ -427,8 +432,8 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       merge: (persisted, current) => {
         const raw = persisted as { account?: unknown; pnlDisplayMode?: unknown } | undefined;
         const account = sanitizePaperAccount(raw?.account);
-        const pnlDisplayMode = PNL_DISPLAY_MODES.includes(raw?.pnlDisplayMode as PnlDisplayMode)
-          ? (raw!.pnlDisplayMode as PnlDisplayMode)
+        const pnlDisplayMode = isPnlDisplayMode(raw?.pnlDisplayMode)
+          ? raw.pnlDisplayMode
           : current.pnlDisplayMode;
         return { ...current, ...(account ? { account } : {}), pnlDisplayMode };
       },

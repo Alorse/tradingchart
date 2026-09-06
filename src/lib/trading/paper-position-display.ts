@@ -11,6 +11,12 @@ export type PnlDisplayMode = "MONEY" | "TICKS" | "PERCENT";
 
 export const PNL_DISPLAY_MODES: PnlDisplayMode[] = ["MONEY", "TICKS", "PERCENT"];
 
+/** Narrows a value off a persisted blob to a known mode, so a stale or
+ *  hand-edited one falls back to the default instead of rendering blank. */
+export function isPnlDisplayMode(v: unknown): v is PnlDisplayMode {
+  return PNL_DISPLAY_MODES.includes(v as PnlDisplayMode);
+}
+
 /**
  * The floating P&L in whichever unit `mode` asks for. Signed by direction in
  * every mode — a short profits from a falling mark, so `TICKS`/`PERCENT` flip
