@@ -11,6 +11,7 @@ import {
   equity as engineEquity,
   evaluateTick as engineEvaluateTick,
   fillMarketOrder,
+  isPositive,
   placeLimitOrder as enginePlaceLimitOrder,
   reversePosition as engineReversePosition,
   setBrackets as engineSetBrackets,
@@ -120,7 +121,7 @@ function createPaperStorage(): PersistStorage<Persisted> {
 }
 
 function isQuote(price: number | undefined): price is number {
-  return price !== undefined && Number.isFinite(price) && price > 0;
+  return price !== undefined && isPositive(price);
 }
 
 /**
@@ -350,7 +351,7 @@ export const usePaperTradingStore = create<PaperTradingState>()(
       },
 
       evaluateTick: (symbol, price) => {
-        if (!Number.isFinite(price) || price <= 0) return;
+        if (!isPositive(price)) return;
         const { account, marks } = get();
         // The cheap path, and by far the common one: a tick for a symbol the
         // paper account has no exposure to costs two `some` scans and no

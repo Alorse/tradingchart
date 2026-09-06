@@ -203,7 +203,10 @@ function clampLeverage(leverage: number | undefined, fallback: number): number {
   return Math.min(MAX_LEVERAGE, Math.max(MIN_LEVERAGE, Math.round(n)));
 }
 
-function isPositive(n: number): boolean {
+/** The engine's own accept gate for a price or a quantity. Exported so the
+ *  store's "is this a usable quote" bail-out can't drift from the rule the
+ *  engine will actually apply to the same number. */
+export function isPositive(n: number): boolean {
   return isFinite(n) && n > 0;
 }
 
@@ -219,7 +222,7 @@ function entrySide(dir: PaperDirection): PaperSide {
 
 /** The order side that closes a position pointing this way. */
 function closingSide(dir: PaperDirection): PaperSide {
-  return entrySide(dir) === "BUY" ? "SELL" : "BUY";
+  return dir === "LONG" ? "SELL" : "BUY";
 }
 
 /** Margin locked to hold `qty` at `price` on `leverage`x. */
@@ -856,7 +859,10 @@ export function setBrackets(
   if (!position) return account;
   const candidateTp = brackets.tp === undefined ? position.tp : brackets.tp;
   const candidateSl = brackets.sl === undefined ? position.sl : brackets.sl;
-  const ref = isPositive(referencePrice ?? NaN) ? (referencePrice as number) : position.entryPrice;
+  const ref =
+    referencePrice !== undefined && isPositive(referencePrice)
+      ? referencePrice
+      : position.entryPrice;
   const { tp, sl } = normalizeBrackets(position.side, ref, candidateTp, candidateSl);
   return {
     ...account,
