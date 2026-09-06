@@ -43,6 +43,19 @@ export function reasonLabel(reason: CloseReason): string {
   return REASON_LABELS[reason];
 }
 
+/**
+ * The colour a `PaperEvent` reads in, shared by the bottom-left toasts and the
+ * panel's Notifications tab — the same notification in two places, so a new
+ * event variant must not pick up a colour in one and fall through to blue in
+ * the other. Keyed by the event type so the union stays exhaustive.
+ */
+export const PAPER_EVENT_TONE: Record<PaperEvent["type"], string> = {
+  fill: "text-tv-blue-text",
+  close: "text-tv-green",
+  cancel: "text-tv-blue-text",
+  reject: "text-tv-red",
+};
+
 /** One-line summary of a `PaperEvent`, shared by the bottom-left toasts and
  *  the panel's Notifications tab — both just render this over the raw event. */
 export function describePaperEvent(event: PaperEvent): string {

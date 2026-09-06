@@ -21,7 +21,12 @@ import { cn } from "@/lib/utils";
 import { Badge, Stat, Stub, TabBtn } from "@/components/layout/panel-bits";
 import { formatPct, formatPrice } from "@/lib/format";
 import { bracketEditReason } from "@/lib/trading/paper-brackets";
-import { describePaperEvent, formatDuration, reasonLabel } from "@/lib/trading/paper-format";
+import {
+  describePaperEvent,
+  formatDuration,
+  PAPER_EVENT_TONE,
+  reasonLabel,
+} from "@/lib/trading/paper-format";
 import {
   formatPnlDisplay,
   markOf,
@@ -985,12 +990,7 @@ function NotificationsTable({ events }: { events: PaperEvent[] }) {
     <ul className="divide-y divide-tv-border">
       {events.map((e, i) => (
         <li key={i} className="flex items-center gap-2 px-3 py-2 text-[11px]">
-          <Bell
-            className={cn(
-              "h-3 w-3 shrink-0",
-              e.type === "reject" ? "text-tv-red" : e.type === "close" ? "text-tv-green" : "text-tv-blue-text",
-            )}
-          />
+          <Bell className={cn("h-3 w-3 shrink-0", PAPER_EVENT_TONE[e.type])} />
           <span className="text-tv-text">{describePaperEvent(e)}</span>
         </li>
       ))}
