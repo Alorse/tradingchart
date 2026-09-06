@@ -10,6 +10,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { translateDrawing } from "@/lib/drawings/translate";
 import { TV_PINE } from "@/lib/chart/theme";
+import { lineDash } from "@/lib/drawings/line-style";
 
 interface Props {
   drawing: ParallelChannelDrawing;
@@ -45,7 +46,7 @@ export function ParallelChannelDraw({
   const color = drawing.color ?? TV_PINE.blue;
   const stroke = color;
   const strokeWidth = drawing.lineWidth ?? 1.5;
-  const strokeDasharray = drawing.lineStyle === 1 ? "6 4" : drawing.lineStyle === 2 ? "2 4" : undefined;
+  const strokeDasharray = lineDash(drawing.lineStyle);
   const fill = `${color}1a`; // ~10% alpha
   const { updateLive, commit } = useDrawings();
   const snapshotRef = useRef<ParallelChannelDrawing | null>(null);

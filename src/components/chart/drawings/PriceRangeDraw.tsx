@@ -11,6 +11,7 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
 import { translateDrawing } from "@/lib/drawings/translate";
 import { TV_PINE } from "@/lib/chart/theme";
+import { lineDash } from "@/lib/drawings/line-style";
 
 interface Props {
   drawing: PriceRangeDrawing;
@@ -97,7 +98,7 @@ export function PriceRangeDraw({
         fill={fill}
         stroke={stroke}
         strokeWidth={drawing.lineWidth ?? 1}
-        strokeDasharray={drawing.lineStyle === 1 ? "6 4" : drawing.lineStyle === 2 ? "2 4" : undefined}
+        strokeDasharray={lineDash(drawing.lineStyle)}
         className="drawing-hit"
         style={{ pointerEvents: "all", cursor: selected ? "move" : "pointer", touchAction: "none" }}
         onPointerDown={(e) => {
