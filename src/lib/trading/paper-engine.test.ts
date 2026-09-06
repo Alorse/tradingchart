@@ -20,7 +20,7 @@ import {
   updateSettings,
   usedMargin,
 } from "./paper-engine";
-import type { PaperAccount } from "./paper-engine";
+import type { LimitOrderRequest, MarketOrderRequest, PaperAccount } from "./paper-engine";
 
 /**
  * The paper fills engine is pure: every function takes an account and returns a
@@ -39,10 +39,38 @@ function acct(): PaperAccount {
   return createAccount();
 }
 
+/**
+ * A 1 BTC market buy at 10x against `a`, with `req` overriding whatever the
+ * case under test is actually about. Every market fill here is a variation on
+ * that one order, so spelling the constant fields out per test buried the one
+ * that mattered.
+ */
+function market(
+  a: PaperAccount,
+  req: Partial<MarketOrderRequest>,
+  price: number,
+  now: number = NOW,
+) {
+  return fillMarketOrder(
+    a,
+    { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, ...req },
+    price,
+    now,
+  );
+}
+
+/** `market`'s counterpart for a resting limit order: 1 BTC bid at 19_000, 10x. */
+function restLimit(a: PaperAccount, req: Partial<LimitOrderRequest> = {}, now: number = NOW) {
+  return placeLimitOrder(
+    a,
+    { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10, ...req },
+    now,
+  );
+}
+
 /** Open 1 BTC at `price` and return the resulting account. */
 function openLong(a: PaperAccount, price = 20_000, qty = 1, leverage = 10) {
-  return fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty, leverage }, price, NOW)
-    .account;
+  return market(a, { qty, leverage }, price).account;
 }
 
 function pos(a: PaperAccount, symbol = "BTCUSDT") {
@@ -71,11 +99,7 @@ describe("createAccount / resetAccount", () => {
   it("reset restores the seed state but keeps settings", () => {
     let a = createAccount({ seedBalance: 1_000 });
     a = openLong(a, 20_000, 0.1);
-    a = placeLimitOrder(
-      a,
-      { symbol: "ETHUSDT", side: "BUY", qty: 1, price: 1_000, leverage: 10 },
-      NOW,
-    ).account;
+    a = restLimit(a, { symbol: "ETHUSDT", price: 1_000 }).account;
     a = closePosition(a, "BTCUSDT", 21_000, NOW + 1_000).account;
     expect(a.history).toHaveLength(1);
 
@@ -103,12 +127,7 @@ describe("market orders", () => {
   });
 
   it("fills a short at the quote", () => {
-    const a = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
-      20_000,
-      NOW,
-    ).account;
+    const a = market(acct(), { side: "SELL" }, 20_000).account;
     const p = pos(a);
     expect(p.side).toBe("SHORT");
     expect(p.entryPrice).toBe(20_000);
@@ -116,12 +135,7 @@ describe("market orders", () => {
   });
 
   it("emits a fill event and records the order as FILLED", () => {
-    const res = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 },
-      20_000,
-      NOW,
-    );
+    const res = market(acct(), {}, 20_000);
     expect(res.events).toHaveLength(1);
     expect(res.events[0].type).toBe("fill");
     // A market order never rests: it is not left in the working-orders list.
@@ -129,12 +143,7 @@ describe("market orders", () => {
   });
 
   it("rejects an order the free balance cannot margin", () => {
-    const res = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 100, leverage: 10 },
-      20_000,
-      NOW,
-    );
+    const res = market(acct(), { qty: 100 }, 20_000);
     expect(res.events[0].type).toBe("reject");
     expect(res.account.positions).toHaveLength(0);
     expect(res.account.balance).toBe(S.seedBalance);
@@ -151,12 +160,7 @@ describe("market orders", () => {
 
   it("nets an opposite-side market order against the open position", () => {
     let a = openLong(acct(), 20_000, 2, 10);
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
-      21_000,
-      NOW + 1,
-    ).account;
+    a = market(a, { side: "SELL" }, 21_000, NOW + 1).account;
     const p = pos(a);
     expect(p.side).toBe("LONG");
     expect(p.qty).toBeCloseTo(1, 8);
@@ -166,12 +170,7 @@ describe("market orders", () => {
 
   it("flips the position when the opposite order is larger", () => {
     let a = openLong(acct(), 20_000, 1, 10);
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 3, leverage: 10 },
-      21_000,
-      NOW + 1,
-    ).account;
+    a = market(a, { side: "SELL", qty: 3 }, 21_000, NOW + 1).account;
     const p = pos(a);
     expect(p.side).toBe("SHORT");
     expect(p.qty).toBeCloseTo(2, 8);
@@ -189,12 +188,7 @@ describe("P&L", () => {
     expect(positionRoi(long, 21_000)).toBeCloseTo(0.5, 6);
 
     const short = pos(
-      fillMarketOrder(
-        acct(),
-        { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
-        20_000,
-        NOW,
-      ).account,
+      market(acct(), { side: "SELL" }, 20_000).account,
     );
     expect(unrealizedPnl(short, 19_000)).toBeCloseTo(1_000, 6);
     expect(unrealizedPnl(short, 21_000)).toBeCloseTo(-1_000, 6);
@@ -227,12 +221,7 @@ describe("P&L", () => {
   });
 
   it("a short profits when price falls", () => {
-    let a = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
-      20_000,
-      NOW,
-    ).account;
+    let a = market(acct(), { side: "SELL" }, 20_000).account;
     a = closePosition(a, "BTCUSDT", 19_000, NOW + 1).account;
     expect(a.history[0].grossPnl).toBeCloseTo(1_000, 6);
     expect(a.balance).toBeGreaterThan(S.seedBalance);
@@ -288,11 +277,7 @@ describe("leverage and margin", () => {
 
 describe("limit orders", () => {
   it("rests and reserves margin + maker fee off the free balance", () => {
-    const res = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
-      NOW,
-    );
+    const res = restLimit(acct());
     const a = res.account;
     expect(a.orders).toHaveLength(1);
     expect(a.orders[0].status).toBe("NEW");
@@ -302,11 +287,7 @@ describe("limit orders", () => {
   });
 
   it("a buy limit fills when the tick reaches or crosses below the limit", () => {
-    let a = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
-      NOW,
-    ).account;
+    let a = restLimit(acct()).account;
 
     const above = evaluateTick(a, "BTCUSDT", 19_500, NOW + 1);
     expect(above.account.positions).toHaveLength(0);
@@ -325,11 +306,7 @@ describe("limit orders", () => {
   });
 
   it("a sell limit fills when the tick reaches or crosses above the limit", () => {
-    let a = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 21_000, leverage: 10 },
-      NOW,
-    ).account;
+    let a = restLimit(acct(), { side: "SELL", price: 21_000 }).account;
     expect(evaluateTick(a, "BTCUSDT", 20_500, NOW + 1).account.positions).toHaveLength(0);
 
     a = evaluateTick(a, "BTCUSDT", 21_000, NOW + 2).account;
@@ -338,41 +315,21 @@ describe("limit orders", () => {
   });
 
   it("ignores ticks for another symbol", () => {
-    const a = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
-      NOW,
-    ).account;
+    const a = restLimit(acct()).account;
     const res = evaluateTick(a, "ETHUSDT", 10, NOW + 1);
     expect(res.account).toBe(a);
     expect(res.events).toHaveLength(0);
   });
 
   it("carries the order's TP/SL onto the filled position", () => {
-    let a = placeLimitOrder(
-      acct(),
-      {
-        symbol: "BTCUSDT",
-        side: "BUY",
-        qty: 1,
-        price: 19_000,
-        leverage: 10,
-        tp: 21_000,
-        sl: 18_000,
-      },
-      NOW,
-    ).account;
+    let a = restLimit(acct(), { tp: 21_000, sl: 18_000 }).account;
     a = evaluateTick(a, "BTCUSDT", 19_000, NOW + 1).account;
     expect(pos(a).tp).toBe(21_000);
     expect(pos(a).sl).toBe(18_000);
   });
 
   it("cancelling returns the reserved margin", () => {
-    const placed = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
-      NOW,
-    ).account;
+    const placed = restLimit(acct()).account;
     const a = cancelOrder(placed, placed.orders[0].id).account;
     expect(a.orders).toHaveLength(0);
     expect(a.balance).toBeCloseTo(S.seedBalance, 6);
@@ -384,11 +341,7 @@ describe("limit orders", () => {
   });
 
   it("rejects a limit whose reserve exceeds the free balance", () => {
-    const res = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 100, price: 19_000, leverage: 10 },
-      NOW,
-    );
+    const res = restLimit(acct(), { qty: 100 });
     expect(res.events[0].type).toBe("reject");
     expect(res.account.orders).toHaveLength(0);
     expect(res.account.balance).toBe(S.seedBalance);
@@ -417,12 +370,7 @@ describe("per-tick bracket triggers", () => {
   });
 
   it("closes a short at its brackets (mirrored conditions)", () => {
-    let a = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
-      20_000,
-      NOW,
-    ).account;
+    let a = market(acct(), { side: "SELL" }, 20_000).account;
     a = { ...a, positions: [{ ...pos(a), sl: 21_000, tp: 19_000 }] };
     expect(evaluateTick(a, "BTCUSDT", 19_000, NOW + 1).account.history[0].reason).toBe("TP");
     expect(evaluateTick(a, "BTCUSDT", 21_500, NOW + 1).account.history[0].reason).toBe("SL");
@@ -488,14 +436,9 @@ describe("same-side merge liquidation", () => {
     // not drag its liquidation up near entry just because 125x was the *last*
     // leverage used.
     let a = createAccount({ seedBalance: 1_000_000 });
-    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 10, leverage: 2 }, 20_000, NOW)
+    a = market(a, { qty: 10, leverage: 2 }, 20_000)
       .account;
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "BUY", qty: 0.1, leverage: 125 },
-      20_000,
-      NOW + 1,
-    ).account;
+    a = market(a, { qty: 0.1, leverage: 125 }, 20_000, NOW + 1).account;
     const p = pos(a);
     expect(p.qty).toBeCloseTo(10.1, 6);
     // Overwriting leverage with 125 would have put this at ~19_940.
@@ -512,14 +455,9 @@ describe("same-side merge liquidation", () => {
     // have pushed liquidation all the way down to ~10_100, letting a thinly
     // margined position ride to a deeply negative equity.
     let a = createAccount({ seedBalance: 1_000_000 });
-    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 10, leverage: 125 }, 20_000, NOW)
+    a = market(a, { qty: 10, leverage: 125 }, 20_000)
       .account;
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "BUY", qty: 0.1, leverage: 2 },
-      20_000,
-      NOW + 1,
-    ).account;
+    a = market(a, { qty: 0.1, leverage: 2 }, 20_000, NOW + 1).account;
     const p = pos(a);
     expect(p.liquidationPrice).toBeCloseTo(19_842.57, 1);
 
@@ -541,24 +479,14 @@ describe("liquidation buffer clamp", () => {
 
 describe("bracket normalization on open", () => {
   it("drops a stop-loss above entry and a take-profit below entry on a fresh LONG", () => {
-    const a = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, sl: 21_000, tp: 19_000 },
-      20_000,
-      NOW,
-    ).account;
+    const a = market(acct(), { sl: 21_000, tp: 19_000 }, 20_000).account;
     const p = pos(a);
     expect(p.sl).toBe(null);
     expect(p.tp).toBe(null);
   });
 
   it("drops a stop-loss below entry and a take-profit above entry on a fresh SHORT", () => {
-    const a = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10, sl: 19_000, tp: 21_000 },
-      20_000,
-      NOW,
-    ).account;
+    const a = market(acct(), { side: "SELL", sl: 19_000, tp: 21_000 }, 20_000).account;
     const p = pos(a);
     expect(p.sl).toBe(null);
     expect(p.tp).toBe(null);
@@ -577,11 +505,7 @@ describe("same-tick bracket evaluation", () => {
     // normalization, so this is the one case left where "just opened" still
     // matters.)
     let a = createAccount({ maintMarginRate: 0.1 });
-    a = placeLimitOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 19_000, leverage: 10 },
-      NOW,
-    ).account;
+    a = restLimit(a, { side: "SELL" }).account;
 
     const opened = evaluateTick(a, "BTCUSDT", 19_000, NOW + 1);
     expect(opened.account.positions).toHaveLength(1);
@@ -611,11 +535,7 @@ describe("rejected crossing orders", () => {
   // by a gap tick so far above it that the position it would open needs far
   // more margin than was ever reserved.
   it("auto-cancels a resting order whose reserve a gap tick outgrows, refunding it", () => {
-    const a = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "SELL", qty: 3, price: 1_000, leverage: 10 },
-      NOW,
-    ).account;
+    const a = restLimit(acct(), { side: "SELL", qty: 3, price: 1_000 }).account;
     const orderId = a.orders[0].id;
     const balanceBeforeGap = a.balance;
 
@@ -644,11 +564,7 @@ describe("crossing limit fills at the tick price", () => {
     // Before this fix it filled at its own 15_000, booking a $5,000 phantom
     // loss on an ordinary tick that barely moved the market.
     let a = openLong(acct(), 20_000, 1, 10);
-    a = placeLimitOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 15_000, leverage: 10 },
-      NOW,
-    ).account;
+    a = restLimit(a, { side: "SELL", price: 15_000 }).account;
 
     const res = evaluateTick(a, "BTCUSDT", 19_999, NOW + 1);
     const trade = res.account.history[0];
@@ -665,11 +581,7 @@ describe("crossing limit fills at the tick price", () => {
     // margin — even though the fill price is now the (real, no-look-ahead)
     // tick, not a phantom order price.
     let a = openLong(acct(), 20_000, 1, 125);
-    a = placeLimitOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, price: 100, leverage: 10 },
-      NOW,
-    ).account;
+    a = restLimit(a, { side: "SELL", price: 100 }).account;
     const orderId = a.orders[0].id;
 
     const res = evaluateTick(a, "BTCUSDT", 150, NOW + 1);
@@ -699,12 +611,7 @@ describe("wrong-side brackets on a merge", () => {
     let a = openLong(acct(), 20_000, 1, 10);
     // Adding to the LONG with an SL *above* the fill price books a gain the
     // instant price so much as ticks, mislabelled as a stop-out.
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, sl: 25_000 },
-      20_000,
-      NOW + 1,
-    ).account;
+    a = market(a, { sl: 25_000 }, 20_000, NOW + 1).account;
     expect(pos(a).sl).toBe(null);
 
     const res = evaluateTick(a, "BTCUSDT", 20_000, NOW + 2);
@@ -716,11 +623,7 @@ describe("wrong-side brackets on a merge", () => {
 describe("same-tick bracket evaluation for a merge", () => {
   it("does not evaluate a merge's newly-set bracket against the tick that just set it", () => {
     let a = openLong(acct(), 20_000, 1, 10);
-    a = placeLimitOrder(
-      a,
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10, sl: 19_200 },
-      NOW,
-    ).account;
+    a = restLimit(a, { sl: 19_200 }).account;
 
     // Fills the merge and, if brackets were evaluated on this same tick,
     // would also blow through the just-set 19_200 stop — except 19_200 sits
@@ -748,12 +651,7 @@ describe("same-tick bracket evaluation for a merge", () => {
 
 describe("event payloads and flips against a resting order", () => {
   it("a market fill's event carries a null orderId and a taker fee proportional to qty*price*rate", () => {
-    const res = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 2, leverage: 10 },
-      20_000,
-      NOW,
-    );
+    const res = market(acct(), { qty: 2 }, 20_000);
     const fill = res.events.find((e) => e.type === "fill");
     if (!fill || fill.type !== "fill") throw new Error("expected a fill event");
     expect(fill.orderId).toBe(null);
@@ -761,11 +659,7 @@ describe("event payloads and flips against a resting order", () => {
   });
 
   it("a limit fill's event carries the resting order's id and the maker fee", () => {
-    const a = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10 },
-      NOW,
-    ).account;
+    const a = restLimit(acct()).account;
     const orderId = a.orders[0].id;
 
     const res = evaluateTick(a, "BTCUSDT", 19_000, NOW + 1);
@@ -777,19 +671,10 @@ describe("event payloads and flips against a resting order", () => {
 
   it("flips a position via market order while a resting limit on the same symbol is untouched", () => {
     let a = openLong(acct(), 20_000, 1, 10);
-    a = placeLimitOrder(
-      a,
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 18_000, leverage: 10 },
-      NOW,
-    ).account;
+    a = restLimit(a, { price: 18_000 }).account;
     expect(a.orders).toHaveLength(1);
 
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 3, leverage: 10 },
-      21_000,
-      NOW + 1,
-    ).account;
+    a = market(a, { side: "SELL", qty: 3 }, 21_000, NOW + 1).account;
     const p = pos(a);
     expect(p.side).toBe("SHORT");
     expect(p.qty).toBeCloseTo(2, 8);
@@ -868,12 +753,7 @@ describe("updateSettings validation", () => {
 describe("fill event fee semantics and ordering", () => {
   it("reports zero fee on a fill event for a pure reduce, since the exit fee is already in the close's trade.fees", () => {
     const a = openLong(acct(), 20_000, 2, 10);
-    const res = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
-      20_000,
-      NOW + 1,
-    );
+    const res = market(a, { side: "SELL" }, 20_000, NOW + 1);
     const fill = res.events.find((e) => e.type === "fill");
     const close = res.events.find((e) => e.type === "close");
     if (!fill || fill.type !== "fill" || !close || close.type !== "close") {
@@ -885,23 +765,13 @@ describe("fill event fee semantics and ordering", () => {
 
   it("emits the fill event before the close event it caused", () => {
     const a = openLong(acct(), 20_000, 1, 10);
-    const res = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 1, leverage: 10 },
-      21_000,
-      NOW + 1,
-    );
+    const res = market(a, { side: "SELL" }, 21_000, NOW + 1);
     expect(res.events.map((e) => e.type)).toEqual(["fill", "close"]);
   });
 
   it("reports only the opening leg's fee on a flip's single fill event", () => {
     const a = openLong(acct(), 20_000, 1, 10);
-    const res = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 3, leverage: 10 },
-      21_000,
-      NOW + 1,
-    );
+    const res = market(a, { side: "SELL", qty: 3 }, 21_000, NOW + 1);
     const fill = res.events.find((e) => e.type === "fill");
     if (!fill || fill.type !== "fill") throw new Error("expected a fill event");
     // qty on the event is the full requested size...
@@ -915,32 +785,17 @@ describe("fill event fee semantics and ordering", () => {
 describe("floating-point dust after full netting", () => {
   it("does not leave a dust-sized phantom position after netting to exactly flat", () => {
     let a = createAccount();
-    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 0.3, leverage: 10 }, 20_000, NOW)
+    a = market(a, { qty: 0.3 }, 20_000)
       .account;
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 0.1, leverage: 10 },
-      20_000,
-      NOW + 1,
-    ).account;
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "SELL", qty: 0.2, leverage: 10 },
-      20_000,
-      NOW + 2,
-    ).account;
+    a = market(a, { side: "SELL", qty: 0.1 }, 20_000, NOW + 1).account;
+    a = market(a, { side: "SELL", qty: 0.2 }, 20_000, NOW + 2).account;
     expect(a.positions).toHaveLength(0);
   });
 });
 
 describe("feedSymbol", () => {
   it("carries the decorated symbol from the request onto a fresh position", () => {
-    const res = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, feedSymbol: "BTCUSDT.P" },
-      20_000,
-      NOW,
-    );
+    const res = market(acct(), { feedSymbol: "BTCUSDT.P" }, 20_000);
     expect(res.account.positions[0].feedSymbol).toBe("BTCUSDT.P");
   });
 
@@ -950,45 +805,27 @@ describe("feedSymbol", () => {
   });
 
   it("carries the decorated symbol onto a resting limit order", () => {
-    const res = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10, feedSymbol: "BYBIT:BTCUSDT.P" },
-      NOW,
-    );
+    const res = restLimit(acct(), { feedSymbol: "BYBIT:BTCUSDT.P" });
     expect(res.account.orders[0].feedSymbol).toBe("BYBIT:BTCUSDT.P");
   });
 
   it("keeps the position's original feed identity across a same-side merge", () => {
-    let a = fillMarketOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, feedSymbol: "BTCUSDT.P" },
-      20_000,
-      NOW,
-    ).account;
+    let a = market(acct(), { feedSymbol: "BTCUSDT.P" }, 20_000).account;
     // A second fill with no feedSymbol of its own (or a different one) must
     // not blank out — or overwrite — what the position already opened with.
-    a = fillMarketOrder(a, { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10 }, 21_000, NOW)
+    a = market(a, {}, 21_000)
       .account;
     expect(pos(a).feedSymbol).toBe("BTCUSDT.P");
   });
 
   it("fills a gap left by an earlier feedless open on a same-side merge", () => {
     let a = openLong(acct(), 20_000, 1, 10); // no feedSymbol
-    a = fillMarketOrder(
-      a,
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, leverage: 10, feedSymbol: "BTCUSDT.P" },
-      21_000,
-      NOW,
-    ).account;
+    a = market(a, { feedSymbol: "BTCUSDT.P" }, 21_000).account;
     expect(pos(a).feedSymbol).toBe("BTCUSDT.P");
   });
 
   it("carries a resting order's feedSymbol onto the position it fills", () => {
-    let a = placeLimitOrder(
-      acct(),
-      { symbol: "BTCUSDT", side: "BUY", qty: 1, price: 19_000, leverage: 10, feedSymbol: "BTCUSDT.P" },
-      NOW,
-    ).account;
+    let a = restLimit(acct(), { feedSymbol: "BTCUSDT.P" }).account;
     a = evaluateTick(a, "BTCUSDT", 18_900, NOW + 1).account;
     expect(pos(a).feedSymbol).toBe("BTCUSDT.P");
   });
@@ -1068,7 +905,7 @@ describe("reversePosition", () => {
 describe("totalUnrealizedPnl", () => {
   it("sums unrealized P&L across every open position at its own mark", () => {
     let a = openLong(acct(), 20_000, 1, 10);
-    a = fillMarketOrder(a, { symbol: "ETHUSDT", side: "BUY", qty: 1, leverage: 10 }, 1_000, NOW)
+    a = market(a, { symbol: "ETHUSDT" }, 1_000)
       .account;
     const total = totalUnrealizedPnl(a.positions, { BTCUSDT: 21_000, ETHUSDT: 900 });
     const expected =
