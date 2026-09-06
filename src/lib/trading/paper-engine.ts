@@ -534,16 +534,17 @@ function applyFill(
   let positions = account.positions;
   let history = account.history;
   // Set once the reducing leg below computes a trade; pushed to `events`
-  // *after* the fill event that caused it (see the two returns below), not
-  // as soon as it's known, so a close is always reported as a consequence of
-  // a fill rather than the other way around.
+  // *after* the fill event that caused it, not as soon as it's known, so a
+  // close is always reported as a consequence of a fill rather than the
+  // other way around.
   let closeEvent: PaperEvent | null = null;
 
   const existing = positions.find((p) => p.symbol === symbol) ?? null;
+  const opposite = existing !== null && side === closingSide(existing.side);
   let openQty = qty;
 
   // Opposite side: reduce, close, or flip before opening anything new.
-  if (existing && side === closingSide(existing.side)) {
+  if (existing && opposite) {
     const reduceQty = Math.min(qty, existing.qty);
     const slice = closeSlice(existing, reduceQty, price, feeRate, "MANUAL", now);
     const tentativeBalance = balance + slice.balanceDelta;
@@ -569,103 +570,102 @@ function applyFill(
     openQty = qty - reduceQty;
   }
 
+  // Only the opening leg's fee, per the `PaperEvent["fee"]` doc: a pure
+  // reduce leaves this at zero because its exit fee is already inside the
+  // close event's `trade.fees`.
+  let fee = 0;
+
   // A remainder too small to represent a real position (see
-  // `DUST_QTY_TOLERANCE`): the reduce above already absorbed the whole
+  // `DUST_QTY_TOLERANCE`) means the reduce above already absorbed the whole
   // request in every way that matters, so don't flip into a dust-sized
   // position over it.
-  if (openQty <= qty * DUST_QTY_TOLERANCE) {
-    // Pure reduce: the exit fee is already inside the close event's
-    // `trade.fees`, so the fill event reports zero rather than double-billing it.
-    const events: PaperEvent[] = [{ type: "fill", orderId, symbol, side, qty, price, fee: 0 }];
-    if (closeEvent) events.push(closeEvent);
-    return { account: { ...account, balance, positions, history }, events };
-  }
+  if (openQty > qty * DUST_QTY_TOLERANCE) {
+    const margin = marginFor(openQty, price, leverage);
+    fee = openQty * price * feeRate;
+    if (balance + 1e-9 < margin + fee) {
+      // Nothing is applied: an order the account cannot margin is refused whole,
+      // including any reducing leg it came bundled with.
+      return reject(account, symbol, "Insufficient paper balance");
+    }
+    balance -= margin + fee;
 
-  const margin = marginFor(openQty, price, leverage);
-  const fee = openQty * price * feeRate;
-  if (balance + 1e-9 < margin + fee) {
-    // Nothing is applied: an order the account cannot margin is refused whole,
-    // including any reducing leg it came bundled with.
-    return reject(account, symbol, "Insufficient paper balance");
-  }
-  balance -= margin + fee;
-
-  const sameSide = positions.find((p) => p.symbol === symbol) ?? null;
-  if (sameSide) {
-    const totalQty = sameSide.qty + openQty;
-    const totalMargin = sameSide.margin + margin;
-    const entryPrice =
-      (sameSide.entryPrice * sameSide.qty + price * openQty) / totalQty;
-    // Re-validated against *this* fill's price, same as a fresh open below —
-    // an incoming or carried-over bracket that no longer protects anything
-    // relative to the current market is dropped rather than left to fire a
-    // phantom gain (adversarial re-audit finding 2).
-    const { tp, sl } = normalizeBrackets(
-      sameSide.side,
-      price,
-      args.tp ?? sameSide.tp,
-      args.sl ?? sameSide.sl,
-    );
-    const merged: PaperPosition = {
-      ...sameSide,
-      qty: totalQty,
-      entryPrice,
-      // Informational only: a blended figure so the position still shows
-      // *a* leverage, but liquidation below is derived from the margin
-      // actually locked, not from this number.
-      leverage: totalMargin > 0 ? (totalQty * entryPrice) / totalMargin : leverage,
-      margin: totalMargin,
-      feesPaid: sameSide.feesPaid + fee,
-      tp,
-      sl,
-      // A merge keeps the position's original feed identity — it's the same
-      // symbol, and the incoming fill's own feedSymbol (if any) only fills a
-      // gap left by an earlier direct-engine open with none.
-      feedSymbol: sameSide.feedSymbol ?? args.feedSymbol,
-      liquidationPrice: liquidationPriceFromMargin(
-        sameSide.side,
+    // A position left to merge into can only be `existing` on its own side:
+    // an opposite-side `existing` either absorbed the whole request above
+    // (openQty 0, so we never got here) or was closed out and dropped from
+    // `positions` by the reduce.
+    if (existing && !opposite) {
+      const totalQty = existing.qty + openQty;
+      const totalMargin = existing.margin + margin;
+      const entryPrice = (existing.entryPrice * existing.qty + price * openQty) / totalQty;
+      // Re-validated against *this* fill's price, same as a fresh open below —
+      // an incoming or carried-over bracket that no longer protects anything
+      // relative to the current market is dropped rather than left to fire a
+      // phantom gain.
+      const { tp, sl } = normalizeBrackets(
+        existing.side,
+        price,
+        args.tp ?? existing.tp,
+        args.sl ?? existing.sl,
+      );
+      const merged: PaperPosition = {
+        ...existing,
+        qty: totalQty,
         entryPrice,
-        totalQty,
-        totalMargin,
-        account.settings.maintMarginRate,
-      ),
-    };
-    positions = positions.map((p) => (p.id === sameSide.id ? merged : p));
-  } else {
-    const dir = directionOf(side);
-    // A fresh position (a plain open, or the re-entry leg of a flip): drop
-    // any bracket that sits on the wrong side of the fill price rather than
-    // let it rest forever and eventually fire as a stop that books a gain.
-    const { tp, sl } = normalizeBrackets(dir, price, args.tp ?? null, args.sl ?? null);
-    positions = [
-      ...positions,
-      {
-        id: genId("p"),
-        symbol,
-        side: dir,
-        qty: openQty,
-        entryPrice: price,
-        leverage,
-        margin,
-        feesPaid: fee,
+        // Informational only: a blended figure so the position still shows
+        // *a* leverage, but liquidation below is derived from the margin
+        // actually locked, not from this number.
+        leverage: totalMargin > 0 ? (totalQty * entryPrice) / totalMargin : leverage,
+        margin: totalMargin,
+        feesPaid: existing.feesPaid + fee,
         tp,
         sl,
-        feedSymbol: args.feedSymbol,
-        liquidationPrice: liquidationPrice(
-          dir,
-          price,
-          leverage,
+        // A merge keeps the position's original feed identity — it's the same
+        // symbol, and the incoming fill's own feedSymbol (if any) only fills a
+        // gap left by an earlier direct-engine open with none.
+        feedSymbol: existing.feedSymbol ?? args.feedSymbol,
+        liquidationPrice: liquidationPriceFromMargin(
+          existing.side,
+          entryPrice,
+          totalQty,
+          totalMargin,
           account.settings.maintMarginRate,
         ),
-        openedAt: now,
-      },
-    ];
+      };
+      positions = positions.map((p) => (p.id === existing.id ? merged : p));
+    } else {
+      const dir = directionOf(side);
+      // A fresh position (a plain open, or the re-entry leg of a flip): drop
+      // any bracket that sits on the wrong side of the fill price rather than
+      // let it rest forever and eventually fire as a stop that books a gain.
+      const { tp, sl } = normalizeBrackets(dir, price, args.tp ?? null, args.sl ?? null);
+      positions = [
+        ...positions,
+        {
+          id: genId("p"),
+          symbol,
+          side: dir,
+          qty: openQty,
+          entryPrice: price,
+          leverage,
+          margin,
+          feesPaid: fee,
+          tp,
+          sl,
+          feedSymbol: args.feedSymbol,
+          liquidationPrice: liquidationPrice(
+            dir,
+            price,
+            leverage,
+            account.settings.maintMarginRate,
+          ),
+          openedAt: now,
+        },
+      ];
+    }
   }
 
   // `qty` (not `openQty`) so a flip's single fill event still reports the
-  // full requested size; `fee` here is only the opening leg's, per the
-  // `PaperEvent["fee"]` doc — the reducing leg's fee is already counted in
-  // `closeEvent`'s `trade.fees`.
+  // full requested size.
   const events: PaperEvent[] = [{ type: "fill", orderId, symbol, side, qty, price, fee }];
   if (closeEvent) events.push(closeEvent);
   return { account: { ...account, balance, positions, history }, events };
