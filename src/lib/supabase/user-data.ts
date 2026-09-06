@@ -41,12 +41,24 @@ export interface CloudChartSettings {
 
 // ─── Chart Settings ───────────────────────────────────────────────────────────
 
+/**
+ * Loads the signed-in user's chart settings.
+ *
+ * Returns `null` only when there genuinely is no row yet, and *throws* on any
+ * other failure — same contract, and same reasoning, as `loadWatchlists`
+ * below. `.maybeSingle()` rather than `.single()`: the latter reports "no row"
+ * as an error, so discarding that error made a dropped connection (or an RLS
+ * rejection) indistinguishable from a fresh account. The caller would read the
+ * resulting `null` as "nothing up there yet", leave `loadedRef` set and go on
+ * to upsert this device's local settings over a cloud row it never read.
+ */
 export async function loadChartSettings(): Promise<CloudChartSettings | null> {
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("user_chart_settings")
     .select("symbol, timeframe, indicators, hidden, config, visual_settings")
-    .single();
+    .maybeSingle();
+  if (error) throw error;
   if (!data) return null;
   return data as CloudChartSettings;
 }
