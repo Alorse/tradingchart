@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { localStoragePersist } from "@/lib/store/persist-storage";
 
 /**
  * Which order panel drives the Trade tab: `paper` submits to
@@ -32,13 +33,7 @@ export const useTradingModeStore = create<TradingModeState>()(
     }),
     {
       name: TRADING_MODE_STORAGE_KEY,
-      // The default storage option reads `window.localStorage`, which is
-      // undefined in the offline `node --test` environment (no `window`
-      // global at all) and silently disables persistence. Going through
-      // `globalThis.localStorage` instead is identical in the browser and is
-      // what lets the test suite exercise the round trip for real — same
-      // reasoning as `paper-trading-store.ts`'s custom storage.
-      storage: createJSONStorage(() => globalThis.localStorage),
+      storage: localStoragePersist<TradingModeState>(),
       // A corrupted/foreign blob (or any value that isn't literally "live")
       // must rehydrate to `paper`, not whatever `current` happened to hold —
       // this is the one store where "wrong default" means a fresh install

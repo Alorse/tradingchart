@@ -2,7 +2,8 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { PersistStorage, StorageValue } from "zustand/middleware";
+import type { PersistStorage } from "zustand/middleware";
+import { localStoragePersist } from "@/lib/store/persist-storage";
 import {
   DEFAULT_PAPER_SETTINGS,
   cancelOrder as engineCancelOrder,
@@ -92,31 +93,31 @@ interface PaperTradingState {
 type Persisted = { account: PaperAccount; pnlDisplayMode: PnlDisplayMode };
 
 /**
- * `persist`'s wrapped `set` re-serializes the whole store to localStorage on
- * *every* call, regardless of whether the persisted slice actually changed —
- * see `partialize` below, which is just `{ account, pnlDisplayMode }`.
- * `evaluateTick` calls `set` on a mark-only tick too (a manual close or
- * `equity()` needs the fresh mark, so it can't just skip `set`), which would
- * otherwise mean a full JSON.stringify of positions/orders/history on every
- * live price update. Caching the last `account`/`pnlDisplayMode` actually
- * written and skipping the write when both are unchanged keeps that cost tied
- * to real mutations instead of ticks.
+ * The shared localStorage backing, plus one extra layer: skip a write whose
+ * persisted slice is identical to the last one written.
+ *
+ * `persist`'s wrapped `set` re-serializes the whole store on *every* call,
+ * regardless of whether the persisted slice actually changed — and `marks`
+ * lives in this same store, so `evaluateTick` reaches `set` on a mark-only
+ * tick too (a manual close or `equity()` needs the fresh mark). Without the
+ * cache that would mean a full JSON.stringify of positions/orders/history on
+ * every live price update. Moving `marks` into a store of its own would fix
+ * it at the source; until then, comparing `account`/`pnlDisplayMode` by
+ * identity keeps the write cost tied to real mutations instead of ticks.
  */
-function createPaperStorage(): PersistStorage<Persisted> {
+function createPaperStorage(): PersistStorage<Persisted> | undefined {
+  const base = localStoragePersist<Persisted>();
+  if (!base) return undefined;
   let lastAccount: PaperAccount | null = null;
   let lastMode: PnlDisplayMode | null = null;
   return {
-    getItem: (name) => {
-      const raw = globalThis.localStorage.getItem(name);
-      return raw ? (JSON.parse(raw) as StorageValue<Persisted>) : null;
-    },
+    ...base,
     setItem: (name, value) => {
       if (value.state.account === lastAccount && value.state.pnlDisplayMode === lastMode) return;
       lastAccount = value.state.account;
       lastMode = value.state.pnlDisplayMode;
-      globalThis.localStorage.setItem(name, JSON.stringify(value));
+      base.setItem(name, value);
     },
-    removeItem: (name) => globalThis.localStorage.removeItem(name),
   };
 }
 
@@ -409,9 +410,6 @@ export const usePaperTradingStore = create<PaperTradingState>()(
     {
       name: PAPER_STORAGE_KEY,
       version: 1,
-      // Going through `globalThis.localStorage` (rather than `window`) is
-      // identical in the browser and is what lets the offline `node --test`
-      // suite exercise this round trip for real.
       storage: createPaperStorage(),
       // Account and the P&L display preference survive a reload; marks and
       // events are session data.
