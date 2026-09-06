@@ -634,6 +634,7 @@ export function Watchlist() {
               ? openPosition.side
               : null;
             const row = rows[s];
+            const daily = dailyChange(row?.price, dailyOpens[s]);
             const isActive = s === symbol;
             const isMultiSelected = multiSelected.has(item.id);
             const f = flash[s];
@@ -746,27 +747,21 @@ export function Watchlist() {
                 >
                   {row ? formatPrice(row.price) : "—"}
                 </span>
-                {(() => {
-                  const open = dailyOpens[s];
-                  const price = row?.price;
-                  const daily = price !== undefined && open ? { amount: price - open, pct: ((price - open) / open) * 100 } : null;
-                  return (
-                    <div className="flex items-center justify-end gap-1">
-                      {daily ? (
-                        <>
-                          <span className={cn("tabular-nums", daily.amount >= 0 ? "text-tv-green" : "text-tv-red")}>
-                            {formatChangeAmount(daily.amount, price!)}
-                          </span>
-                          <span className={cn("tabular-nums", daily.amount >= 0 ? "text-tv-green" : "text-tv-red")}>
-                            {formatPct(daily.pct)}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="tabular-nums text-tv-text-muted">—</span>
-                      )}
-                    </div>
-                  );
-                })()}
+                <div
+                  className={cn(
+                    "flex items-center justify-end gap-1 tabular-nums",
+                    daily ? (daily.amount >= 0 ? "text-tv-green" : "text-tv-red") : "text-tv-text-muted",
+                  )}
+                >
+                  {daily ? (
+                    <>
+                      <span>{formatChangeAmount(daily.amount, daily.price)}</span>
+                      <span>{formatPct(daily.pct)}</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </div>
               </div>
             );
           })}

@@ -15,9 +15,9 @@ export function utcDateKey(d: Date = new Date()): string {
 export function dailyChange(
   price: number | undefined,
   open: number | undefined,
-): { amount: number; pct: number } | null {
+): { amount: number; pct: number; price: number } | null {
   if (price === undefined || !open) return null;
-  return { amount: price - open, pct: ((price - open) / open) * 100 };
+  return { amount: price - open, pct: ((price - open) / open) * 100, price };
 }
 
 async function fetchDayOpen(symbol: string): Promise<number | null> {

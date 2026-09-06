@@ -681,6 +681,7 @@ function SymbolRow({
 }) {
   const s = item.value;
   const displaySymbol = stripExchangePrefix(s);
+  const daily = dailyChange(row?.price, dailyOpen);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
@@ -779,28 +780,21 @@ function SymbolRow({
         >
           {row ? formatPrice(row.price) : "—"}
         </span>
-        {(() => {
-          const daily = row && dailyOpen
-            ? { amount: row.price - dailyOpen, pct: ((row.price - dailyOpen) / dailyOpen) * 100 }
-            : null;
-          return (
-            <span
-              className={cn(
-                "flex items-center gap-1 rounded px-1.5 py-px font-mono text-[10px] tabular-nums",
-                daily ? (daily.amount >= 0 ? "bg-tv-green/15 text-tv-green" : "bg-tv-red/15 text-tv-red") : "text-tv-text-muted",
-              )}
-            >
-              {daily ? (
-                <>
-                  <span>{formatChangeAmount(daily.amount, row!.price)}</span>
-                  <span>{formatPct(daily.pct)}</span>
-                </>
-              ) : (
-                "—"
-              )}
-            </span>
-          );
-        })()}
+        <span
+          className={cn(
+            "flex items-center gap-1 rounded px-1.5 py-px font-mono text-[10px] tabular-nums",
+            daily ? (daily.amount >= 0 ? "bg-tv-green/15 text-tv-green" : "bg-tv-red/15 text-tv-red") : "text-tv-text-muted",
+          )}
+        >
+          {daily ? (
+            <>
+              <span>{formatChangeAmount(daily.amount, daily.price)}</span>
+              <span>{formatPct(daily.pct)}</span>
+            </>
+          ) : (
+            "—"
+          )}
+        </span>
       </div>
 
       {!selectMode && (
