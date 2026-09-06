@@ -1,9 +1,21 @@
-# TradingView Free 📈
+# TradingChart 📈
 
 > **An open-source, 100% free alternative to TradingView Pro.**
 > Live candles, custom indicators, drawing tools, alerts, bar replay — no fees, no ads.
 
 A crypto charting platform built on **Binance**'s public data (WebSocket) and the same rendering library TradingView itself uses ([`lightweight-charts`](https://github.com/tradingview/lightweight-charts)).
+
+---
+
+## 🙏 Based on
+
+This project descends from two prior open-source efforts. The earliest MVP —
+Spanish, single-file, Binance WebSocket candles and a handful of indicators —
+was built by **KManuS88** (kmanus88ar@gmail.com). It was later forked from
+**[KisuShotto15/tradingview](https://github.com/KisuShotto15/tradingview)**, a
+Next.js + lightweight-charts + Binance WS TradingView clone built as a free
+alternative for LATAM, which is where the Supabase auth, cloud sync, and
+drawing system originated before this repo grew the rest.
 
 ---
 

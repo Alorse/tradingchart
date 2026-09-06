@@ -1,6 +1,6 @@
 {
-  "name": "TradingView Free",
-  "short_name": "TV Free",
+  "name": "TradingChart",
+  "short_name": "TradingChart",
   "description": "Live crypto charting platform. A free alternative to TradingView.",
   "id": "/",
   "start_url": "/",

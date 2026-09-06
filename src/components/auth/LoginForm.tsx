@@ -72,7 +72,7 @@ export function LoginForm({ onSuccess }: { onSuccess?: () => void }) {
           <TrendingUp className="h-6 w-6 text-tv-blue-text" />
         </div>
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-tv-text">TradingView Free</h1>
+          <h1 className="text-xl font-semibold text-tv-text">TradingChart</h1>
           <p className="mt-1 text-sm text-tv-text-muted">Real-time crypto charts</p>
         </div>
       </div>

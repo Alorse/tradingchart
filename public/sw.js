@@ -1,4 +1,4 @@
-/* TradingView Free — minimal offline shell service worker.
+/* TradingChart — minimal offline shell service worker.
  *
  * Strategy:
  *  - On install, pre-cache the app shell (`/`, manifest, logo).
@@ -9,7 +9,7 @@
  *  - Skip caching POST/non-GET requests and cross-origin requests.
  */
 const CACHE = "tvf-shell-v2";
-const SHELL = ["/", "/manifest.webmanifest", "/logo.svg", "/icon-192.png"];
+const SHELL = ["/", "/manifest.webmanifest", "/logo.png", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
