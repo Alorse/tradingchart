@@ -19,7 +19,7 @@ import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { cn } from "@/lib/utils";
 import { Badge, Stat, Stub, TabBtn } from "@/components/layout/panel-bits";
-import { formatPrice } from "@/lib/format";
+import { formatPct, formatPrice } from "@/lib/format";
 import { bracketEditReason } from "@/lib/trading/paper-brackets";
 import { describePaperEvent, formatDuration, reasonLabel } from "@/lib/trading/paper-format";
 import {
@@ -533,8 +533,7 @@ function PositionRow({
         {formatPnlDisplay(displayPnl, pnlDisplayMode)}
       </td>
       <td className={cn("px-3 py-1.5 text-right font-mono tabular-nums", roe >= 0 ? "text-tv-green" : "text-tv-red")}>
-        {roe >= 0 ? "+" : ""}
-        {roe.toFixed(2)}%
+        {formatPct(roe)}
       </td>
       <td className="px-3 py-1.5">
         <div className="flex items-center gap-1">
@@ -957,8 +956,7 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
                 {t.realizedPnl.toFixed(2)} USDT
               </td>
               <td className={cn("px-3 py-1.5 text-right font-mono tabular-nums", pnlColor)}>
-                {roi >= 0 ? "+" : ""}
-                {roi.toFixed(2)}%
+                {formatPct(roi)}
               </td>
               <td className={cn("px-3 py-1.5 font-semibold", REASON_CLASS[t.reason])}>
                 {reasonLabel(t.reason)}
