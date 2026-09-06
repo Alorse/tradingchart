@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePaperTradingStore, PAPER_STORAGE_KEY } from "@/lib/store/paper-trading-store";
+import { clearPersistedPaperAccount, usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useAuth } from "./auth-context";
 import { loadPaperAccount, savePaperAccount } from "./paper-account-data";
 
@@ -55,7 +55,7 @@ export function usePaperAccountSync() {
 
   // ── Wipe local paper state on sign-out / user switch ───────────────────
   // The account persists to localStorage under one un-namespaced key
-  // (PAPER_STORAGE_KEY), so signing out used to leave whatever the last
+  // (`PAPER_STORAGE_KEY`), so signing out used to leave whatever the last
   // signed-in user was trading sitting in this browser's storage — visible
   // to the next person who opens the app on this device before signing in,
   // and liable to bleed into a *different* user's account on their own
@@ -71,7 +71,12 @@ export function usePaperAccountSync() {
     // be pushed up to a cloud row that doesn't exist yet.
     if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentId) {
       usePaperTradingStore.getState().resetAccount();
-      globalThis.localStorage.removeItem(PAPER_STORAGE_KEY);
+      // Through the store's own persist path, not a bare
+      // `localStorage.removeItem`: the storage handle keeps a write-skip cache
+      // that a hand-rolled removal would leave stale (see
+      // `clearPersistedPaperAccount`), which makes the wipe depend on the
+      // `resetAccount()` above happening first.
+      clearPersistedPaperAccount();
     }
     prevUserIdRef.current = currentId;
   }, [user]);
