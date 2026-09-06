@@ -3727,7 +3727,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
         <PaperOrderLinesLayer
           chart={chartRef.current}
           candleSeries={candleSeriesRef.current}
-          container={containerRef.current}
           width={containerSize.width}
           mainPaneHeight={paneOffsets[0]?.height ?? containerSize.height}
           renderTick={renderTick}

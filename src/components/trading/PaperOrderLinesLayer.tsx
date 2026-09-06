@@ -7,6 +7,7 @@ import { stripExchangePrefix } from "@/lib/symbols/prefix";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { unrealizedPnl } from "@/lib/trading/paper-engine";
 import { formatPnlDisplay, pnlDisplayValue } from "@/lib/trading/paper-position-display";
+import type { PnlDisplayMode } from "@/lib/trading/paper-position-display";
 import { TV_PINE } from "@/lib/chart/theme";
 import {
   ClosePositionDialog,
@@ -45,7 +46,6 @@ interface Level {
 export function PaperOrderLinesLayer({
   chart,
   candleSeries,
-  container,
   width,
   mainPaneHeight,
   renderTick,
@@ -53,13 +53,11 @@ export function PaperOrderLinesLayer({
 }: {
   chart: IChartApi | null;
   candleSeries: ISeriesApi<"Candlestick"> | null;
-  container: HTMLElement | null;
   width: number;
   mainPaneHeight: number;
   renderTick: number;
   symbol: string;
 }) {
-  void container;
   // Forces a re-render (and a fresh `priceToCoordinate` read) on chart
   // pan/zoom, same as `OrderLinesLayer` — a price-scale rescale moves the
   // entry toolbar's y position without touching any of our own state.
@@ -181,14 +179,14 @@ export function PaperOrderLinesLayer({
 
   return (
     <>
-      {y !== null && (y as number) >= 0 && (y as number) <= mainPaneHeight && (
+      {y !== null && y >= 0 && y <= mainPaneHeight && (
         <svg
           className="pointer-events-none absolute inset-0 z-20 h-full w-full"
           style={{ overflow: "visible" }}
         >
           <g style={{ pointerEvents: "all" }}>
             <EntryToolbarRow
-              y={y as number}
+              y={y}
               width={plotW}
               position={chartedPosition}
               mark={mark}
@@ -237,7 +235,7 @@ function EntryToolbarRow({
   position: PaperPosition;
   mark: number;
   tickSize: number;
-  pnlDisplayMode: Parameters<typeof pnlDisplayValue>[2];
+  pnlDisplayMode: PnlDisplayMode;
   onEdit: () => void;
   onReverse: () => void;
   onClose: () => void;
