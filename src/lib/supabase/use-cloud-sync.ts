@@ -58,6 +58,7 @@ export function useCloudSync() {
   useEffect(() => {
     if (!user || initializedRef.current) return;
     initializedRef.current = true;
+    const userId = user.id;
 
     async function init() {
       const [settings, wl] = await Promise.all([
@@ -111,7 +112,7 @@ export function useCloudSync() {
         // user to happen to edit a list.
         const { watchlists: local, activeWatchlistId: localActive } =
           useChartStore.getState();
-        saveWatchlists(local, localActive);
+        saveWatchlists(userId, local, localActive);
       }
     }
 
@@ -147,7 +148,7 @@ export function useCloudSync() {
     if (!user || !loadedRef.current) return;
     if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
     settingsTimerRef.current = setTimeout(() => {
-      saveChartSettings({
+      saveChartSettings(user.id, {
         symbol,
         timeframe,
         indicators,
@@ -182,7 +183,7 @@ export function useCloudSync() {
     if (!user || !loadedRef.current) return;
     if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
     wlTimerRef.current = setTimeout(() => {
-      saveWatchlists(watchlists, activeWatchlistId);
+      saveWatchlists(user.id, watchlists, activeWatchlistId);
     }, DEBOUNCE_MS);
     return () => {
       if (wlTimerRef.current) clearTimeout(wlTimerRef.current);

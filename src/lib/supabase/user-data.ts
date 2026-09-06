@@ -39,6 +39,14 @@ export interface CloudChartSettings {
   visual_settings?: VisualSettings;
 }
 
+// Every save below takes the signed-in `userId` from the caller rather than
+// calling `supabase.auth.getUser()` for it. `getUser()` is not a local read —
+// it round-trips to the auth server on every call — so fetching it here made
+// each debounced save two sequential requests instead of one, for an id the
+// calling hook already holds via `useAuth()`. RLS (`auth.uid() = user_id`) is
+// what actually authorizes the row; the extra hop bought nothing. Same reason
+// `src/middleware.ts` prefers `getClaims()` over `getUser()`.
+
 // ─── Chart Settings ───────────────────────────────────────────────────────────
 
 export async function loadChartSettings(): Promise<CloudChartSettings | null> {
@@ -51,12 +59,10 @@ export async function loadChartSettings(): Promise<CloudChartSettings | null> {
   return data as CloudChartSettings;
 }
 
-export async function saveChartSettings(settings: CloudChartSettings) {
+export async function saveChartSettings(userId: string, settings: CloudChartSettings) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
   await supabase.from("user_chart_settings").upsert(
-    { user_id: user.id, ...settings, updated_at: new Date().toISOString() },
+    { user_id: userId, ...settings, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   );
 }
@@ -97,13 +103,11 @@ export async function loadWatchlists(): Promise<CloudWatchlists | null> {
  * branch could resurface, silently dropping the rest. Nothing reads them once
  * `lists` is non-empty, which it is from this write onwards.
  */
-export async function saveWatchlists(lists: Watchlist[], activeId: string) {
+export async function saveWatchlists(userId: string, lists: Watchlist[], activeId: string) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
   await supabase.from("user_watchlists").upsert(
     {
-      user_id: user.id,
+      user_id: userId,
       lists,
       active_id: activeId,
       updated_at: new Date().toISOString(),
