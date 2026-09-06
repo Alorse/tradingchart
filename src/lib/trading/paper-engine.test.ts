@@ -12,7 +12,6 @@ import {
   liquidationPriceFromMargin,
   placeLimitOrder,
   positionRoi,
-  resetAccount,
   reversePosition,
   setBrackets,
   totalUnrealizedPnl,
@@ -79,7 +78,7 @@ function pos(a: PaperAccount, symbol = "BTCUSDT") {
   return p;
 }
 
-describe("createAccount / resetAccount", () => {
+describe("createAccount", () => {
   it("seeds the virtual balance and starts empty", () => {
     const a = acct();
     expect(a.balance).toBe(S.seedBalance);
@@ -94,21 +93,6 @@ describe("createAccount / resetAccount", () => {
     expect(a.settings.takerFeeRate).toBe(0.001);
     // untouched keys keep their defaults
     expect(a.settings.makerFeeRate).toBe(S.makerFeeRate);
-  });
-
-  it("reset restores the seed state but keeps settings", () => {
-    let a = createAccount({ seedBalance: 1_000 });
-    a = openLong(a, 20_000, 0.1);
-    a = restLimit(a, { symbol: "ETHUSDT", price: 1_000 }).account;
-    a = closePosition(a, "BTCUSDT", 21_000, NOW + 1_000).account;
-    expect(a.history).toHaveLength(1);
-
-    const r = resetAccount(a);
-    expect(r.balance).toBe(1_000);
-    expect(r.positions).toHaveLength(0);
-    expect(r.orders).toHaveLength(0);
-    expect(r.history).toHaveLength(0);
-    expect(r.settings.seedBalance).toBe(1_000);
   });
 });
 

@@ -43,7 +43,7 @@ export const MIN_LEVERAGE = 1;
 export const MAX_LEVERAGE = 125;
 
 export interface PaperSettings {
-  /** Virtual USDT handed out on first use and restored by `resetAccount`. */
+  /** Virtual USDT handed out on first use, and again on an account reset. */
   seedBalance: number;
   /** Fee rate on a market fill (0.0005 = 0.05%). */
   takerFeeRate: number;
@@ -319,11 +319,6 @@ export function createAccount(settings?: Partial<PaperSettings>): PaperAccount {
     history: [],
     settings: merged,
   };
-}
-
-/** Back to the seed, keeping whatever settings the user configured. */
-export function resetAccount(account: PaperAccount): PaperAccount {
-  return createAccount(account.settings);
 }
 
 /** A fee rate above 1% is not a real venue's, and a negative one pays the trader to trade. */
