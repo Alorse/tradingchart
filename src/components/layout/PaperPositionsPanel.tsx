@@ -457,6 +457,16 @@ export function useRowMenuTrigger(open: (x: number, y: number) => void) {
   const start = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
 
+  // A row can unmount mid-press on its own — a TP/SL or liquidation fill takes
+  // the position out of the table — and the pending timer would then fire
+  // `open()` on a dead tree, holding the row's props alive until it did.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
   return {
     onContextMenu: (e: React.MouseEvent) => {
       e.preventDefault();
@@ -603,13 +613,21 @@ export function PositionRowMenu({
   onDismiss: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Held in a ref so the listener effect can key on `[]`. Callers pass a fresh
+  // arrow every render, and their renders are tick-rate — keyed on `onDismiss`
+  // this effect swapped two `document` listeners (one capture-phase) on every
+  // price tick for as long as the menu stayed open.
+  const dismiss = useRef(onDismiss);
+  useEffect(() => {
+    dismiss.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) onDismiss();
+      if (!ref.current?.contains(e.target as Node)) dismiss.current();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onDismiss();
+      if (e.key === "Escape") dismiss.current();
     }
     document.addEventListener("mousedown", onPointerDown, true);
     document.addEventListener("keydown", onKey);
@@ -617,7 +635,7 @@ export function PositionRowMenu({
       document.removeEventListener("mousedown", onPointerDown, true);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onDismiss]);
+  }, []);
 
   if (typeof document === "undefined") return null;
 
