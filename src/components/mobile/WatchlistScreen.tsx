@@ -21,6 +21,7 @@ import {
 import { fetchTickers24h, cleanSym } from "@/lib/binance/rest";
 import { fetchBybitTickers24h } from "@/lib/bybit/public";
 import { sortWatchlistItems, cycleSort } from "@/lib/watchlist/sort";
+import { getDailyOpens } from "@/lib/watchlist/daily-open";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
 import { resolveSource } from "@/lib/symbols/source";
@@ -29,7 +30,7 @@ import { useChartStore, type WatchlistItem } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
 import { useTradingStore } from "@/lib/store/trading-store";
 import type { Position } from "@/lib/binance/trading-types";
-import { formatPrice, formatPct } from "@/lib/format";
+import { formatPrice, formatPct, formatChangeAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBatchedTicks } from "@/hooks/useBatchedTicks";
 import { CoinIcon, getBaseAsset } from "@/components/watchlist/CoinIcon";
@@ -105,6 +106,10 @@ export function WatchlistScreen() {
   const [rows, setRows] = useState<Record<string, Row>>({});
   const [flash, setFlash] = useState<Record<string, "up" | "down" | null>>({});
   const applyTick = useBatchedTicks(setRows, setFlash);
+  // UTC-midnight open per symbol — the baseline for the daily "Chg" column.
+  // Kept separate from `rows` (live price/flash) since it only changes once a
+  // day; see src/lib/watchlist/daily-open.ts for the caching strategy.
+  const [dailyOpens, setDailyOpens] = useState<Record<string, number>>({});
   const [manageOpen, setManageOpen] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -148,6 +153,25 @@ export function WatchlistScreen() {
     };
   }, [symbols.join(",")]);
 
+  // Daily open per symbol. `getDailyOpens` caches by UTC date internally, so
+  // this periodic re-invoke costs nothing until the date actually rolls over
+  // — no N-call fan-out on every tick, just a once-a-day refetch.
+  useEffect(() => {
+    if (symbols.length === 0) return;
+    let cancelled = false;
+    function load() {
+      getDailyOpens(symbols).then((opens) => {
+        if (!cancelled) setDailyOpens((prev) => ({ ...prev, ...opens }));
+      });
+    }
+    load();
+    const interval = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [symbols.join(",")]);
+
   const visibleItems = useMemo(() => {
     let hidingUnder: string | null = null;
     return items.filter((item) => {
@@ -159,9 +183,22 @@ export function WatchlistScreen() {
     });
   }, [items, collapsed]);
 
+  // Sort input: price straight from `rows`, but "change" is the daily pct
+  // (price vs UTC-midnight open) rather than `rows`' own field, so a symbol
+  // whose daily open hasn't loaded yet is treated as missing (sorted last)
+  // instead of by a rolling-24h number it no longer displays.
+  const sortRows = useMemo(() => {
+    const out: Record<string, { price: number; pct: number }> = {};
+    for (const [sym, r] of Object.entries(rows)) {
+      const open = dailyOpens[sym];
+      out[sym] = { price: r.price, pct: open ? ((r.price - open) / open) * 100 : NaN };
+    }
+    return out;
+  }, [rows, dailyOpens]);
+
   const displayItems = useMemo(
-    () => sortWatchlistItems(visibleItems, rows, sort),
-    [visibleItems, rows, sort],
+    () => sortWatchlistItems(visibleItems, sortRows, sort),
+    [visibleItems, sortRows, sort],
   );
   const isSorted = sort.key !== "manual";
   const selectMode = selected.size > 0;
@@ -319,7 +356,7 @@ export function WatchlistScreen() {
           onClick={() => setWatchlistSort(cycleSort(sort, "price"))}
         />
         <SortHeader
-          label="24h"
+          label="Chg"
           active={sort.key === "change"}
           dir={sort.dir}
           onClick={() => setWatchlistSort(cycleSort(sort, "change"))}
@@ -461,6 +498,7 @@ export function WatchlistScreen() {
                   else rowRefs.current.delete(item.id);
                 }}
                 row={rows[item.value]}
+                dailyOpen={dailyOpens[item.value]}
                 flash={flash[item.value] ?? null}
                 isActive={item.value === symbol}
                 isSelected={selected.has(item.id)}
@@ -483,7 +521,6 @@ export function WatchlistScreen() {
                 onDragPointerUp={handleDragPointerUp}
                 onDragPointerCancel={handleDragPointerCancel}
                 onMore={() => setActionsFor(item)}
-                onRemove={() => removeWatchlistItem(active.id, item.id)}
               />
             );
           })
@@ -620,13 +657,14 @@ export function WatchlistScreen() {
 /** A single symbol row: tap opens the chart (or toggles selection in select
  *  mode), long-press enters select mode, the grip handle drags to reorder. */
 function SymbolRow({
-  item, rowRef, row, flash, isActive, isSelected, selectMode, showHandle, isDragTarget, posSide,
+  item, rowRef, row, dailyOpen, flash, isActive, isSelected, selectMode, showHandle, isDragTarget, posSide,
   onOpen, onLongPress, onDragPointerDown, onDragPointerMove, onDragPointerUp, onDragPointerCancel,
-  onMore, onRemove,
+  onMore,
 }: {
   item: Extract<WatchlistItem, { type: "symbol" }>;
   rowRef: (el: HTMLElement | null) => void;
   row: Row | undefined;
+  dailyOpen: number | undefined;
   flash: "up" | "down" | null;
   isActive: boolean;
   isSelected: boolean;
@@ -641,7 +679,6 @@ function SymbolRow({
   onDragPointerUp: (e: React.PointerEvent) => void;
   onDragPointerCancel: (e: React.PointerEvent) => void;
   onMore: () => void;
-  onRemove: () => void;
 }) {
   const s = item.value;
   const displaySymbol = stripExchangePrefix(s);
@@ -743,20 +780,34 @@ function SymbolRow({
         >
           {row ? formatPrice(row.price) : "—"}
         </span>
-        <span
-          className={cn(
-            "rounded px-1.5 py-px font-mono text-[10px] tabular-nums",
-            row ? (row.pct >= 0 ? "bg-tv-green/15 text-tv-green" : "bg-tv-red/15 text-tv-red") : "text-tv-text-muted",
-          )}
-        >
-          {row ? formatPct(row.pct) : "—"}
-        </span>
+        {(() => {
+          const daily = row && dailyOpen
+            ? { amount: row.price - dailyOpen, pct: ((row.price - dailyOpen) / dailyOpen) * 100 }
+            : null;
+          return (
+            <span
+              className={cn(
+                "flex items-center gap-1 rounded px-1.5 py-px font-mono text-[10px] tabular-nums",
+                daily ? (daily.amount >= 0 ? "bg-tv-green/15 text-tv-green" : "bg-tv-red/15 text-tv-red") : "text-tv-text-muted",
+              )}
+            >
+              {daily ? (
+                <>
+                  <span>{formatChangeAmount(daily.amount, row!.price)}</span>
+                  <span>{formatPct(daily.pct)}</span>
+                </>
+              ) : (
+                "—"
+              )}
+            </span>
+          );
+        })()}
       </div>
 
       {!selectMode && (
         // Pointer events (not just click) must stop here too — they bubble to
         // the row's own pointerdown/up handlers, which drive long-press and
-        // tap-to-open; without this, tapping × would also open the chart.
+        // tap-to-open; without this, tapping ⋮ would also open the chart.
         <div className="flex items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
           <IconButton
             onClick={(e) => {
@@ -767,16 +818,6 @@ function SymbolRow({
             aria-label="More actions"
           >
             <MoreHorizontal className="size-4" />
-          </IconButton>
-          <IconButton
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            className="text-tv-text-dim active:text-tv-red"
-            aria-label={`Remove ${s} from watchlist`}
-          >
-            <X className="size-4" />
           </IconButton>
         </div>
       )}

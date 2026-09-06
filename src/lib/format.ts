@@ -72,6 +72,17 @@ export function formatPct(n: number): string {
   return `${sign}${n.toFixed(2)}%`;
 }
 
+/**
+ * Signed change amount (e.g. "+46.26" / "−0.0012"), decimal count matched to
+ * the instrument's price magnitude via `pricePrecisionFor` so it lines up
+ * with how `formatPrice` renders the price it was computed against.
+ */
+export function formatChangeAmount(amount: number, price: number): string {
+  if (!isFinite(amount)) return "—";
+  const sign = amount >= 0 ? "+" : "";
+  return `${sign}${amount.toFixed(pricePrecisionFor(price))}`;
+}
+
 export function formatVolume(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;

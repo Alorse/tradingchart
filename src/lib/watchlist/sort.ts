@@ -34,7 +34,11 @@ export function sortWatchlistItems<T extends ItemLike>(
   const valueOf = (i: T): number => {
     const r = rows[i.value];
     if (!r) return missing;
-    return sort.key === "price" ? r.price : r.pct;
+    const v = sort.key === "price" ? r.price : r.pct;
+    // A symbol whose daily-change baseline hasn't loaded yet reports pct as
+    // NaN rather than being absent from `rows` (price is still known) — treat
+    // it the same as a missing row so it doesn't corrupt the sort order.
+    return Number.isNaN(v) ? missing : v;
   };
 
   return [...symbols].sort((a, b) => {
