@@ -778,8 +778,10 @@ export function EditPositionDialog({
   position, onOpenChange,
 }: { position: PaperPosition; onOpenChange: (open: boolean) => void }) {
   const setBrackets = usePaperTradingStore((s) => s.setBrackets);
-  const marks = usePaperTradingStore((s) => s.marks);
-  const mark = marks[position.symbol] ?? position.entryPrice;
+  // Just this symbol's mark, not the whole record — `withMark` hands out a
+  // fresh identity whenever *any* exposed symbol ticks, which re-rendered the
+  // open dialog (and re-ran its validation) for symbols it doesn't show.
+  const mark = usePaperTradingStore((s) => s.marks[position.symbol]) ?? position.entryPrice;
   const displaySymbol = position.feedSymbol ?? position.symbol;
   const [tp, setTp] = useState(position.tp !== null ? String(position.tp) : "");
   const [sl, setSl] = useState(position.sl !== null ? String(position.sl) : "");
