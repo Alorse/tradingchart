@@ -100,15 +100,14 @@ export function usePaperAccountSync() {
   }, [user]);
 
   // ── Debounced save on subsequent mutations ─────────────────────────────
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // No timer ref: React runs an effect's cleanup before the next run of that
+  // same effect, so the pending timeout is always cleared by the line below
+  // and a local handle is enough (same as `useCloudSync`).
   useEffect(() => {
     if (!user || !loadedRef.current) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       savePaperAccount(account);
     }, DEBOUNCE_MS);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [user, account]);
 }
