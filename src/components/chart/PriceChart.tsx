@@ -427,6 +427,24 @@ export function PriceChart({ symbol, timeframe }: Props) {
     panes.forEach((p, i) => p.setStretchFactor(ratios[i]));
   }
 
+  /**
+   * Called right after a sub-pane creation effect adds its series. Sets the
+   * site's own default stretch factors first — today's behavior, and what a
+   * fresh user with no persisted layout still gets — then immediately overlays
+   * any persisted ratios on top. Pane-creation effects can run after
+   * `applyPaneRatios()` already fired once (a later-toggled indicator, or a
+   * rehydration that lands after the initial load), and without this second
+   * call their hardcoded default would be the last word, silently discarding
+   * a restored/dragged layout.
+   */
+  function applyPaneLayout(paneIndex: number, defaultSubStretch: number) {
+    if (!chartRef.current) return;
+    const panes = chartRef.current.panes();
+    panes[paneIndex]?.setStretchFactor(defaultSubStretch);
+    panes[0]?.setStretchFactor(3);
+    applyPaneRatios();
+  }
+
   // Re-read each pane's actual autoScale flag off its series, so the "A"
   // button's highlight reflects reality after a price-scale drag (which
   // flips it off internally) without a public event to react to instead.
@@ -1393,8 +1411,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       rsi30Ref.current = r30;
       rsi70Ref.current = r70;
       try {
-        chartRef.current.panes()[1]?.setStretchFactor(1);
-        chartRef.current.panes()[0]?.setStretchFactor(3);
+        applyPaneLayout(1, 1);
       } catch {}
       updateRSI();
     } else if (!indicators.rsi && rsiRef.current && chartRef.current) {
@@ -1443,8 +1460,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       macdSignalRef.current = s;
       macdHistRef.current = h;
       try {
-        chartRef.current.panes()[paneIndex]?.setStretchFactor(1);
-        chartRef.current.panes()[0]?.setStretchFactor(3);
+        applyPaneLayout(paneIndex, 1);
       } catch {}
       updateMACD();
     } else if (!indicators.macd && macdRef.current && chartRef.current) {
@@ -1543,8 +1559,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         paneIndex,
       );
       try {
-        chartRef.current.panes()[paneIndex]?.setStretchFactor(1);
-        chartRef.current.panes()[0]?.setStretchFactor(3);
+        applyPaneLayout(paneIndex, 1);
       } catch {}
       updateADX();
     }
@@ -1588,8 +1603,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       );
       squeezeDotsMarkersRef.current = createSeriesMarkers(squeezeDotsRef.current);
       try {
-        chartRef.current.panes()[paneIndex]?.setStretchFactor(1);
-        chartRef.current.panes()[0]?.setStretchFactor(3);
+        applyPaneLayout(paneIndex, 1);
       } catch {}
       updateSqueeze();
       // When ADX and Squeeze share a pane, enforce the configured visual z-order.
@@ -1738,8 +1752,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         vmcMarkersRef.current = createSeriesMarkers(vmcWt2Ref.current);
       }
       try {
-        chartRef.current.panes()[paneIndex]?.setStretchFactor(1.4);
-        chartRef.current.panes()[0]?.setStretchFactor(3);
+        applyPaneLayout(paneIndex, 1.4);
       } catch {}
       updateVumanchu();
     }
@@ -1767,8 +1780,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         paneIndex,
       );
       try {
-        chartRef.current.panes()[paneIndex]?.setStretchFactor(1);
-        chartRef.current.panes()[0]?.setStretchFactor(3);
+        applyPaneLayout(paneIndex, 1);
       } catch {}
       updateOBV();
     }
@@ -1911,8 +1923,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       );
       simpleOscRef.current.set(spec.key, { lines, guides });
       try {
-        chart.panes()[paneIndex]?.setStretchFactor(1);
-        chart.panes()[0]?.setStretchFactor(3);
+        applyPaneLayout(paneIndex, 1);
       } catch {}
     }
     updateSimpleOscillators();
