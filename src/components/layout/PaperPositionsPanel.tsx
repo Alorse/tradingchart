@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeftRight,
@@ -180,10 +180,18 @@ function AccountSummaryRow({
   account, onReset,
 }: { account: PaperAccount; onReset: () => void }) {
   const marks = usePaperTradingStore((s) => s.marks);
-  const equity = usePaperTradingStore((s) => s.equity());
   const unrealized = totalUnrealizedPnl(account.positions, marks);
   const marginUsed = usedMargin(account);
-  const realized = account.history.reduce((s, t) => s + t.realizedPnl, 0);
+  // `equity()` is defined as exactly this sum, so calling it would walk the
+  // positions twice more per tick — and as a selector it ran on every store
+  // `set`, not just on render.
+  const equity = account.balance + marginUsed + unrealized;
+  // `history` is append-only and uncapped, but the total only moves when a
+  // trade closes — not on the ticks that re-render this row.
+  const realized = useMemo(
+    () => account.history.reduce((sum, t) => sum + t.realizedPnl, 0),
+    [account.history],
+  );
 
   return (
     <div className="flex items-center gap-6 border-b border-tv-border px-4 py-2 text-[11px]">
