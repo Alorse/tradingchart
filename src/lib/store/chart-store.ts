@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Timeframe } from "@/lib/binance/types";
 import { DEFAULT_FLAG_COLOR } from "@/lib/watchlist/flags";
+import { randomId } from "@/lib/id";
 import { unifiedHistory, isApplyingHistory, withoutHistory } from "@/lib/history";
 import type { ChartStateSnapshot } from "@/lib/history";
 import type { WatchSort } from "@/lib/watchlist/sort";
@@ -682,10 +683,6 @@ interface ChartState {
   setCurrentLivePrice: (price: number | null) => void;
   /** Apply a partial snapshot from undo/redo — does NOT push to history */
   applySnapshot: (snap: ChartStateSnapshot) => void;
-}
-
-function randomId(): string {
-  return Math.random().toString(36).slice(2, 10);
 }
 
 function initialWatchlists(): {

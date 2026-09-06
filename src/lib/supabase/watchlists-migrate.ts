@@ -1,4 +1,5 @@
 import type { Watchlist, WatchlistItem } from "@/lib/store/chart-store";
+import { randomId } from "@/lib/id";
 
 /**
  * Pure parsing of a `user_watchlists` row into the store's `Watchlist[]`.
@@ -17,8 +18,6 @@ import type { Watchlist, WatchlistItem } from "@/lib/store/chart-store";
 
 /** Injected so tests get deterministic ids; production uses `randomId`. */
 export type IdFactory = () => string;
-
-const randomId: IdFactory = () => Math.random().toString(36).slice(2, 10);
 
 /** A raw `user_watchlists` row, straight off the wire and wholly untrusted. */
 export interface RawWatchlistRow {
