@@ -143,11 +143,12 @@ export function useCloudSync() {
   }, [user]);
 
   // ── Debounced settings sync (indicators + visual) ────────────────────────
-  const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // No timer ref: React runs an effect's cleanup before the next run of that
+  // same effect, so the pending timeout is always cleared by the line below
+  // and a local handle is enough.
   useEffect(() => {
     if (!user || !loadedRef.current) return;
-    if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
-    settingsTimerRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       saveChartSettings(user.id, {
         symbol,
         timeframe,
@@ -167,9 +168,7 @@ export function useCloudSync() {
         },
       });
     }, DEBOUNCE_MS);
-    return () => {
-      if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [
     user,
     symbol, timeframe, indicators, hidden, config,
@@ -178,15 +177,11 @@ export function useCloudSync() {
   ]);
 
   // ── Debounced watchlist sync (every named list, not just the active one) ──
-  const wlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!user || !loadedRef.current) return;
-    if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
-    wlTimerRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       saveWatchlists(user.id, watchlists, activeWatchlistId);
     }, DEBOUNCE_MS);
-    return () => {
-      if (wlTimerRef.current) clearTimeout(wlTimerRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [user, watchlists, activeWatchlistId]);
 }
