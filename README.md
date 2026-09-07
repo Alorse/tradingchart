@@ -19,8 +19,8 @@ A crypto charting platform built on **Binance**'s public data (WebSocket) and th
 
 This project descends from two prior open-source efforts. The earliest MVP —
 Spanish, single-file, Binance WebSocket candles and a handful of indicators —
-was built by **KManuS88** (kmanus88ar@gmail.com). It was later forked from
-**[KisuShotto15/tradingview](https://github.com/KisuShotto15/tradingview)**, a
+was built by **KManuS88** [kmanus88ar@gmail.com](https://github.com/outlinersclub-cpu/tradingview-gratis). It was later forked from
+[KisuShotto15/tradingview](https://github.com/KisuShotto15/tradingview), a
 Next.js + lightweight-charts + Binance WS TradingView clone built as a free
 alternative for LATAM, which is where the Supabase auth, cloud sync, and
 drawing system originated before this repo grew the rest.
@@ -51,52 +51,6 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
-
-## 🛠️ Stack
-
-| Layer | Tech |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript |
-| Styles | Tailwind CSS 4 + shadcn/ui |
-| Charts | [lightweight-charts](https://github.com/tradingview/lightweight-charts) v5 |
-| State | Zustand (with persistence) |
-| Icons | lucide-react |
-| Data | Binance Public REST + WebSocket |
-
-## 📐 Architecture
-
-```
-src/
-├── app/
-│   ├── layout.tsx          # Root, Inter font, TooltipProvider, dark
-│   ├── page.tsx            # Dashboard assembling the layout
-│   └── globals.css         # TradingView palette
-├── components/
-│   ├── chart/
-│   │   ├── PriceChart.tsx     # Chart core (lightweight-charts + panes)
-│   │   ├── SymbolSelector.tsx # USDT pair search
-│   │   ├── TimeframeSelector.tsx
-│   │   └── IndicatorMenu.tsx  # Toggle EMA/RSI/MACD/Volume
-│   ├── layout/
-│   │   ├── Header.tsx
-│   │   ├── LeftSidebar.tsx    # Drawing tool icons (visual)
-│   │   ├── RightSidebar.tsx
-│   │   └── BottomPanel.tsx    # 24h stats
-│   ├── watchlist/
-│   │   └── Watchlist.tsx      # Live multi-symbol prices
-│   └── ui/                    # shadcn primitives
-└── lib/
-    ├── binance/
-    │   ├── rest.ts            # klines / ticker / exchangeInfo
-    │   ├── ws.ts              # WS multiplex + auto-reconnect
-    │   └── types.ts
-    ├── indicators/
-    │   └── index.ts           # SMA, EMA, RSI (Wilder), MACD
-    ├── store/
-    │   └── chart-store.ts     # Zustand global state
-    └── format.ts              # formatPrice / formatPct / formatVolume
-```
 
 ## 🌐 Deploy to Vercel
 
