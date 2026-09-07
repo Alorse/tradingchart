@@ -194,9 +194,21 @@ export function ChartScreen() {
 
 // Fade only the outer few pixels of the chip into the dock background — most
 // of the prev/next rows stay fully opaque and readable; only the very top
-// and bottom edges dissolve. `-webkit-` prefixed for iOS Safari.
-const WHEEL_MASK =
+// and bottom edges dissolve.
+const WHEEL_MASK_VERTICAL =
   "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)";
+// The center value is left-aligned, so a label longer than the chip clips at
+// the right edge instead of both ends — this fades the last ~quarter of the
+// chip's width so that clip dissolves rather than cutting off hard.
+const WHEEL_MASK_HORIZONTAL =
+  "linear-gradient(to right, black 0%, black 78%, transparent 100%)";
+// The two gradients are stacked as separate mask layers and intersected
+// (each layer's alpha multiplies), so a pixel only stays opaque if it's both
+// away from the top/bottom edges AND away from the right edge.
+// `-webkit-mask-composite: source-in` is Safari's pre-standard equivalent of
+// `mask-composite: intersect` (Porter-Duff "source-in" applied against the
+// previous layer) — both are needed for iOS.
+const WHEEL_MASK_IMAGE = `${WHEEL_MASK_VERTICAL}, ${WHEEL_MASK_HORIZONTAL}`;
 
 /**
  * A wheel-picker-style chip (TradingView mobile's symbol/interval roller):
@@ -205,7 +217,10 @@ const WHEEL_MASK =
  * from the center by real vertical air. Only the outer edges of the chip
  * fade into the background — the rows themselves stay sharp (no ellipsis
  * truncation; overflow-hidden only clips an over-long label horizontally).
- * Swipe up/down cycles the value; tap opens the full picker sheet.
+ * The center value is left-aligned (prev/next stay centered) so a label
+ * longer than the fixed chip width clips only at the trailing end, and the
+ * horizontal mask layer fades that clipped end instead of cutting it off
+ * hard. Swipe up/down cycles the value; tap opens the full picker sheet.
  * `touchAction: "none"` is required for the swipe gesture to be reliably
  * captured (a touch browser otherwise treats it as a scroll attempt) — safe
  * here since this chip sits in the dock's fixed left zone, which never
@@ -240,9 +255,11 @@ function SwipeChip({
       )}
       style={{
         touchAction: "none",
-        WebkitMaskImage: WHEEL_MASK,
-        maskImage: WHEEL_MASK,
-      }}
+        WebkitMaskImage: WHEEL_MASK_IMAGE,
+        maskImage: WHEEL_MASK_IMAGE,
+        WebkitMaskComposite: "source-in",
+        maskComposite: "intersect",
+      } as CSSProperties}
       onPointerDown={(e) => {
         startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
         setActive(true);
@@ -285,7 +302,7 @@ function SwipeChip({
       <span
         key={label}
         style={{ "--wheel-spin-from": `${dir * 6}px` } as CSSProperties}
-        className="block whitespace-nowrap text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]"
+        className="block w-full whitespace-nowrap text-left text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]"
       >
         {label}
       </span>
