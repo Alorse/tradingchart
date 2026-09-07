@@ -112,7 +112,7 @@ export function ChartScreen() {
             onSwipe={nextSymbol}
             onTap={() => openSheet("symbolSearch")}
             ariaLabel="Symbol — tap to search, swipe to switch"
-            className="w-[72px]"
+            className="w-[80px]"
           />
           <SwipeChip
             label={timeframe.toUpperCase()}
@@ -201,7 +201,7 @@ const WHEEL_MASK_VERTICAL =
 // the right edge instead of both ends — this fades the last ~quarter of the
 // chip's width so that clip dissolves rather than cutting off hard.
 const WHEEL_MASK_HORIZONTAL =
-  "linear-gradient(to right, black 0%, black 78%, transparent 100%)";
+  "linear-gradient(to right, black 0%, black 85%, transparent 100%)";
 // The two gradients are stacked as separate mask layers and intersected
 // (each layer's alpha multiplies), so a pixel only stays opaque if it's both
 // away from the top/bottom edges AND away from the right edge.
@@ -249,7 +249,7 @@ function SwipeChip({
       type="button"
       aria-label={ariaLabel}
       className={cn(
-        "relative flex h-11 shrink-0 select-none flex-col items-center justify-center gap-1 overflow-hidden px-2 transition-colors",
+        "relative flex h-11 shrink-0 select-none flex-col items-center justify-center gap-1 overflow-hidden pl-1 pr-2 transition-colors",
         active && "bg-tv-panel-hover",
         className,
       )}
