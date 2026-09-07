@@ -155,6 +155,20 @@
 .text-\[11px\],
 .text-\[12px\] { font-size: 12px; }
 
+/* Mobile wheel-picker chip (symbol/timeframe): a short spin-in for the
+   center value when it changes, sliding in from whichever direction was
+   swiped. */
+@keyframes wheel-chip-spin {
+  from {
+    transform: translateY(var(--wheel-spin-from, 6px));
+    opacity: 0.4;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

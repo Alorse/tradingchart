@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Bell, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
@@ -86,6 +86,13 @@ export function ChartScreen() {
     setTimeframe(cycle(pinnedTimeframes.length > 0 ? pinnedTimeframes : [timeframe], timeframe, dir));
   }
 
+  // Neighboring values for the wheel-picker chips' dimmed prev/next slices.
+  const timeframeCycleList = pinnedTimeframes.length > 0 ? pinnedTimeframes : [timeframe];
+  const prevSymbolLabel = cycle(wlSymbols, symbol, -1);
+  const nextSymbolLabel = cycle(wlSymbols, symbol, 1);
+  const prevTimeframeLabel = cycle(timeframeCycleList, timeframe, -1).toUpperCase();
+  const nextTimeframeLabel = cycle(timeframeCycleList, timeframe, 1).toUpperCase();
+
   return (
     <div className="flex h-full flex-col">
       {/* Chart — full-bleed, nothing above it. */}
@@ -100,12 +107,16 @@ export function ChartScreen() {
         <div className="flex shrink-0 items-center gap-1 px-1">
           <SwipeChip
             label={symbol}
+            prevLabel={prevSymbolLabel}
+            nextLabel={nextSymbolLabel}
             onSwipe={nextSymbol}
             onTap={() => openSheet("symbolSearch")}
             ariaLabel="Symbol — tap to search, swipe to switch"
           />
           <SwipeChip
             label={timeframe.toUpperCase()}
+            prevLabel={prevTimeframeLabel}
+            nextLabel={nextTimeframeLabel}
             onSwipe={nextTimeframe}
             onTap={() => openSheet("timeframe")}
             ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
@@ -179,34 +190,51 @@ export function ChartScreen() {
   );
 }
 
+// Fade the dimmed prev/next slivers into the dock background — a soft
+// dissolve rather than a hard clip. `-webkit-` prefixed for iOS Safari.
+const WHEEL_MASK =
+  "linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)";
+
 /**
- * A dropdown-style chip with swipe-up / swipe-down detection (and a tap
- * fallback): value + a trailing chevron signal "tap opens a picker", while
- * the swipe cycles the value inline without opening anything. `touchAction:
- * "none"` is required for the swipe gesture to be reliably captured (a touch
- * browser otherwise treats it as a scroll attempt) — safe here since this
- * chip sits in the dock's fixed left zone, which never scrolls.
+ * A wheel-picker-style chip (TradingView mobile's symbol/interval roller):
+ * the current value sits bold and bright in the center, with thin, dimmed
+ * slivers of the previous/next value peeking above and below and dissolving
+ * into the background via a mask gradient. Swipe up/down cycles the value;
+ * tap opens the full picker sheet. `touchAction: "none"` is required for the
+ * swipe gesture to be reliably captured (a touch browser otherwise treats it
+ * as a scroll attempt) — safe here since this chip sits in the dock's fixed
+ * left zone, which never scrolls.
  */
 function SwipeChip({
-  label, onSwipe, onTap, ariaLabel,
+  label, prevLabel, nextLabel, onSwipe, onTap, ariaLabel,
 }: {
   label: string;
+  prevLabel: string;
+  nextLabel: string;
   onSwipe: (dir: 1 | -1) => void;
   onTap: () => void;
   ariaLabel: string;
 }) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const [active, setActive] = useState(false);
+  // Remembered only to pick which way the center value's spin-in animation
+  // slides from; a tap-driven change (picked from the sheet) just reuses
+  // whatever direction was last swiped.
+  const [dir, setDir] = useState<1 | -1>(1);
 
   return (
     <button
       type="button"
       aria-label={ariaLabel}
       className={cn(
-        "flex shrink-0 select-none items-center gap-0.5 rounded border border-tv-border bg-tv-bg px-2 py-1.5 text-xs font-semibold transition-colors",
+        "relative flex h-7 w-fit shrink-0 select-none flex-col items-center justify-center overflow-hidden px-2 transition-colors",
         active && "bg-tv-panel-hover",
       )}
-      style={{ touchAction: "none" }}
+      style={{
+        touchAction: "none",
+        WebkitMaskImage: WHEEL_MASK,
+        maskImage: WHEEL_MASK,
+      }}
       onPointerDown={(e) => {
         startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
         setActive(true);
@@ -223,7 +251,9 @@ function SwipeChip({
         // Vertical swipe wins — sign convention: swipe DOWN (positive dy) = previous,
         // swipe UP (negative dy) = next, matching how a wheel feels.
         if (Math.abs(dy) > SWIPE_PX && Math.abs(dy) > Math.abs(dx)) {
-          onSwipe(dy < 0 ? 1 : -1);
+          const swipeDir = dy < 0 ? 1 : -1;
+          setDir(swipeDir);
+          onSwipe(swipeDir);
         } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8 && dt < 400) {
           onTap();
         }
@@ -241,8 +271,19 @@ function SwipeChip({
         e.preventDefault();
       }}
     >
-      <span className="max-w-[110px] truncate">{label}</span>
-      <ChevronDown className="size-3 shrink-0 text-tv-text-muted" />
+      <span className="flex h-4 max-w-[100px] items-center justify-center truncate text-[10px] leading-none text-tv-text-dim">
+        {prevLabel}
+      </span>
+      <span
+        key={label}
+        style={{ "--wheel-spin-from": `${dir * 6}px` } as CSSProperties}
+        className="flex h-5 max-w-[100px] items-center justify-center truncate text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]"
+      >
+        {label}
+      </span>
+      <span className="flex h-4 max-w-[100px] items-center justify-center truncate text-[10px] leading-none text-tv-text-dim">
+        {nextLabel}
+      </span>
     </button>
   );
 }
