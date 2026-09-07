@@ -112,6 +112,7 @@ export function ChartScreen() {
             onSwipe={nextSymbol}
             onTap={() => openSheet("symbolSearch")}
             ariaLabel="Symbol — tap to search, swipe to switch"
+            className="w-[72px]"
           />
           <SwipeChip
             label={timeframe.toUpperCase()}
@@ -120,6 +121,7 @@ export function ChartScreen() {
             onSwipe={nextTimeframe}
             onTap={() => openSheet("timeframe")}
             ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
+            className="w-[44px]"
           />
         </div>
         <div className="relative min-w-0 flex-1">
@@ -210,7 +212,7 @@ const WHEEL_MASK =
  * scrolls.
  */
 function SwipeChip({
-  label, prevLabel, nextLabel, onSwipe, onTap, ariaLabel,
+  label, prevLabel, nextLabel, onSwipe, onTap, ariaLabel, className,
 }: {
   label: string;
   prevLabel: string;
@@ -218,6 +220,7 @@ function SwipeChip({
   onSwipe: (dir: 1 | -1) => void;
   onTap: () => void;
   ariaLabel: string;
+  className?: string;
 }) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const [active, setActive] = useState(false);
@@ -231,8 +234,9 @@ function SwipeChip({
       type="button"
       aria-label={ariaLabel}
       className={cn(
-        "relative flex h-11 w-fit max-w-[104px] shrink-0 select-none flex-col items-center justify-center gap-1 overflow-hidden px-2 transition-colors",
+        "relative flex h-11 shrink-0 select-none flex-col items-center justify-center gap-1 overflow-hidden px-2 transition-colors",
         active && "bg-tv-panel-hover",
+        className,
       )}
       style={{
         touchAction: "none",
