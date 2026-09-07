@@ -7,7 +7,6 @@ import { useMobileStore } from "@/lib/store/mobile-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useReplayStore } from "@/lib/replay/replay-store";
 import { PriceChart } from "@/components/chart/PriceChart";
-import { ChartTypeSelector } from "@/components/chart/ChartTypeSelector";
 import { SnapshotButton } from "@/components/chart/SnapshotButton";
 import { cn } from "@/lib/utils";
 
@@ -18,14 +17,13 @@ import { cn } from "@/lib/utils";
  * directly above the app's bottom tab bar, is split into two zones:
  * a fixed left zone (symbol, timeframe — dropdown-style chips: tap opens
  * the picker sheet, swipe cycles inline) and a horizontally-scrolling right
- * zone with everything else (chart type, drawings, indicators, replay,
- * snapshot, alerts, undo, redo).
+ * zone with everything else (drawings, indicators, replay, snapshot, alerts,
+ * undo, redo).
  *
  * The chart itself uses the existing desktop <PriceChart /> — it already
- * supports pinch-zoom and pan on touch devices. `ChartTypeSelector` and
- * `SnapshotButton` are reused as-is from desktop: both are built on the
- * shared `DropdownMenu` primitive (tap-triggered, not hover), so they need
- * no touch adaptation.
+ * supports pinch-zoom and pan on touch devices. `SnapshotButton` is reused
+ * as-is from desktop: it's built on the shared `DropdownMenu` primitive
+ * (tap-triggered, not hover), so it needs no touch adaptation.
  */
 export function ChartScreen() {
   const symbol = useChartStore((s) => s.symbol);
@@ -129,9 +127,6 @@ export function ChartScreen() {
             ref={scrollZoneRef}
             className="no-scrollbar flex h-full items-center gap-1 overflow-x-auto pr-2"
           >
-            <div className="flex h-full w-11 shrink-0 items-center justify-center">
-              <ChartTypeSelector />
-            </div>
             <button
               onClick={() => openSheet("drawings")}
               className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
