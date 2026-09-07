@@ -120,6 +120,7 @@ export function ChartScreen() {
             onTap={() => openSheet("timeframe")}
             ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
             className="w-[44px]"
+            centerAlign
           />
         </div>
         <div className="relative min-w-0 flex-1">
@@ -212,17 +213,20 @@ const WHEEL_MASK_IMAGE = `${WHEEL_MASK_VERTICAL}, ${WHEEL_MASK_HORIZONTAL}`;
  * from the center by real vertical air. Only the outer edges of the chip
  * fade into the background — the rows themselves stay sharp (no ellipsis
  * truncation; overflow-hidden only clips an over-long label horizontally).
- * The center value is left-aligned (prev/next stay centered) so a label
- * longer than the fixed chip width clips only at the trailing end, and the
- * horizontal mask layer fades that clipped end instead of cutting it off
- * hard. Swipe up/down cycles the value; tap opens the full picker sheet.
- * `touchAction: "none"` is required for the swipe gesture to be reliably
- * captured (a touch browser otherwise treats it as a scroll attempt) — safe
- * here since this chip sits in the dock's fixed left zone, which never
- * scrolls.
+ * The center value is left-aligned by default (prev/next stay centered) so
+ * a label longer than the fixed chip width — the symbol chip's coin names —
+ * clips only at the trailing end, and the horizontal mask layer fades that
+ * clipped end instead of cutting it off hard. Short, never-overflowing
+ * values (the timeframe chip's 2-3 chars) look off-center against the
+ * always-centered prev/next rows when left-aligned, so `centerAlign` swaps
+ * the center row to `text-center` too. Swipe up/down cycles the value; tap
+ * opens the full picker sheet. `touchAction: "none"` is required for the
+ * swipe gesture to be reliably captured (a touch browser otherwise treats it
+ * as a scroll attempt) — safe here since this chip sits in the dock's fixed
+ * left zone, which never scrolls.
  */
 function SwipeChip({
-  label, prevLabel, nextLabel, onSwipe, onTap, ariaLabel, className,
+  label, prevLabel, nextLabel, onSwipe, onTap, ariaLabel, className, centerAlign = false,
 }: {
   label: string;
   prevLabel: string;
@@ -231,6 +235,7 @@ function SwipeChip({
   onTap: () => void;
   ariaLabel: string;
   className?: string;
+  centerAlign?: boolean;
 }) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const [active, setActive] = useState(false);
@@ -297,7 +302,10 @@ function SwipeChip({
       <span
         key={label}
         style={{ "--wheel-spin-from": `${dir * 6}px` } as CSSProperties}
-        className="block w-full whitespace-nowrap text-left text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]"
+        className={cn(
+          "block w-full whitespace-nowrap text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]",
+          centerAlign ? "text-center" : "text-left",
+        )}
       >
         {label}
       </span>
