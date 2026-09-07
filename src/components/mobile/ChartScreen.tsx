@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Bell, Pencil, Redo2, Rewind, Sigma, Undo2 } from "lucide-react";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useReplayStore } from "@/lib/replay/replay-store";
 import { PriceChart } from "@/components/chart/PriceChart";
-import { ChartTypeSelector } from "@/components/chart/ChartTypeSelector";
 import { SnapshotButton } from "@/components/chart/SnapshotButton";
 import { cn } from "@/lib/utils";
 
@@ -18,14 +17,13 @@ import { cn } from "@/lib/utils";
  * directly above the app's bottom tab bar, is split into two zones:
  * a fixed left zone (symbol, timeframe — dropdown-style chips: tap opens
  * the picker sheet, swipe cycles inline) and a horizontally-scrolling right
- * zone with everything else (chart type, drawings, indicators, replay,
- * snapshot, alerts, undo, redo).
+ * zone with everything else (drawings, indicators, replay, snapshot, alerts,
+ * undo, redo).
  *
  * The chart itself uses the existing desktop <PriceChart /> — it already
- * supports pinch-zoom and pan on touch devices. `ChartTypeSelector` and
- * `SnapshotButton` are reused as-is from desktop: both are built on the
- * shared `DropdownMenu` primitive (tap-triggered, not hover), so they need
- * no touch adaptation.
+ * supports pinch-zoom and pan on touch devices. `SnapshotButton` is reused
+ * as-is from desktop: it's built on the shared `DropdownMenu` primitive
+ * (tap-triggered, not hover), so it needs no touch adaptation.
  */
 export function ChartScreen() {
   const symbol = useChartStore((s) => s.symbol);
@@ -86,6 +84,13 @@ export function ChartScreen() {
     setTimeframe(cycle(pinnedTimeframes.length > 0 ? pinnedTimeframes : [timeframe], timeframe, dir));
   }
 
+  // Neighboring values for the wheel-picker chips' dimmed prev/next slices.
+  const timeframeCycleList = pinnedTimeframes.length > 0 ? pinnedTimeframes : [timeframe];
+  const prevSymbolLabel = cycle(wlSymbols, symbol, -1);
+  const nextSymbolLabel = cycle(wlSymbols, symbol, 1);
+  const prevTimeframeLabel = cycle(timeframeCycleList, timeframe, -1).toUpperCase();
+  const nextTimeframeLabel = cycle(timeframeCycleList, timeframe, 1).toUpperCase();
+
   return (
     <div className="flex h-full flex-col">
       {/* Chart — full-bleed, nothing above it. */}
@@ -100,15 +105,22 @@ export function ChartScreen() {
         <div className="flex shrink-0 items-center gap-1 px-1">
           <SwipeChip
             label={symbol}
+            prevLabel={prevSymbolLabel}
+            nextLabel={nextSymbolLabel}
             onSwipe={nextSymbol}
             onTap={() => openSheet("symbolSearch")}
             ariaLabel="Symbol — tap to search, swipe to switch"
+            className="w-[80px]"
           />
           <SwipeChip
             label={timeframe.toUpperCase()}
+            prevLabel={prevTimeframeLabel}
+            nextLabel={nextTimeframeLabel}
             onSwipe={nextTimeframe}
             onTap={() => openSheet("timeframe")}
             ariaLabel="Timeframe — tap to pick, swipe to cycle pinned"
+            className="w-[44px]"
+            centerAlign
           />
         </div>
         <div className="relative min-w-0 flex-1">
@@ -116,9 +128,6 @@ export function ChartScreen() {
             ref={scrollZoneRef}
             className="no-scrollbar flex h-full items-center gap-1 overflow-x-auto pr-2"
           >
-            <div className="flex h-full w-11 shrink-0 items-center justify-center">
-              <ChartTypeSelector />
-            </div>
             <button
               onClick={() => openSheet("drawings")}
               className="flex h-full w-11 shrink-0 items-center justify-center text-tv-text-muted active:bg-tv-panel-hover"
@@ -179,34 +188,78 @@ export function ChartScreen() {
   );
 }
 
+// Fade only the outer few pixels of the chip into the dock background — most
+// of the prev/next rows stay fully opaque and readable; only the very top
+// and bottom edges dissolve.
+const WHEEL_MASK_VERTICAL =
+  "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)";
+// The center value is left-aligned, so a label longer than the chip clips at
+// the right edge instead of both ends — this fades the last ~quarter of the
+// chip's width so that clip dissolves rather than cutting off hard.
+const WHEEL_MASK_HORIZONTAL =
+  "linear-gradient(to right, black 0%, black 85%, transparent 100%)";
+// The two gradients are stacked as separate mask layers and intersected
+// (each layer's alpha multiplies), so a pixel only stays opaque if it's both
+// away from the top/bottom edges AND away from the right edge.
+// `-webkit-mask-composite: source-in` is Safari's pre-standard equivalent of
+// `mask-composite: intersect` (Porter-Duff "source-in" applied against the
+// previous layer) — both are needed for iOS.
+const WHEEL_MASK_IMAGE = `${WHEEL_MASK_VERTICAL}, ${WHEEL_MASK_HORIZONTAL}`;
+
 /**
- * A dropdown-style chip with swipe-up / swipe-down detection (and a tap
- * fallback): value + a trailing chevron signal "tap opens a picker", while
- * the swipe cycles the value inline without opening anything. `touchAction:
- * "none"` is required for the swipe gesture to be reliably captured (a touch
- * browser otherwise treats it as a scroll attempt) — safe here since this
- * chip sits in the dock's fixed left zone, which never scrolls.
+ * A wheel-picker-style chip (TradingView mobile's symbol/interval roller):
+ * the current value sits bold and bright in the center, with the previous/
+ * next value shown above and below in a dimmed-but-readable grey, separated
+ * from the center by real vertical air. Only the outer edges of the chip
+ * fade into the background — the rows themselves stay sharp (no ellipsis
+ * truncation; overflow-hidden only clips an over-long label horizontally).
+ * The center value is left-aligned by default (prev/next stay centered) so
+ * a label longer than the fixed chip width — the symbol chip's coin names —
+ * clips only at the trailing end, and the horizontal mask layer fades that
+ * clipped end instead of cutting it off hard. Short, never-overflowing
+ * values (the timeframe chip's 2-3 chars) look off-center against the
+ * always-centered prev/next rows when left-aligned, so `centerAlign` swaps
+ * the center row to `text-center` too. Swipe up/down cycles the value; tap
+ * opens the full picker sheet. `touchAction: "none"` is required for the
+ * swipe gesture to be reliably captured (a touch browser otherwise treats it
+ * as a scroll attempt) — safe here since this chip sits in the dock's fixed
+ * left zone, which never scrolls.
  */
 function SwipeChip({
-  label, onSwipe, onTap, ariaLabel,
+  label, prevLabel, nextLabel, onSwipe, onTap, ariaLabel, className, centerAlign = false,
 }: {
   label: string;
+  prevLabel: string;
+  nextLabel: string;
   onSwipe: (dir: 1 | -1) => void;
   onTap: () => void;
   ariaLabel: string;
+  className?: string;
+  centerAlign?: boolean;
 }) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const [active, setActive] = useState(false);
+  // Remembered only to pick which way the center value's spin-in animation
+  // slides from; a tap-driven change (picked from the sheet) just reuses
+  // whatever direction was last swiped.
+  const [dir, setDir] = useState<1 | -1>(1);
 
   return (
     <button
       type="button"
       aria-label={ariaLabel}
       className={cn(
-        "flex shrink-0 select-none items-center gap-0.5 rounded border border-tv-border bg-tv-bg px-2 py-1.5 text-xs font-semibold transition-colors",
+        "relative flex h-11 shrink-0 select-none flex-col items-center justify-center gap-1 overflow-hidden pl-1 pr-2 transition-colors",
         active && "bg-tv-panel-hover",
+        className,
       )}
-      style={{ touchAction: "none" }}
+      style={{
+        touchAction: "none",
+        WebkitMaskImage: WHEEL_MASK_IMAGE,
+        maskImage: WHEEL_MASK_IMAGE,
+        WebkitMaskComposite: "source-in",
+        maskComposite: "intersect",
+      } as CSSProperties}
       onPointerDown={(e) => {
         startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
         setActive(true);
@@ -223,7 +276,9 @@ function SwipeChip({
         // Vertical swipe wins — sign convention: swipe DOWN (positive dy) = previous,
         // swipe UP (negative dy) = next, matching how a wheel feels.
         if (Math.abs(dy) > SWIPE_PX && Math.abs(dy) > Math.abs(dx)) {
-          onSwipe(dy < 0 ? 1 : -1);
+          const swipeDir = dy < 0 ? 1 : -1;
+          setDir(swipeDir);
+          onSwipe(swipeDir);
         } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8 && dt < 400) {
           onTap();
         }
@@ -241,8 +296,22 @@ function SwipeChip({
         e.preventDefault();
       }}
     >
-      <span className="max-w-[110px] truncate">{label}</span>
-      <ChevronDown className="size-3 shrink-0 text-tv-text-muted" />
+      <span className="block whitespace-nowrap text-[10px] leading-none text-tv-text-muted">
+        {prevLabel}
+      </span>
+      <span
+        key={label}
+        style={{ "--wheel-spin-from": `${dir * 6}px` } as CSSProperties}
+        className={cn(
+          "block w-full whitespace-nowrap text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]",
+          centerAlign ? "text-center" : "text-left",
+        )}
+      >
+        {label}
+      </span>
+      <span className="block whitespace-nowrap text-[10px] leading-none text-tv-text-muted">
+        {nextLabel}
+      </span>
     </button>
   );
 }
