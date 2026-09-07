@@ -19,7 +19,7 @@ A crypto charting platform built on **Binance**'s public data (WebSocket) and th
 
 This project descends from two prior open-source efforts. The earliest MVP —
 Spanish, single-file, Binance WebSocket candles and a handful of indicators —
-was built by **KManuS88** [kmanus88ar@gmail.com](https://github.com/outlinersclub-cpu/tradingview-gratis). It was later forked from
+was built by **KManuS88** [outlinersclub-cpu/tradingview-gratis](https://github.com/outlinersclub-cpu/tradingview-gratis). It was later forked from
 [KisuShotto15/tradingview](https://github.com/KisuShotto15/tradingview), a
 Next.js + lightweight-charts + Binance WS TradingView clone built as a free
 alternative for LATAM, which is where the Supabase auth, cloud sync, and
