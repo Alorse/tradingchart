@@ -190,20 +190,24 @@ export function ChartScreen() {
   );
 }
 
-// Fade the dimmed prev/next slivers into the dock background — a soft
-// dissolve rather than a hard clip. `-webkit-` prefixed for iOS Safari.
+// Fade only the outer few pixels of the chip into the dock background — most
+// of the prev/next rows stay fully opaque and readable; only the very top
+// and bottom edges dissolve. `-webkit-` prefixed for iOS Safari.
 const WHEEL_MASK =
-  "linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)";
+  "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)";
 
 /**
  * A wheel-picker-style chip (TradingView mobile's symbol/interval roller):
- * the current value sits bold and bright in the center, with thin, dimmed
- * slivers of the previous/next value peeking above and below and dissolving
- * into the background via a mask gradient. Swipe up/down cycles the value;
- * tap opens the full picker sheet. `touchAction: "none"` is required for the
- * swipe gesture to be reliably captured (a touch browser otherwise treats it
- * as a scroll attempt) — safe here since this chip sits in the dock's fixed
- * left zone, which never scrolls.
+ * the current value sits bold and bright in the center, with the previous/
+ * next value shown above and below in a dimmed-but-readable grey, separated
+ * from the center by real vertical air. Only the outer edges of the chip
+ * fade into the background — the rows themselves stay sharp (no ellipsis
+ * truncation; overflow-hidden only clips an over-long label horizontally).
+ * Swipe up/down cycles the value; tap opens the full picker sheet.
+ * `touchAction: "none"` is required for the swipe gesture to be reliably
+ * captured (a touch browser otherwise treats it as a scroll attempt) — safe
+ * here since this chip sits in the dock's fixed left zone, which never
+ * scrolls.
  */
 function SwipeChip({
   label, prevLabel, nextLabel, onSwipe, onTap, ariaLabel,
@@ -227,7 +231,7 @@ function SwipeChip({
       type="button"
       aria-label={ariaLabel}
       className={cn(
-        "relative flex h-7 w-fit shrink-0 select-none flex-col items-center justify-center overflow-hidden px-2 transition-colors",
+        "relative flex h-11 w-fit max-w-[104px] shrink-0 select-none flex-col items-center justify-center gap-1 overflow-hidden px-2 transition-colors",
         active && "bg-tv-panel-hover",
       )}
       style={{
@@ -271,17 +275,17 @@ function SwipeChip({
         e.preventDefault();
       }}
     >
-      <span className="flex h-4 max-w-[100px] items-center justify-center truncate text-[10px] leading-none text-tv-text-dim">
+      <span className="block whitespace-nowrap text-[10px] leading-none text-tv-text-muted">
         {prevLabel}
       </span>
       <span
         key={label}
         style={{ "--wheel-spin-from": `${dir * 6}px` } as CSSProperties}
-        className="flex h-5 max-w-[100px] items-center justify-center truncate text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]"
+        className="block whitespace-nowrap text-xs leading-none font-bold text-tv-text [animation:wheel-chip-spin_140ms_ease-out]"
       >
         {label}
       </span>
-      <span className="flex h-4 max-w-[100px] items-center justify-center truncate text-[10px] leading-none text-tv-text-dim">
+      <span className="block whitespace-nowrap text-[10px] leading-none text-tv-text-muted">
         {nextLabel}
       </span>
     </button>
