@@ -18,6 +18,7 @@ import { useTradingStore } from "@/lib/store/trading-store";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
 import { useChartStore } from "@/lib/store/chart-store";
+import { useMobileStore } from "@/lib/store/mobile-store";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
@@ -384,6 +385,8 @@ function PaperPositionCard({
   const displaySymbol = paperDisplaySymbol(position);
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
   const figures = positionFiguresAt(position, mark, pnlDisplayMode, tickSize);
+  const setSymbol = useChartStore((s) => s.setSymbol);
+  const setTab = useMobileStore((s) => s.setTab);
 
   const [editing, setEditing] = useState(false);
   const [closingQty, setClosingQty] = useState<number | null>(null);
@@ -456,6 +459,7 @@ function PaperPositionCard({
         <PositionRowMenu
           x={menu.x}
           y={menu.y}
+          onOpenChart={() => { setSymbol(displaySymbol); setTab("chart"); setMenu(null); }}
           onEdit={() => { setEditing(true); setMenu(null); }}
           onReverse={() => { setReversing(true); setMenu(null); }}
           onClose={() => { setClosingQty(position.qty); setMenu(null); }}

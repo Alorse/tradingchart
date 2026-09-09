@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { usePaperTradingStore } from "@/lib/store/paper-trading-store";
+import { useChartStore } from "@/lib/store/chart-store";
 import { cn } from "@/lib/utils";
-import { Badge, Stat, Stub, TabBtn } from "@/components/layout/panel-bits";
+import { Badge, ChartLinkButton, Stat, Stub, SymbolLink, TabBtn } from "@/components/layout/panel-bits";
 import { formatPct, formatPrice } from "@/lib/format";
 import { bracketEditReason } from "@/lib/trading/paper-brackets";
 import {
@@ -348,6 +349,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
   const marks = usePaperTradingStore((s) => s.marks);
   const pnlDisplayMode = usePaperTradingStore((s) => s.pnlDisplayMode);
   const setPnlDisplayMode = usePaperTradingStore((s) => s.setPnlDisplayMode);
+  const setSymbol = useChartStore((s) => s.setSymbol);
   const [sort, setSort] = useState<SortState | null>(null);
   const [editing, setEditing] = useState<PaperPosition | null>(null);
   const [closing, setClosing] = useState<{ position: PaperPosition; initialQty: number } | null>(null);
@@ -437,6 +439,7 @@ function PositionsTable({ positions }: { positions: PaperPosition[] }) {
         <PositionRowMenu
           x={menu.x}
           y={menu.y}
+          onOpenChart={() => { setSymbol(paperDisplaySymbol(menu.position)); setMenu(null); }}
           onEdit={() => { setEditing(menu.position); setMenu(null); }}
           onReverse={() => { setReversing(menu.position); setMenu(null); }}
           onClose={() => { setClosing({ position: menu.position, initialQty: menu.position.qty }); setMenu(null); }}
@@ -526,7 +529,9 @@ function PositionRow({
       className="border-b border-tv-border hover:bg-tv-panel-hover"
       {...menuTrigger}
     >
-      <td className="px-3 py-1.5 font-semibold">{displaySymbol}</td>
+      <td className="px-3 py-1.5 font-semibold">
+        <SymbolLink symbol={displaySymbol} />
+      </td>
       <td className="px-3 py-1.5">
         <SideChip side={position.side} />
       </td>
@@ -573,6 +578,7 @@ function PositionRow({
       </td>
       <td className="px-3 py-1.5">
         <div className="flex items-center gap-1">
+          <ChartLinkButton symbol={displaySymbol} />
           <button
             onClick={onEdit}
             title="Edit TP / SL"
@@ -601,10 +607,11 @@ function PositionRow({
 }
 
 export function PositionRowMenu({
-  x, y, onEdit, onReverse, onClose, onClosePartial, onDismiss,
+  x, y, onOpenChart, onEdit, onReverse, onClose, onClosePartial, onDismiss,
 }: {
   x: number;
   y: number;
+  onOpenChart: () => void;
   onEdit: () => void;
   onReverse: () => void;
   onClose: () => void;
@@ -644,6 +651,9 @@ export function PositionRowMenu({
       style={{ position: "fixed", left: x, top: y }}
       className="z-50 w-48 overflow-hidden rounded-md border border-tv-border bg-tv-panel shadow-xl"
     >
+      <button onClick={onOpenChart} className="block w-full px-3 py-2 text-left text-xs text-tv-text hover:bg-tv-panel-hover">
+        Open chart
+      </button>
       <button onClick={onEdit} className="block w-full px-3 py-2 text-left text-xs text-tv-text hover:bg-tv-panel-hover">
         Edit TP / SL
       </button>
@@ -909,7 +919,9 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
       <tbody>
         {orders.map((o) => (
           <tr key={o.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
-            <td className="px-3 py-1.5 font-semibold">{paperDisplaySymbol(o)}</td>
+            <td className="px-3 py-1.5 font-semibold">
+              <SymbolLink symbol={paperDisplaySymbol(o)} />
+            </td>
             <td className={cn("px-3 py-1.5 font-semibold", o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red")}>
               {o.side === "BUY" ? "Buy" : "Sell"}
             </td>
@@ -923,13 +935,16 @@ function OrdersTable({ orders }: { orders: PaperOrder[] }) {
               {o.sl !== null ? formatPrice(o.sl) : "—"}
             </td>
             <td className="px-3 py-1.5">
-              <button
-                onClick={() => cancelOrder(o.id)}
-                title="Cancel order"
-                className="rounded p-0.5 text-tv-text-muted hover:bg-tv-red/15 hover:text-tv-red"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <ChartLinkButton symbol={paperDisplaySymbol(o)} />
+                <button
+                  onClick={() => cancelOrder(o.id)}
+                  title="Cancel order"
+                  className="rounded p-0.5 text-tv-text-muted hover:bg-tv-red/15 hover:text-tv-red"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </td>
           </tr>
         ))}
@@ -970,6 +985,7 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
           <th className="px-3 py-1.5 text-right">ROI%</th>
           <th className="px-3 py-1.5">Reason</th>
           <th className="px-3 py-1.5">Duration</th>
+          <th className="px-3 py-1.5"></th>
         </tr>
       </thead>
       <tbody>
@@ -978,7 +994,9 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
           const roi = t.roi * 100;
           return (
             <tr key={t.id} className="border-b border-tv-border hover:bg-tv-panel-hover">
-              <td className="px-3 py-1.5 font-semibold">{t.symbol}</td>
+              <td className="px-3 py-1.5 font-semibold">
+                <SymbolLink symbol={t.symbol} />
+              </td>
               <td className="px-3 py-1.5">
                 <SideChip side={t.side} />
               </td>
@@ -998,6 +1016,9 @@ function HistoryTable({ trades }: { trades: PaperTrade[] }) {
               </td>
               <td className="px-3 py-1.5 font-mono tabular-nums text-tv-text-muted">
                 {formatDuration(t.durationMs)}
+              </td>
+              <td className="px-3 py-1.5">
+                <ChartLinkButton symbol={t.symbol} />
               </td>
             </tr>
           );
