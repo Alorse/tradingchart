@@ -21,7 +21,7 @@ import { useChartStore } from "@/lib/store/chart-store";
 import { useMobileStore } from "@/lib/store/mobile-store";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Pencil, X } from "lucide-react";
+import { LineChart, Pencil, X } from "lucide-react";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import {
   formatPnlDisplay,
@@ -155,7 +155,7 @@ export function TradeScreen() {
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-semibold">
-                      {p.symbol}{" "}
+                      <MobileSymbolLink symbol={posSymbol}>{p.symbol}</MobileSymbolLink>{" "}
                       <span className={cn(
                         "rounded px-1 text-[9px]",
                         isLong ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
@@ -182,6 +182,7 @@ export function TradeScreen() {
                         {p.percentage >= 0 ? "+" : ""}{p.percentage.toFixed(2)}%
                       </span>
                     </div>
+                    <ChartIconButton symbol={posSymbol} />
                     <IconButton
                       onClick={() => openPositionEdit(posSymbol, p)}
                       aria-label="Edit take profit / stop loss"
@@ -216,14 +217,16 @@ export function TradeScreen() {
       {/* Orders */}
       {connected && (
         <Section title="Open Orders" emptyMessage="No pending orders">
-          {activeOrders.map((o) => (
+          {activeOrders.map((o) => {
+            const chartSymbol = `${o.symbol}${o.isPerp ? ".P" : ""}`;
+            return (
             <div
               key={o.orderId}
               className="flex items-center justify-between border-b border-tv-border/60 px-3 py-2"
             >
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-semibold">
-                  {o.symbol}{" "}
+                  <MobileSymbolLink symbol={chartSymbol}>{o.symbol}</MobileSymbolLink>{" "}
                   <span className={cn(
                     "rounded px-1 text-[9px]",
                     o.side === "BUY" ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
@@ -238,6 +241,7 @@ export function TradeScreen() {
                 </span>
               </div>
               <div className="flex items-center gap-1">
+                <ChartIconButton symbol={chartSymbol} />
                 <IconButton
                   onClick={() => setEditingOrder(o)}
                   aria-label="Edit order"
@@ -254,7 +258,8 @@ export function TradeScreen() {
                 </IconButton>
               </div>
             </div>
-          ))}
+            );
+          })}
         </Section>
       )}
 
@@ -266,6 +271,49 @@ export function TradeScreen() {
         />
       )}
     </div>
+  );
+}
+
+/** Navigates to a symbol's chart and switches to the Chart tab — the mobile
+ *  equivalent of desktop's plain `setSymbol`, since there's a bottom-tab
+ *  shell to switch as well. Shared by every card/row below rather than
+ *  duplicated per section. */
+function useOpenChart() {
+  const setSymbol = useChartStore((s) => s.setSymbol);
+  const setTab = useMobileStore((s) => s.setTab);
+  return (chartSymbol: string) => {
+    setSymbol(chartSymbol);
+    setTab("chart");
+  };
+}
+
+/** Symbol text as a clickable CTA, same styling as desktop's `SymbolLink`
+ *  (panel-bits.tsx) but navigating through `useOpenChart` above. */
+function MobileSymbolLink({ symbol, children }: { symbol: string; children?: React.ReactNode }) {
+  const openChart = useOpenChart();
+  return (
+    <span
+      role="button"
+      onClick={() => openChart(symbol)}
+      title={`Open ${symbol} chart`}
+      className="cursor-pointer text-tv-blue-text hover:underline"
+    >
+      {children ?? symbol}
+    </span>
+  );
+}
+
+/** Chart icon button matching the row's other IconButtons (Pencil/X). */
+function ChartIconButton({ symbol }: { symbol: string }) {
+  const openChart = useOpenChart();
+  return (
+    <IconButton
+      onClick={() => openChart(symbol)}
+      aria-label={`Open ${symbol} chart`}
+      className="text-tv-text-muted active:bg-tv-panel-hover active:text-tv-text"
+    >
+      <LineChart className="size-4" />
+    </IconButton>
   );
 }
 
@@ -353,7 +401,7 @@ function PaperTradeSection() {
           >
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-semibold">
-                {paperDisplaySymbol(o)}{" "}
+                <MobileSymbolLink symbol={paperDisplaySymbol(o)} />{" "}
                 <span className={cn(
                   "rounded px-1 text-[9px]",
                   o.side === "BUY" ? "bg-tv-blue/15 text-tv-blue-text" : "bg-tv-red/15 text-tv-red",
@@ -365,13 +413,16 @@ function PaperTradeSection() {
                 {o.type} · {o.qty} @ {formatPrice(o.price)}
               </span>
             </div>
-            <IconButton
-              onClick={() => cancelOrder(o.id)}
-              aria-label="Cancel order"
-              className="text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
-            >
-              <X className="size-4" />
-            </IconButton>
+            <div className="flex items-center gap-1">
+              <ChartIconButton symbol={paperDisplaySymbol(o)} />
+              <IconButton
+                onClick={() => cancelOrder(o.id)}
+                aria-label="Cancel order"
+                className="text-tv-text-muted active:bg-tv-red/15 active:text-tv-red"
+              >
+                <X className="size-4" />
+              </IconButton>
+            </div>
           </div>
         ))}
       </Section>
@@ -385,8 +436,7 @@ function PaperPositionCard({
   const displaySymbol = paperDisplaySymbol(position);
   const tickSize = useSymbolInfo(displaySymbol).tickSize;
   const figures = positionFiguresAt(position, mark, pnlDisplayMode, tickSize);
-  const setSymbol = useChartStore((s) => s.setSymbol);
-  const setTab = useMobileStore((s) => s.setTab);
+  const openChart = useOpenChart();
 
   const [editing, setEditing] = useState(false);
   const [closingQty, setClosingQty] = useState<number | null>(null);
@@ -399,7 +449,7 @@ function PaperPositionCard({
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <span className="flex items-center gap-1.5 text-sm font-semibold">
-            {displaySymbol} <SideChip side={position.side} />
+            <MobileSymbolLink symbol={displaySymbol} /> <SideChip side={position.side} />
           </span>
           <span className="font-mono text-[10px] text-tv-text-muted tabular-nums">
             {position.qty} @ {formatPrice(position.entryPrice)}
@@ -414,6 +464,7 @@ function PaperPositionCard({
               {figures.roe >= 0 ? "+" : ""}{figures.roe.toFixed(2)}%
             </span>
           </div>
+          <ChartIconButton symbol={displaySymbol} />
           <IconButton
             onClick={() => setEditing(true)}
             aria-label="Edit take profit / stop loss"
@@ -459,7 +510,7 @@ function PaperPositionCard({
         <PositionRowMenu
           x={menu.x}
           y={menu.y}
-          onOpenChart={() => { setSymbol(displaySymbol); setTab("chart"); setMenu(null); }}
+          onOpenChart={() => { openChart(displaySymbol); setMenu(null); }}
           onEdit={() => { setEditing(true); setMenu(null); }}
           onReverse={() => { setReversing(true); setMenu(null); }}
           onClose={() => { setClosingQty(position.qty); setMenu(null); }}
