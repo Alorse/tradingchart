@@ -1,5 +1,7 @@
 "use client";
 
+import { LineChart } from "lucide-react";
+import { useChartStore } from "@/lib/store/chart-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -64,5 +66,43 @@ export function Stub({ message }: { message: string }) {
     <div className="flex h-32 items-center justify-center text-xs text-tv-text-muted">
       {message}
     </div>
+  );
+}
+
+/**
+ * A row's symbol rendered as the TradingView-style "click to open chart" CTA:
+ * accent color, underline on hover. `symbol` must already be a chartable
+ * ticker (feed symbol with `.P`/`BYBIT:` decoration as needed) — this
+ * component does no mapping of its own, callers pass the exact string for
+ * `setSymbol`.
+ */
+export function SymbolLink({
+  symbol, className, children,
+}: { symbol: string; className?: string; children?: React.ReactNode }) {
+  const setSymbol = useChartStore((s) => s.setSymbol);
+  return (
+    <span
+      role="button"
+      onClick={() => setSymbol(symbol)}
+      title={`Open ${symbol} chart`}
+      className={cn("cursor-pointer text-tv-blue-text hover:underline", className)}
+    >
+      {children ?? symbol}
+    </span>
+  );
+}
+
+/** Chart-icon button for a row's action column, next to Pencil/Close/X — same
+ *  navigation as `SymbolLink`, for when the symbol text itself isn't handy. */
+export function ChartLinkButton({ symbol, className }: { symbol: string; className?: string }) {
+  const setSymbol = useChartStore((s) => s.setSymbol);
+  return (
+    <button
+      onClick={() => setSymbol(symbol)}
+      title={`Open ${symbol} chart`}
+      className={cn("rounded p-0.5 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text", className)}
+    >
+      <LineChart className="h-3 w-3" />
+    </button>
   );
 }

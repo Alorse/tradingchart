@@ -6,7 +6,7 @@ import { useTradingStore } from "@/lib/store/trading-store";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { cn } from "@/lib/utils";
-import { Badge, Stat, Stub, TabBtn } from "@/components/layout/panel-bits";
+import { Badge, ChartLinkButton, Stat, Stub, SymbolLink, TabBtn } from "@/components/layout/panel-bits";
 import { formatPrice } from "@/lib/format";
 import type { Order, Position } from "@/lib/binance/trading-types";
 
@@ -235,7 +235,9 @@ function PositionsTable({
           const posSymbol = `${p.symbol}.P`;
           return (
             <tr key={rowKey} className="border-b border-tv-border hover:bg-tv-panel-hover">
-              <td className="px-3 py-1.5 font-semibold">{p.symbol}.P</td>
+              <td className="px-3 py-1.5 font-semibold">
+                <SymbolLink symbol={posSymbol} />
+              </td>
               <td className={cn("px-3 py-1.5 font-semibold", isLong ? "text-tv-blue-text" : "text-tv-red")}>
                 {isLong ? "Long" : "Short"}
               </td>
@@ -266,6 +268,7 @@ function PositionsTable({
               <td className="px-3 py-1.5 capitalize">{p.marginType}</td>
               <td className="px-3 py-1.5">
                 <div className="flex items-center gap-1">
+                  <ChartLinkButton symbol={posSymbol} />
                   <button
                     onClick={() => setEditing(rowKey)}
                     title="Set TP / SL"
@@ -464,9 +467,13 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((o) => (
+            {filtered.map((o) => {
+              const chartSymbol = `${o.symbol}${o.isPerp ? ".P" : ""}`;
+              return (
               <tr key={o.orderId} className="border-b border-tv-border hover:bg-tv-panel-hover">
-                <td className="px-3 py-1.5 font-semibold">{o.symbol}</td>
+                <td className="px-3 py-1.5 font-semibold">
+                  <SymbolLink symbol={chartSymbol}>{o.symbol}</SymbolLink>
+                </td>
                 <td className={cn(
                   "px-3 py-1.5 font-semibold",
                   o.side === "BUY" ? "text-tv-blue-text" : "text-tv-red",
@@ -494,24 +501,27 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
                   </span>
                 </td>
                 <td className="px-3 py-1.5">
-                  {(o.status === "NEW" || o.status === "PARTIALLY_FILLED") && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setEditing(o.orderId)}
-                        title="Edit order"
-                        className="rounded p-0.5 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => void cancelOrder(symbol, o.orderId)}
-                        title="Cancel order"
-                        className="rounded p-0.5 text-tv-text-muted hover:bg-tv-red/15 hover:text-tv-red"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <ChartLinkButton symbol={chartSymbol} />
+                    {(o.status === "NEW" || o.status === "PARTIALLY_FILLED") && (
+                      <>
+                        <button
+                          onClick={() => setEditing(o.orderId)}
+                          title="Edit order"
+                          className="rounded p-0.5 text-tv-text-muted hover:bg-tv-bg hover:text-tv-text"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => void cancelOrder(symbol, o.orderId)}
+                          title="Cancel order"
+                          className="rounded p-0.5 text-tv-text-muted hover:bg-tv-red/15 hover:text-tv-red"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                   {editing === o.orderId && (
                     <EditOrderPopover
                       order={o}
@@ -521,7 +531,8 @@ function OrdersTable({ orders, symbol }: { orders: Order[]; symbol: string }) {
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}
