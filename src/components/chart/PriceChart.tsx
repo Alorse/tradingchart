@@ -74,7 +74,7 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { unifiedHistory, registerViewportApplier, isApplyingHistory } from "@/lib/history";
 import { registerPricePerPixel } from "@/lib/chart/nudge";
-import { fitViewLogicalRange } from "@/lib/chart/fit-view";
+import { fitViewLogicalRange, TV_DEFAULT_BAR_SPACING } from "@/lib/chart/fit-view";
 import { registerChartCapture, composeChartPng } from "@/lib/chart/snapshot";
 import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
@@ -510,7 +510,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 12,
-        barSpacing: 8,
+        barSpacing: TV_DEFAULT_BAR_SPACING,
       },
       autoSize: true,
     });
@@ -2780,6 +2780,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         updateBB();
         updateVWAP();
         updateSimpleOscillators();
+        // Whether the first-load auto-fit (visibleBars === 0) still needs to
+        // apply once layout has settled — see the retry below.
+        let needsAutoFitRetry = false;
         if (chartRef.current && klines.length > 0) {
           const lastIdx = klines.length - 1;
           if (shape) {
@@ -2790,11 +2793,31 @@ export function PriceChart({ symbol, timeframe }: Props) {
           } else {
             // First load: show the user's preferred number of recent bars.
             // Bypasses lightweight-charts' default "fit all" which zooms out too far.
+            // 0 means "never zoomed" — auto to TradingView's own density for
+            // however many bars fit this pane, instead of a fixed count.
             const bars = useChartStore.getState().visibleBars;
-            chartRef.current.timeScale().setVisibleLogicalRange({
-              from: Math.max(0, lastIdx - bars + 1),
-              to: lastIdx + 4,
-            });
+            if (bars > 0) {
+              chartRef.current.timeScale().setVisibleLogicalRange({
+                from: Math.max(0, lastIdx - bars + 1),
+                to: lastIdx + 4,
+              });
+            } else {
+              const range = fitViewLogicalRange({
+                barCount: klines.length,
+                chartAreaWidth: chartRef.current.timeScale().width(),
+                rightOffset: 4,
+              });
+              // A pane with no measurable width yet (plausible on first mount,
+              // especially on mobile) must not fall back to fitContent() —
+              // that crams the whole 1000-bar load in, exactly the bug this
+              // fixes. Leave the chart's own default for now and retry once
+              // layout has settled, below.
+              if (range) {
+                chartRef.current.timeScale().setVisibleLogicalRange(range);
+              } else {
+                needsAutoFitRetry = true;
+              }
+            }
           }
         }
         // Recompute pane offsets in multiple frames: lightweight-charts needs
@@ -2806,6 +2829,14 @@ export function PriceChart({ symbol, timeframe }: Props) {
         requestAnimationFrame(() => {
           applyPaneRatios();
           recomputePaneOffsets();
+          if (needsAutoFitRetry && chartRef.current && klines.length > 0) {
+            const range = fitViewLogicalRange({
+              barCount: klines.length,
+              chartAreaWidth: chartRef.current.timeScale().width(),
+              rightOffset: 4,
+            });
+            if (range) chartRef.current.timeScale().setVisibleLogicalRange(range);
+          }
           requestAnimationFrame(() => recomputePaneOffsets());
         });
         setTimeout(() => {

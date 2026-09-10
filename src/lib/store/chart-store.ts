@@ -734,6 +734,111 @@ export const DEFAULT_INDICATORS: Record<IndicatorKey, boolean> = {
   volume: true,
 };
 
+/**
+ * Persisted-state upgrader, kept as a standalone export (rather than inline
+ * in `persist()`) so it can be unit-tested directly: chart-store, like
+ * alerts/trading/mobile, uses zustand's default `window.localStorage`
+ * storage rather than the `globalThis`-based one in `persist-storage.ts`, so
+ * `useChartStore.persist` isn't available under Node's test runner.
+ */
+export function migrateChartState(persisted: unknown, fromVersion: number): unknown {
+  const p = persisted as Record<string, unknown>;
+  if (fromVersion < 3 && Array.isArray(p.watchlist)) {
+    const id = randomId();
+    p.watchlists = [
+      {
+        id,
+        name: "Default",
+        items: (p.watchlist as string[]).map((sym) => ({
+          id: randomId(),
+          type: "symbol",
+          value: sym,
+        })),
+      },
+    ];
+    p.activeWatchlistId = id;
+    delete p.watchlist;
+  }
+  // v4: fill in adxKeyLevel and showKeyLevel defaults for users who persisted
+  // state before these fields were added (they'd be undefined otherwise).
+  // Also reset keyLevelColor from old gray to white so it's visible on dark bg.
+  if (fromVersion < 4) {
+    const cfg = p.config as Record<string, unknown> | undefined;
+    if (cfg && cfg.adxKeyLevel === undefined) cfg.adxKeyLevel = 23;
+    const adxStyle = p.adxStyle as Record<string, unknown> | undefined;
+    if (adxStyle && adxStyle.showKeyLevel === undefined) adxStyle.showKeyLevel = true;
+    if (adxStyle && adxStyle.keyLevelColor === "#787b86") adxStyle.keyLevelColor = "#ffffff";
+  }
+  // v6: eight new indicators (BB, VWAP, VRVP, StochRSI, %R, ATR, CCI, MFI).
+  // A persisted `indicators`/`hidden` map predates their keys, and a
+  // missing key reads as undefined rather than false — harmless for the
+  // toggles, but `Object.values(indicators).filter(Boolean)` and the
+  // pane-index walk both assume a complete record.
+  if (fromVersion < 6) {
+    p.indicators = { ...ALL_INDICATORS_FALSE, ...(p.indicators as object ?? {}) };
+    p.hidden = { ...ALL_INDICATORS_FALSE, ...(p.hidden as object ?? {}) };
+    p.config = { ...DEFAULT_CONFIG, ...(p.config as object ?? {}) };
+  }
+  // v7: the palette moved from pure black to TradingView's cold-gray ramp.
+  // A persisted chart-color set is the *old* palette, so an existing user
+  // would keep #0e0e0e grid lines and #26a69a candles on the new #0f0f0f
+  // background — invisible grid, mismatched candles. Reset the colors to
+  // the new defaults. Only the color-carrying fields of the style objects
+  // are overwritten: visibility toggles, line widths and the rest are user
+  // choices that have nothing to do with the palette.
+  if (fromVersion < 7) {
+    p.chartColors = { ...DEFAULT_CHART_COLORS };
+    const adxStyle = p.adxStyle as Record<string, unknown> | undefined;
+    if (adxStyle) {
+      adxStyle.adxColor = DEFAULT_ADX_STYLE.adxColor;
+      adxStyle.plusDiColor = DEFAULT_ADX_STYLE.plusDiColor;
+      adxStyle.minusDiColor = DEFAULT_ADX_STYLE.minusDiColor;
+    }
+    const squeezeStyle = p.squeezeStyle as Record<string, unknown> | undefined;
+    if (squeezeStyle) squeezeStyle.squeezeOff = DEFAULT_SQUEEZE_STYLE.squeezeOff;
+    const vwapStyle = p.vwapStyle as Record<string, unknown> | undefined;
+    if (vwapStyle) vwapStyle.bandColor = DEFAULT_VWAP_STYLE.bandColor;
+    const vp = p.volumeProfile as Record<string, unknown> | undefined;
+    if (vp) {
+      vp.upColor = DEFAULT_VOLUME_PROFILE.upColor;
+      vp.downColor = DEFAULT_VOLUME_PROFILE.downColor;
+      vp.valueAreaUpColor = DEFAULT_VOLUME_PROFILE.valueAreaUpColor;
+      vp.valueAreaDownColor = DEFAULT_VOLUME_PROFILE.valueAreaDownColor;
+    }
+    const keyLevels = p.keyLevels as Record<string, { color?: string }> | undefined;
+    if (keyLevels?.monthly) keyLevels.monthly.color = DEFAULT_KEY_LEVELS.monthly.color;
+    if (keyLevels?.yearly) keyLevels.yearly.color = DEFAULT_KEY_LEVELS.yearly.color;
+  }
+  // v8: the squeeze-on dot moved off black (invisible on the new
+  // background) to amber. Only rewrite it if it is still the old default
+  // — a user who picked their own color keeps it, the same conditional
+  // shape the v4 keyLevelColor reset uses.
+  if (fromVersion < 8) {
+    const squeezeStyle = p.squeezeStyle as Record<string, unknown> | undefined;
+    if (squeezeStyle?.squeezeOn === "#000000") {
+      squeezeStyle.squeezeOn = DEFAULT_SQUEEZE_STYLE.squeezeOn;
+    }
+  }
+  // v9: pane heights became persistent. Nothing to carry over — a
+  // pre-v9 state simply has no layout saved yet, and `null` means
+  // "use the library's defaults" rather than a broken zero layout.
+  if (fromVersion < 9 && p.paneRatios === undefined) {
+    p.paneRatios = null;
+  }
+  // v10: the old hardcoded default (150) became 0 = "auto to
+  // TradingView's own density". A persisted 150 could either be that
+  // untouched old default or a real user zoom that happens to equal
+  // it — indistinguishable, but treating it as the untouched default
+  // is the far more common case, and worst case a user who really did
+  // zoom to exactly 150 bars gets auto density instead, not a broken
+  // chart. Any other persisted value is unambiguously a real zoom and
+  // is left untouched.
+  if (fromVersion < 10 && p.visibleBars === 150) {
+    p.visibleBars = 0;
+  }
+  return p;
+}
+
 export const useChartStore = create<ChartState>()(
   persist(
     (set, get) => ({
@@ -757,7 +862,11 @@ export const useChartStore = create<ChartState>()(
       mainPriceScaleMode: "normal",
       mainPriceScaleInverted: false,
       indicatorLogScale: {},
-      visibleBars: 150,
+      // 0 = auto: TradingView's own density for however many bars fit the
+      // pane (see fitViewLogicalRange in PriceChart's first-load path).
+      // The zoom handler's setVisibleBars never writes 0 (guarded `bars >= 5`),
+      // so any non-zero value here is a real prior user zoom.
+      visibleBars: 0,
       pillsCollapsed: false,
       subPanesHidden: false,
       paneRatios: null,
@@ -1346,93 +1455,8 @@ export const useChartStore = create<ChartState>()(
     }),
     {
       name: "tv-gratis-chart-state",
-      version: 9,
-      migrate: (persisted, fromVersion) => {
-        const p = persisted as Record<string, unknown>;
-        if (fromVersion < 3 && Array.isArray(p.watchlist)) {
-          const id = randomId();
-          p.watchlists = [
-            {
-              id,
-              name: "Default",
-              items: (p.watchlist as string[]).map((sym) => ({
-                id: randomId(),
-                type: "symbol",
-                value: sym,
-              })),
-            },
-          ];
-          p.activeWatchlistId = id;
-          delete p.watchlist;
-        }
-        // v4: fill in adxKeyLevel and showKeyLevel defaults for users who persisted
-        // state before these fields were added (they'd be undefined otherwise).
-        // Also reset keyLevelColor from old gray to white so it's visible on dark bg.
-        if (fromVersion < 4) {
-          const cfg = p.config as Record<string, unknown> | undefined;
-          if (cfg && cfg.adxKeyLevel === undefined) cfg.adxKeyLevel = 23;
-          const adxStyle = p.adxStyle as Record<string, unknown> | undefined;
-          if (adxStyle && adxStyle.showKeyLevel === undefined) adxStyle.showKeyLevel = true;
-          if (adxStyle && adxStyle.keyLevelColor === "#787b86") adxStyle.keyLevelColor = "#ffffff";
-        }
-        // v6: eight new indicators (BB, VWAP, VRVP, StochRSI, %R, ATR, CCI, MFI).
-        // A persisted `indicators`/`hidden` map predates their keys, and a
-        // missing key reads as undefined rather than false — harmless for the
-        // toggles, but `Object.values(indicators).filter(Boolean)` and the
-        // pane-index walk both assume a complete record.
-        if (fromVersion < 6) {
-          p.indicators = { ...ALL_INDICATORS_FALSE, ...(p.indicators as object ?? {}) };
-          p.hidden = { ...ALL_INDICATORS_FALSE, ...(p.hidden as object ?? {}) };
-          p.config = { ...DEFAULT_CONFIG, ...(p.config as object ?? {}) };
-        }
-        // v7: the palette moved from pure black to TradingView's cold-gray ramp.
-        // A persisted chart-color set is the *old* palette, so an existing user
-        // would keep #0e0e0e grid lines and #26a69a candles on the new #0f0f0f
-        // background — invisible grid, mismatched candles. Reset the colors to
-        // the new defaults. Only the color-carrying fields of the style objects
-        // are overwritten: visibility toggles, line widths and the rest are user
-        // choices that have nothing to do with the palette.
-        if (fromVersion < 7) {
-          p.chartColors = { ...DEFAULT_CHART_COLORS };
-          const adxStyle = p.adxStyle as Record<string, unknown> | undefined;
-          if (adxStyle) {
-            adxStyle.adxColor = DEFAULT_ADX_STYLE.adxColor;
-            adxStyle.plusDiColor = DEFAULT_ADX_STYLE.plusDiColor;
-            adxStyle.minusDiColor = DEFAULT_ADX_STYLE.minusDiColor;
-          }
-          const squeezeStyle = p.squeezeStyle as Record<string, unknown> | undefined;
-          if (squeezeStyle) squeezeStyle.squeezeOff = DEFAULT_SQUEEZE_STYLE.squeezeOff;
-          const vwapStyle = p.vwapStyle as Record<string, unknown> | undefined;
-          if (vwapStyle) vwapStyle.bandColor = DEFAULT_VWAP_STYLE.bandColor;
-          const vp = p.volumeProfile as Record<string, unknown> | undefined;
-          if (vp) {
-            vp.upColor = DEFAULT_VOLUME_PROFILE.upColor;
-            vp.downColor = DEFAULT_VOLUME_PROFILE.downColor;
-            vp.valueAreaUpColor = DEFAULT_VOLUME_PROFILE.valueAreaUpColor;
-            vp.valueAreaDownColor = DEFAULT_VOLUME_PROFILE.valueAreaDownColor;
-          }
-          const keyLevels = p.keyLevels as Record<string, { color?: string }> | undefined;
-          if (keyLevels?.monthly) keyLevels.monthly.color = DEFAULT_KEY_LEVELS.monthly.color;
-          if (keyLevels?.yearly) keyLevels.yearly.color = DEFAULT_KEY_LEVELS.yearly.color;
-        }
-        // v8: the squeeze-on dot moved off black (invisible on the new
-        // background) to amber. Only rewrite it if it is still the old default
-        // — a user who picked their own color keeps it, the same conditional
-        // shape the v4 keyLevelColor reset uses.
-        if (fromVersion < 8) {
-          const squeezeStyle = p.squeezeStyle as Record<string, unknown> | undefined;
-          if (squeezeStyle?.squeezeOn === "#000000") {
-            squeezeStyle.squeezeOn = DEFAULT_SQUEEZE_STYLE.squeezeOn;
-          }
-        }
-        // v9: pane heights became persistent. Nothing to carry over — a
-        // pre-v9 state simply has no layout saved yet, and `null` means
-        // "use the library's defaults" rather than a broken zero layout.
-        if (fromVersion < 9 && p.paneRatios === undefined) {
-          p.paneRatios = null;
-        }
-        return p;
-      },
+      version: 10,
+      migrate: migrateChartState,
       partialize: (s) => ({
         symbol: s.symbol,
         timeframe: s.timeframe,
