@@ -74,6 +74,7 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { unifiedHistory, registerViewportApplier, isApplyingHistory } from "@/lib/history";
 import { registerPricePerPixel } from "@/lib/chart/nudge";
+import { fitViewLogicalRange } from "@/lib/chart/fit-view";
 import { registerChartCapture, composeChartPng } from "@/lib/chart/snapshot";
 import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
@@ -4281,7 +4282,19 @@ export function PriceChart({ symbol, timeframe }: Props) {
                   // currently visible candles without touching pan/zoom.
                   candleSeriesRef.current?.priceScale().applyOptions({ autoScale: true });
                 } else {
-                  chartRef.current?.timeScale().fitContent();
+                  const chart = chartRef.current;
+                  const range = chart
+                    ? fitViewLogicalRange({
+                        barCount: candlesRef.current.length,
+                        chartAreaWidth: chart.timeScale().width(),
+                        rightOffset: 4,
+                      })
+                    : null;
+                  if (chart && range) {
+                    chart.timeScale().setVisibleLogicalRange(range);
+                  } else {
+                    chart?.timeScale().fitContent();
+                  }
                   candleSeriesRef.current?.priceScale().applyOptions({ autoScale: true });
                 }
                 setChartContextMenu(null);
