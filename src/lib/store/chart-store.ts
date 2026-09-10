@@ -836,6 +836,20 @@ export function migrateChartState(persisted: unknown, fromVersion: number): unkn
   if (fromVersion < 10 && p.visibleBars === 150) {
     p.visibleBars = 0;
   }
+  // v11: the pre-v10 "Fit chart to data" action called fitContent() over the
+  // full 1000-candle load (see PriceChart's fetchCandles(symbol, timeframe,
+  // 1000)), and the zoom handler persists Math.round(range.to - range.from)
+  // for any in-range result — so real users who ever hit that action have
+  // ~1000 (± the small rightOffset fitContent leaves at the edge) sitting in
+  // visibleBars, not the untouched default the v10 clause above assumes.
+  // No legitimate zoom lands here: at TradingView's own ~6px/bar density a
+  // 995+ bar view needs a ~6000px-wide pane, far beyond any real viewport, so
+  // treating anything that large as this artifact and resetting it to auto
+  // cannot misfire on a real user zoom. A user who already migrated through
+  // v10 still needs the 150 clause above, so both stay.
+  if (fromVersion < 11 && typeof p.visibleBars === "number" && p.visibleBars >= 995) {
+    p.visibleBars = 0;
+  }
   return p;
 }
 
@@ -1455,7 +1469,7 @@ export const useChartStore = create<ChartState>()(
     }),
     {
       name: "tv-gratis-chart-state",
-      version: 10,
+      version: 11,
       migrate: migrateChartState,
       partialize: (s) => ({
         symbol: s.symbol,

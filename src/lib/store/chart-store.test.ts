@@ -54,4 +54,29 @@ describe("chart-store visibleBars default and migration", () => {
     const migrated = migrateChartState({}, 9) as { visibleBars?: number };
     expect(migrated.visibleBars).toBe(undefined);
   });
+
+  it("heals the pre-v10 fitContent() artifact: a persisted 1000 (full load size) resets to auto", () => {
+    const migrated = migrateChartState({ visibleBars: 1000 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("resets exactly the 995 threshold to auto", () => {
+    const migrated = migrateChartState({ visibleBars: 995 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("leaves a real measured TradingView-density zoom (236) untouched", () => {
+    const migrated = migrateChartState({ visibleBars: 236 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(236);
+  });
+
+  it("also heals the fitContent() artifact for a user who already migrated through v10", () => {
+    const migrated = migrateChartState({ visibleBars: 1000 }, 10) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("leaves an already-auto 0 untouched at v11", () => {
+    const migrated = migrateChartState({ visibleBars: 0 }, 10) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
 });
