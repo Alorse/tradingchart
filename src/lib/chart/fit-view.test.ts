@@ -73,4 +73,22 @@ describe("fitViewLogicalRange", () => {
       fitViewLogicalRange({ barCount: 1000, chartAreaWidth: 3, rightOffset: 4, barSpacing: 6 }),
     ).toBe(null);
   });
+
+  // Mobile parity: PriceChart is the same component on mobile (ChartScreen.tsx
+  // renders it as-is, no mobile-specific bar logic), and TradingView itself
+  // has no separate mobile density — measured live at a 390px viewport, its
+  // chart area is 262px wide and still uses the same 6px/bar as desktop.
+  it("caps the span at 43 bars on TradingView's measured 262px mobile pane", () => {
+    const range = fitViewLogicalRange({
+      barCount: 1000,
+      chartAreaWidth: 262,
+      rightOffset: 4,
+    });
+    const span = range ? range.to - range.from : null;
+    expect(span).toBe(43);
+  });
+
+  it("returns null on a phone-width pane smaller than one bar", () => {
+    expect(fitViewLogicalRange({ barCount: 1000, chartAreaWidth: 4, rightOffset: 4 })).toBe(null);
+  });
 });
