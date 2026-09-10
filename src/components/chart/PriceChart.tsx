@@ -256,6 +256,34 @@ export function PriceChart({ symbol, timeframe }: Props) {
       programmaticRangeRef.current = false;
     }, 750);
   };
+  // Applies TradingView-density fit to `chart`, marking the range change as
+  // programmatic so the zoom-persist handler above doesn't re-save it as a
+  // user zoom. Returns whether a range was actually applied, so callers can
+  // fall back (retry later, or fitContent()) when the pane isn't measurable yet.
+  const applyFitView = (
+    chart: IChartApi | null,
+    barCount: number,
+    rightOffset: number,
+    fallbackToFitContent: boolean,
+  ): boolean => {
+    if (!chart) return false;
+    const range = fitViewLogicalRange({
+      barCount,
+      chartAreaWidth: chart.timeScale().width(),
+      rightOffset,
+    });
+    if (range) {
+      markProgrammaticRange();
+      chart.timeScale().setVisibleLogicalRange(range);
+      return true;
+    }
+    if (fallbackToFitContent) {
+      markProgrammaticRange();
+      chart.timeScale().fitContent();
+      return true;
+    }
+    return false;
+  };
   // Full candle array snapshot captured when bar replay starts (candlesRef holds
   // the truncated slice while replay is active).
   const replayFullRef = useRef<Candle[]>([]);
@@ -2815,22 +2843,12 @@ export function PriceChart({ symbol, timeframe }: Props) {
                 to: lastIdx + 4,
               });
             } else {
-              const range = fitViewLogicalRange({
-                barCount: klines.length,
-                chartAreaWidth: chartRef.current.timeScale().width(),
-                rightOffset: 4,
-              });
               // A pane with no measurable width yet (plausible on first mount,
               // especially on mobile) must not fall back to fitContent() —
               // that crams the whole 1000-bar load in, exactly the bug this
               // fixes. Leave the chart's own default for now and retry once
               // layout has settled, below.
-              if (range) {
-                markProgrammaticRange();
-                chartRef.current.timeScale().setVisibleLogicalRange(range);
-              } else {
-                needsAutoFitRetry = true;
-              }
+              needsAutoFitRetry = !applyFitView(chartRef.current, klines.length, 4, false);
             }
           }
         }
@@ -2844,15 +2862,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
           applyPaneRatios();
           recomputePaneOffsets();
           if (needsAutoFitRetry && chartRef.current && klines.length > 0) {
-            const range = fitViewLogicalRange({
-              barCount: klines.length,
-              chartAreaWidth: chartRef.current.timeScale().width(),
-              rightOffset: 4,
-            });
-            if (range) {
-              markProgrammaticRange();
-              chartRef.current.timeScale().setVisibleLogicalRange(range);
-            }
+            applyFitView(chartRef.current, klines.length, 4, false);
           }
           requestAnimationFrame(() => recomputePaneOffsets());
         });
@@ -4330,20 +4340,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                   // currently visible candles without touching pan/zoom.
                   candleSeriesRef.current?.priceScale().applyOptions({ autoScale: true });
                 } else {
-                  const chart = chartRef.current;
-                  const range = chart
-                    ? fitViewLogicalRange({
-                        barCount: candlesRef.current.length,
-                        chartAreaWidth: chart.timeScale().width(),
-                        rightOffset: 4,
-                      })
-                    : null;
-                  markProgrammaticRange();
-                  if (chart && range) {
-                    chart.timeScale().setVisibleLogicalRange(range);
-                  } else {
-                    chart?.timeScale().fitContent();
-                  }
+                  applyFitView(chartRef.current, candlesRef.current.length, 4, true);
                   candleSeriesRef.current?.priceScale().applyOptions({ autoScale: true });
                 }
                 setChartContextMenu(null);
