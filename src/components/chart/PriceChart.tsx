@@ -243,6 +243,19 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // as the user pans/zooms so it survives a symbol change and can be reapplied
   // to keep the same zoom + scroll position on the next symbol.
   const viewShapeRef = useRef<{ span: number; rightOffset: number } | null>(null);
+  // Set true right around a *programmatic* setVisibleLogicalRange call (auto-fit
+  // on first load, or the "Fit chart to data" menu action) and cleared ~750ms
+  // later — after the zoom-persist handler's own 600ms debounce — so that
+  // handler can tell a real user drag/scroll from a range the app itself set.
+  // Without this, the auto-fit path re-persists a bar count every time it
+  // runs, turning "auto to TradingView density" into a one-time fixed count.
+  const programmaticRangeRef = useRef(false);
+  const markProgrammaticRange = () => {
+    programmaticRangeRef.current = true;
+    setTimeout(() => {
+      programmaticRangeRef.current = false;
+    }, 750);
+  };
   // Full candle array snapshot captured when bar replay starts (candlesRef holds
   // the truncated slice while replay is active).
   const replayFullRef = useRef<Candle[]>([]);
@@ -1058,7 +1071,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         const range = chart.timeScale().getVisibleLogicalRange();
         if (!range || range.to <= range.from) return;
         const bars = Math.round(range.to - range.from);
-        if (bars >= 5 && bars <= 5000) {
+        if (bars >= 5 && bars <= 5000 && !programmaticRangeRef.current) {
           useChartStore.getState().setVisibleBars(bars);
         }
         // Push viewport op to unified history (skip during undo/redo application)
@@ -2813,6 +2826,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               // fixes. Leave the chart's own default for now and retry once
               // layout has settled, below.
               if (range) {
+                markProgrammaticRange();
                 chartRef.current.timeScale().setVisibleLogicalRange(range);
               } else {
                 needsAutoFitRetry = true;
@@ -2835,7 +2849,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
               chartAreaWidth: chartRef.current.timeScale().width(),
               rightOffset: 4,
             });
-            if (range) chartRef.current.timeScale().setVisibleLogicalRange(range);
+            if (range) {
+              markProgrammaticRange();
+              chartRef.current.timeScale().setVisibleLogicalRange(range);
+            }
           }
           requestAnimationFrame(() => recomputePaneOffsets());
         });
@@ -4321,6 +4338,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                         rightOffset: 4,
                       })
                     : null;
+                  markProgrammaticRange();
                   if (chart && range) {
                     chart.timeScale().setVisibleLogicalRange(range);
                   } else {
