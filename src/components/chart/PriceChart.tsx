@@ -74,6 +74,7 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { unifiedHistory, registerViewportApplier, isApplyingHistory } from "@/lib/history";
 import { registerPricePerPixel } from "@/lib/chart/nudge";
+import { fitViewLogicalRange, TV_DEFAULT_BAR_SPACING } from "@/lib/chart/fit-view";
 import { registerChartCapture, composeChartPng } from "@/lib/chart/snapshot";
 import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
@@ -242,6 +243,47 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // as the user pans/zooms so it survives a symbol change and can be reapplied
   // to keep the same zoom + scroll position on the next symbol.
   const viewShapeRef = useRef<{ span: number; rightOffset: number } | null>(null);
+  // Set true right around a *programmatic* setVisibleLogicalRange call (auto-fit
+  // on first load, or the "Fit chart to data" menu action) and cleared ~750ms
+  // later — after the zoom-persist handler's own 600ms debounce — so that
+  // handler can tell a real user drag/scroll from a range the app itself set.
+  // Without this, the auto-fit path re-persists a bar count every time it
+  // runs, turning "auto to TradingView density" into a one-time fixed count.
+  const programmaticRangeRef = useRef(false);
+  const markProgrammaticRange = () => {
+    programmaticRangeRef.current = true;
+    setTimeout(() => {
+      programmaticRangeRef.current = false;
+    }, 750);
+  };
+  // Applies TradingView-density fit to `chart`, marking the range change as
+  // programmatic so the zoom-persist handler above doesn't re-save it as a
+  // user zoom. Returns whether a range was actually applied, so callers can
+  // fall back (retry later, or fitContent()) when the pane isn't measurable yet.
+  const applyFitView = (
+    chart: IChartApi | null,
+    barCount: number,
+    rightOffset: number,
+    fallbackToFitContent: boolean,
+  ): boolean => {
+    if (!chart) return false;
+    const range = fitViewLogicalRange({
+      barCount,
+      chartAreaWidth: chart.timeScale().width(),
+      rightOffset,
+    });
+    if (range) {
+      markProgrammaticRange();
+      chart.timeScale().setVisibleLogicalRange(range);
+      return true;
+    }
+    if (fallbackToFitContent) {
+      markProgrammaticRange();
+      chart.timeScale().fitContent();
+      return true;
+    }
+    return false;
+  };
   // Full candle array snapshot captured when bar replay starts (candlesRef holds
   // the truncated slice while replay is active).
   const replayFullRef = useRef<Candle[]>([]);
@@ -509,7 +551,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 12,
-        barSpacing: 8,
+        barSpacing: TV_DEFAULT_BAR_SPACING,
       },
       autoSize: true,
     });
@@ -1057,7 +1099,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         const range = chart.timeScale().getVisibleLogicalRange();
         if (!range || range.to <= range.from) return;
         const bars = Math.round(range.to - range.from);
-        if (bars >= 5 && bars <= 5000) {
+        if (bars >= 5 && bars <= 5000 && !programmaticRangeRef.current) {
           useChartStore.getState().setVisibleBars(bars);
         }
         // Push viewport op to unified history (skip during undo/redo application)
@@ -2779,6 +2821,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         updateBB();
         updateVWAP();
         updateSimpleOscillators();
+        // Whether the first-load auto-fit (visibleBars === 0) still needs to
+        // apply once layout has settled — see the retry below.
+        let needsAutoFitRetry = false;
         if (chartRef.current && klines.length > 0) {
           const lastIdx = klines.length - 1;
           if (shape) {
@@ -2789,11 +2834,22 @@ export function PriceChart({ symbol, timeframe }: Props) {
           } else {
             // First load: show the user's preferred number of recent bars.
             // Bypasses lightweight-charts' default "fit all" which zooms out too far.
+            // 0 means "never zoomed" — auto to TradingView's own density for
+            // however many bars fit this pane, instead of a fixed count.
             const bars = useChartStore.getState().visibleBars;
-            chartRef.current.timeScale().setVisibleLogicalRange({
-              from: Math.max(0, lastIdx - bars + 1),
-              to: lastIdx + 4,
-            });
+            if (bars > 0) {
+              chartRef.current.timeScale().setVisibleLogicalRange({
+                from: Math.max(0, lastIdx - bars + 1),
+                to: lastIdx + 4,
+              });
+            } else {
+              // A pane with no measurable width yet (plausible on first mount,
+              // especially on mobile) must not fall back to fitContent() —
+              // that crams the whole 1000-bar load in, exactly the bug this
+              // fixes. Leave the chart's own default for now and retry once
+              // layout has settled, below.
+              needsAutoFitRetry = !applyFitView(chartRef.current, klines.length, 4, false);
+            }
           }
         }
         // Recompute pane offsets in multiple frames: lightweight-charts needs
@@ -2805,6 +2861,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         requestAnimationFrame(() => {
           applyPaneRatios();
           recomputePaneOffsets();
+          if (needsAutoFitRetry && chartRef.current && klines.length > 0) {
+            applyFitView(chartRef.current, klines.length, 4, false);
+          }
           requestAnimationFrame(() => recomputePaneOffsets());
         });
         setTimeout(() => {
@@ -4281,7 +4340,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                   // currently visible candles without touching pan/zoom.
                   candleSeriesRef.current?.priceScale().applyOptions({ autoScale: true });
                 } else {
-                  chartRef.current?.timeScale().fitContent();
+                  applyFitView(chartRef.current, candlesRef.current.length, 4, true);
                   candleSeriesRef.current?.priceScale().applyOptions({ autoScale: true });
                 }
                 setChartContextMenu(null);

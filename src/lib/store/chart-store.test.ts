@@ -1,6 +1,6 @@
 import { beforeEach, describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
-import { useChartStore } from "./chart-store";
+import { useChartStore, migrateChartState } from "./chart-store";
 
 beforeEach(() => {
   useChartStore.setState({ favoriteTools: [] });
@@ -27,5 +27,56 @@ describe("chart-store favorites", () => {
     useChartStore.getState().toggleFavoriteTool("arrow");
     useChartStore.getState().toggleFavoriteTool("text");
     expect(useChartStore.getState().favoriteTools).toEqual(["trendline", "arrow"]);
+  });
+});
+
+describe("chart-store visibleBars default and migration", () => {
+  it("defaults to 0 (auto to TradingView's own density)", () => {
+    expect(useChartStore.getState().visibleBars).toBe(0);
+  });
+
+  it("migrates a pre-v10 persisted default of exactly 150 to 0 (auto)", () => {
+    const migrated = migrateChartState({ visibleBars: 150 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("leaves a real pre-v10 zoom (any value other than 150) untouched", () => {
+    const migrated = migrateChartState({ visibleBars: 300 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(300);
+  });
+
+  it("leaves an already-migrated 0 untouched", () => {
+    const migrated = migrateChartState({ visibleBars: 0 }, 10) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("does not touch visibleBars when it was never persisted", () => {
+    const migrated = migrateChartState({}, 9) as { visibleBars?: number };
+    expect(migrated.visibleBars).toBe(undefined);
+  });
+
+  it("heals the pre-v10 fitContent() artifact: a persisted 1000 (full load size) resets to auto", () => {
+    const migrated = migrateChartState({ visibleBars: 1000 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("resets exactly the 995 threshold to auto", () => {
+    const migrated = migrateChartState({ visibleBars: 995 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("leaves a real measured TradingView-density zoom (236) untouched", () => {
+    const migrated = migrateChartState({ visibleBars: 236 }, 9) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(236);
+  });
+
+  it("also heals the fitContent() artifact for a user who already migrated through v10", () => {
+    const migrated = migrateChartState({ visibleBars: 1000 }, 10) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
+  });
+
+  it("leaves an already-auto 0 untouched at v11", () => {
+    const migrated = migrateChartState({ visibleBars: 0 }, 10) as { visibleBars: number };
+    expect(migrated.visibleBars).toBe(0);
   });
 });
