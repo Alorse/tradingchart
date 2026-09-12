@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { fetchTickers24h, cleanSym } from "@/lib/binance/rest";
 import { fetchBybitTickers24h } from "@/lib/bybit/public";
-import { sortWatchlistItems, cycleSort, type WatchRow } from "@/lib/watchlist/sort";
+import { cycleSort } from "@/lib/watchlist/sort";
 import { dailyChange } from "@/lib/watchlist/daily-open";
 import { getBinanceWS } from "@/lib/binance/ws";
 import { getBybitWS } from "@/lib/bybit/ws";
@@ -40,6 +40,7 @@ import { formatPrice, formatPct, formatChangeAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBatchedTicks } from "@/hooks/useBatchedTicks";
 import { useDailyOpens } from "@/hooks/useDailyOpens";
+import { useWatchlistSort } from "@/hooks/useWatchlistSort";
 import { CoinIcon, getBaseAsset } from "./CoinIcon";
 import { FlagPennant } from "./FlagPennant";
 import { FLAG_COLORS } from "@/lib/watchlist/flags";
@@ -283,23 +284,10 @@ export function Watchlist() {
     });
   }, [items, collapsed]);
 
-  // Sort input: "change" sorts on the daily pct (price vs UTC-midnight open),
-  // not `rows`' own rolling-24h field, which is no longer displayed. A symbol
-  // whose open hasn't loaded leaves pct undefined so the sorter ranks it as
-  // unknown, while its price still sorts normally.
-  const sortRows = useMemo(() => {
-    const out: Record<string, WatchRow> = {};
-    for (const [sym, r] of Object.entries(rows)) {
-      out[sym] = { price: r.price, pct: dailyChange(r.price, dailyOpens[sym])?.pct };
-    }
-    return out;
-  }, [rows, dailyOpens]);
-
   // Apply active sort (manual = unchanged; price/change = flat sorted symbols).
-  const displayItems = useMemo(
-    () => sortWatchlistItems(visibleItems, sortRows, sort),
-    [visibleItems, sortRows, sort],
-  );
+  // The order is a snapshot taken when the column was clicked, not a live
+  // re-sort — prices below keep ticking in place.
+  const displayItems = useWatchlistSort(visibleItems, rows, dailyOpens, sort);
   const isSorted = sort.key !== "manual";
 
   function handleRowClick(e: React.MouseEvent, item: WatchlistItem) {
