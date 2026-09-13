@@ -46,6 +46,9 @@ export function expect(actual: unknown) {
   return {
     ...base,
     not: {
+      toBe(expected: unknown) {
+        assert.notStrictEqual(actual, expected);
+      },
       toContain(item: unknown) {
         assert.ok(
           !(actual as unknown[] | string).includes(item as never),
