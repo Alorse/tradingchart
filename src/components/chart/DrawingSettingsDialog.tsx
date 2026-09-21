@@ -27,10 +27,16 @@ import {
 import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useChartStore } from "@/lib/store/chart-store";
 import { useDrawings } from "@/lib/supabase/use-drawings";
-import type { Drawing, PositionStatKey } from "@/lib/drawings/types";
+import type {
+  Drawing,
+  HorzTextAlign,
+  PositionStatKey,
+  VertTextAlign,
+} from "@/lib/drawings/types";
 import { useSymbolInfo } from "@/lib/trading/symbol-info";
 import { deriveQuoteCurrency } from "@/lib/drawings/position-math";
 import { pickStyle, SETTINGS_STYLE_FIELDS } from "@/lib/drawings/style";
+import { resolveTextLabel, type ResolvedTextLabel } from "@/lib/drawings/text-label";
 import { cn } from "@/lib/utils";
 import { TV_PINE } from "@/lib/chart/theme";
 
@@ -47,9 +53,10 @@ const KIND_TITLE: Record<string, string> = {
   long: "Long position",
   short: "Short position",
   rectangle: "Rectangle",
+  arrow: "Arrow",
 };
 
-type Tab = "style" | "coordinates" | "inputs";
+type Tab = "style" | "text" | "coordinates" | "inputs";
 
 export function DrawingSettingsDialog() {
   const editingId = useDrawingsStore((s) => s.editingId);
@@ -114,7 +121,14 @@ function Form({
   const rect = drawing.kind === "rectangle" ? drawing : null;
   const isPosition = pos !== null;
   const isRect = rect !== null;
-  const tabs: Tab[] = isPosition ? ["inputs", "style"] : ["style", "coordinates"];
+  // Null for kinds without a text label, which therefore get no Text tab.
+  const initialTextLabel = resolveTextLabel(drawing, drawing.color ?? TV_PINE.blue);
+  const hasText = initialTextLabel !== null;
+  const tabs: Tab[] = isPosition
+    ? ["inputs", "style"]
+    : hasText
+      ? ["style", "text", "coordinates"]
+      : ["style", "coordinates"];
   const [tab, setTab] = useState<Tab>(() => (isPosition ? "inputs" : "style"));
   const [color, setColor] = useState<string>(drawing.color ?? TV_PINE.neutral);
   const [lineWidth, setLineWidth] = useState<number>(drawing.lineWidth ?? 1);
@@ -164,6 +178,9 @@ function Form({
   const [fillOpacity, setFillOpacity] = useState<number>(
     rect?.fillOpacity ?? 0.1,
   );
+  // Text tab state (line tools only). One object rather than eight useStates:
+  // the fields travel together into the patch and reset together.
+  const [textLabel, setTextLabel] = useState<ResolvedTextLabel | null>(initialTextLabel);
 
   // Inputs tab state (positions only)
   const [entry, setEntry] = useState<number>(pos?.entry ?? 0);
@@ -233,6 +250,7 @@ function Form({
       setFillColor(drawing.fillColor ?? TV_PINE.blue);
       setFillOpacity(drawing.fillOpacity ?? 0.1);
     }
+    setTextLabel(resolveTextLabel(drawing, drawing.color ?? TV_PINE.blue));
   }, [drawing, isPosition]);
 
   function apply() {
@@ -268,6 +286,19 @@ function Form({
     if (isRect) {
       (patch as Record<string, unknown>).fillColor = fillColor;
       (patch as Record<string, unknown>).fillOpacity = fillOpacity;
+    }
+    // Only written when the Text tab was actually edited: otherwise every Ok
+    // would bake the resolved defaults into the drawing (freezing a text colour
+    // that should keep following the line colour) and into the tool default.
+    const before = resolveTextLabel(drawing, drawing.color ?? TV_PINE.blue);
+    if (
+      textLabel &&
+      before &&
+      (Object.keys(textLabel) as (keyof ResolvedTextLabel)[]).some((k) => textLabel[k] !== before[k])
+    ) {
+      // `text` is content, the rest appearance — SETTINGS_STYLE_FIELDS picks
+      // only the latter into the tool default.
+      Object.assign(patch, { ...textLabel, text: textLabel.text.trim() === "" ? "" : textLabel.text });
     }
     if (isPosition) {
       useChartStore.getState().setToolDefault(drawing.kind, {
@@ -373,6 +404,13 @@ function Form({
         </div>
       )}
 
+      {tab === "text" && textLabel && (
+        <TextLabelTab
+          value={textLabel}
+          onChange={(p) => setTextLabel((t) => (t ? { ...t, ...p } : t))}
+        />
+      )}
+
       {tab === "coordinates" && <CoordinatesTab drawing={drawing} onApply={onApply} />}
 
       {tab === "inputs" && isPosition && (
@@ -443,6 +481,121 @@ const STAT_TOGGLES: { key: PositionStatKey; label: string }[] = [
   { key: "ticks", label: "Ticks" },
   { key: "balance", label: "Balance after" },
 ];
+
+const FONT_SIZES = [10, 11, 12, 14, 16, 20, 24, 28, 32, 40];
+
+const HORZ_ALIGN_OPTIONS: { value: HorzTextAlign; label: string }[] = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+];
+
+const VERT_ALIGN_OPTIONS: { value: VertTextAlign; label: string }[] = [
+  { value: "top", label: "Top" },
+  { value: "middle", label: "Middle" },
+  { value: "bottom", label: "Bottom" },
+];
+
+/**
+ * TradingView's "Text" tab for line tools: the master checkbox, the string,
+ * then its appearance. While the checkbox is off the rest stays visible but
+ * disabled (a native `<fieldset disabled>`, which also disables the Select
+ * triggers and colour swatch), so the user can see what turning it on does.
+ */
+function TextLabelTab({
+  value,
+  onChange,
+}: {
+  value: ResolvedTextLabel;
+  onChange: (patch: Partial<ResolvedTextLabel>) => void;
+}) {
+  const off = !value.showText;
+  // Keep a non-preset size (e.g. from an older drawing) selectable.
+  const sizes = FONT_SIZES.includes(value.fontSize)
+    ? FONT_SIZES
+    : [...FONT_SIZES, value.fontSize].sort((a, b) => a - b);
+  return (
+    <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1 max-sm:max-h-none">
+      <CheckRow label="Text" checked={value.showText} onChange={(v) => onChange({ showText: v })} />
+      <fieldset disabled={off} className={cn("flex flex-col gap-3", off && "opacity-50")}>
+        <textarea
+          value={value.text}
+          onChange={(e) => onChange({ text: e.target.value })}
+          placeholder="Add text"
+          rows={3}
+          className="w-full resize-none rounded border border-tv-border bg-tv-bg px-2 py-1 text-xs text-tv-text outline-none focus:border-tv-blue"
+        />
+        <ColorRow label="Text color" value={value.textColor} onChange={(v) => onChange({ textColor: v })} />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-tv-text">Font size</span>
+          <Select
+            value={String(value.fontSize)}
+            onValueChange={(v) => onChange({ fontSize: Number(v) })}
+            disabled={off}
+          >
+            <SelectTrigger size="sm" className="h-7 w-[4.5rem] px-2 text-[11px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sizes.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <CheckRow label="Bold" checked={value.bold} onChange={(v) => onChange({ bold: v })} />
+        <CheckRow label="Italic" checked={value.italic} onChange={(v) => onChange({ italic: v })} />
+        <div className="mt-1 border-t border-tv-border pt-2 text-[10px] font-semibold uppercase tracking-wide text-tv-text-dim">
+          Text alignment
+        </div>
+        <AlignRow
+          label="Horizontal"
+          value={value.horzTextAlign}
+          options={HORZ_ALIGN_OPTIONS}
+          disabled={off}
+          onChange={(v) => onChange({ horzTextAlign: v })}
+        />
+        <AlignRow
+          label="Vertical"
+          value={value.vertTextAlign}
+          options={VERT_ALIGN_OPTIONS}
+          disabled={off}
+          onChange={(v) => onChange({ vertTextAlign: v })}
+        />
+      </fieldset>
+    </div>
+  );
+}
+
+function AlignRow<T extends string>({
+  label,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  disabled: boolean;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs text-tv-text">{label}</span>
+      <Select value={value} items={options} onValueChange={(v) => onChange(v as T)} disabled={disabled}>
+        <SelectTrigger size="sm" className="h-7 w-24 px-2 text-[11px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 function CheckRow({
   label,

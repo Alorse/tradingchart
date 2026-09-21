@@ -1,4 +1,4 @@
-import type { DrawingKind, HorzTextAlign, VertTextAlign } from "./types";
+import type { Drawing, DrawingKind, HorzTextAlign, TextLabelFields, VertTextAlign } from "./types";
 
 export interface TextLabelDefaults {
   fontSize: number;
@@ -27,4 +27,29 @@ export const TEXT_LABEL_DEFAULTS: Partial<Record<DrawingKind, TextLabelDefaults>
 /** Whether `kind` carries a user text label (and gets the dialog's Text tab). */
 export function supportsTextLabel(kind: DrawingKind): boolean {
   return TEXT_LABEL_DEFAULTS[kind] !== undefined;
+}
+
+/** Every text-label field with the kind's defaults filled in. */
+export type ResolvedTextLabel = Required<TextLabelFields>;
+
+/**
+ * Fills in the unset text-label fields of `d`. The text colour falls back to
+ * the line colour (`lineColor`, which the caller already resolved against the
+ * renderer's own default), as TradingView does. Returns null for kinds
+ * without text support.
+ */
+export function resolveTextLabel(d: Drawing, lineColor: string): ResolvedTextLabel | null {
+  const defaults = TEXT_LABEL_DEFAULTS[d.kind];
+  if (!defaults) return null;
+  const f = d as TextLabelFields;
+  return {
+    showText: f.showText ?? false,
+    text: f.text ?? "",
+    textColor: f.textColor ?? lineColor,
+    fontSize: f.fontSize ?? defaults.fontSize,
+    bold: f.bold ?? false,
+    italic: f.italic ?? false,
+    horzTextAlign: f.horzTextAlign ?? defaults.horzTextAlign,
+    vertTextAlign: f.vertTextAlign ?? defaults.vertTextAlign,
+  };
 }
