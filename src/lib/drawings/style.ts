@@ -16,6 +16,12 @@ import type { Drawing } from "./types";
  *   customised ladder to the next fib is the point of saving it.
  * - `SETTINGS_STYLE_FIELDS` — picked out of the settings dialog's patch, so
  *   editing a drawing also updates the tool default for the next one.
+ *
+ * The line tools' text-label appearance (`showText`, `textColor`, `fontSize`,
+ * `bold`, `italic`, the two alignments) is in *both*: it is style by either
+ * definition, and the Text tab is edited through the same dialog as the rest.
+ * The label string `text` is in *neither* — it is content, and carrying it to
+ * the next drawing would stamp the same caption on every new line.
  */
 export const TEMPLATE_STYLE_FIELDS = [
   "color",
@@ -29,6 +35,12 @@ export const TEMPLATE_STYLE_FIELDS = [
   "fillOpacity",
   "fontSize",
   "levels",
+  // Line-tool text label (never `text` itself)
+  "showText",
+  "bold",
+  "italic",
+  "horzTextAlign",
+  "vertTextAlign",
 ] as const;
 
 export const SETTINGS_STYLE_FIELDS = [
@@ -52,6 +64,13 @@ export const SETTINGS_STYLE_FIELDS = [
   // Rectangle-specific
   "fillColor",
   "fillOpacity",
+  // Line-tool text label (`textColor` is listed above; never `text` itself)
+  "showText",
+  "fontSize",
+  "bold",
+  "italic",
+  "horzTextAlign",
+  "vertTextAlign",
 ] as const;
 
 /** Copies whichever of `fields` are set on `source`, dropping the rest. */
