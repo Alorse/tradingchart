@@ -38,6 +38,13 @@ import { deriveQuoteCurrency } from "@/lib/drawings/position-math";
 import { pickStyle, SETTINGS_STYLE_FIELDS } from "@/lib/drawings/style";
 import { resolveTextLabel, type ResolvedTextLabel } from "@/lib/drawings/text-label";
 import { cn } from "@/lib/utils";
+import {
+  formatDecimalInput,
+  formatPriceInput,
+  roundDecimalForInput,
+  roundPriceForInput,
+  stepDecimals,
+} from "@/lib/format";
 import { TV_PINE } from "@/lib/chart/theme";
 
 const KIND_TITLE: Record<string, string> = {
@@ -839,7 +846,7 @@ function PositionInputsTab({
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-tv-text">Account size</span>
         <div className="flex items-center gap-1.5">
-          <DraftNumberInput value={accountSize} onChange={onAccountSize} placeholder="Not set" className="w-24" />
+          <DraftNumberInput value={accountSize} onChange={onAccountSize} decimals={2} placeholder="Not set" className="w-24" />
           <Select value="default" disabled>
             <SelectTrigger size="sm" className="h-7 w-[4.5rem] px-2 text-[11px]">
               <SelectValue />
@@ -851,12 +858,12 @@ function PositionInputsTab({
         </div>
       </div>
 
-      <NumberField label="Lot size" value={lotSize} onChange={onLotSize} />
+      <NumberField label="Lot size" value={lotSize} onChange={onLotSize} decimals={6} />
 
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-tv-text">Risk</span>
         <div className="flex items-center gap-1.5">
-          <DraftNumberInput value={risk} onChange={onRisk} placeholder="Not set" className="w-24" />
+          <DraftNumberInput value={risk} onChange={onRisk} decimals={2} placeholder="Not set" className="w-24" />
           <Select
             value={riskIsPercent ? "percent" : "currency"}
             onValueChange={(v) => onRiskIsPercent(v === "percent")}
@@ -872,8 +879,8 @@ function PositionInputsTab({
         </div>
       </div>
 
-      <NumberFieldStepped label="Entry price" value={entry} onChange={onEntry} step={tickSize} />
-      <OptionalNumberFieldStepped label="Leverage" value={leverage} onChange={onLeverage} step={1} placeholder="Not set" />
+      <PriceFieldStepped label="Entry price" value={entry} onChange={onEntry} step={tickSize} />
+      <OptionalNumberFieldStepped label="Leverage" value={leverage} onChange={onLeverage} step={1} decimals={2} placeholder="Not set" />
 
       <div className="mt-1 border-t border-tv-border pt-2 text-[10px] font-semibold uppercase tracking-wide text-tv-text-dim">
         Profit level
@@ -920,16 +927,31 @@ function useSyncedDraft<T>(value: T, format: (v: T) => string) {
   return [draft, setDraft] as const;
 }
 
+/** Parses a field's draft on blur, returning `null` when there is nothing to
+ *  commit: unparseable text, or a draft the user never changed. The latter
+ *  matters because the display is rounded — committing an untouched draft
+ *  would silently overwrite a stored `2.1234` with the `2.123` on screen just
+ *  because the field was focused and left. */
+function parseEditedDraft(draft: string, shown: string): number | null {
+  if (draft === shown) return null;
+  const n = parseFloat(draft);
+  return isNaN(n) ? null : n;
+}
+
+/** Generic non-price number, rounded to `decimals` for display and storage. */
 function NumberField({
   label,
   value,
   onChange,
+  decimals,
 }: {
   label: string;
   value: number;
   onChange: (n: number) => void;
+  decimals: number;
 }) {
-  const [draft, setDraft] = useSyncedDraft(value, (v) => String(v));
+  const format = (v: number) => formatDecimalInput(v, decimals);
+  const [draft, setDraft] = useSyncedDraft(value, format);
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs text-tv-text">{label}</span>
@@ -938,8 +960,8 @@ function NumberField({
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
-          const n = parseFloat(draft);
-          if (!isNaN(n)) onChange(n);
+          const n = parseEditedDraft(draft, format(value));
+          if (n !== null) onChange(roundDecimalForInput(n, decimals));
         }}
         className="w-32 bg-tv-bg text-right tabular-nums"
       />
@@ -969,8 +991,11 @@ function StepperButtons({ onStep }: { onStep: (dir: 1 | -1) => void }) {
   );
 }
 
-/** Same as `NumberField`, plus a stepper that nudges the value by `step`. */
-function NumberFieldStepped({
+/** Like `PriceField`, plus a stepper that nudges the price by one `step` (the
+ *  symbol's tick). The tick's own decimals are a floor on the rounding, or a
+ *  0.0001 tick on a $2 symbol would be rounded straight back by the 3-decimal
+ *  cap and the stepper would never move. */
+function PriceFieldStepped({
   label,
   value,
   onChange,
@@ -981,7 +1006,9 @@ function NumberFieldStepped({
   onChange: (n: number) => void;
   step: number;
 }) {
-  const [draft, setDraft] = useSyncedDraft(value, (v) => String(v));
+  const minDecimals = stepDecimals(step);
+  const format = (v: number) => formatPriceInput(v, minDecimals);
+  const [draft, setDraft] = useSyncedDraft(value, format);
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs text-tv-text">{label}</span>
@@ -991,54 +1018,66 @@ function NumberFieldStepped({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => {
-            const n = parseFloat(draft);
-            if (!isNaN(n)) onChange(n);
+            const n = parseEditedDraft(draft, format(value));
+            if (n !== null) onChange(roundPriceForInput(n, minDecimals));
           }}
           className="w-28 bg-tv-bg text-right tabular-nums"
         />
-        <StepperButtons onStep={(dir) => onChange(value + dir * step)} />
+        <StepperButtons
+          onStep={(dir) => onChange(roundPriceForInput(value + dir * step, minDecimals))}
+        />
       </div>
     </label>
   );
 }
 
-/** Same as `NumberFieldStepped`, but `undefined` is a valid ("not set") value. */
+/** Same as `NumberField` plus a stepper, but `undefined` is a valid ("not set") value. */
 function OptionalNumberFieldStepped({
   label,
   value,
   onChange,
   step,
+  decimals,
   placeholder,
 }: {
   label: string;
   value: number | undefined;
   onChange: (n: number | undefined) => void;
   step: number;
+  decimals: number;
   placeholder?: string;
 }) {
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs text-tv-text">{label}</span>
       <div className="flex items-center gap-1">
-        <DraftNumberInput value={value} onChange={onChange} placeholder={placeholder} className="w-28" />
-        <StepperButtons onStep={(dir) => onChange(Math.max(0, (value ?? 0) + dir * step))} />
+        <DraftNumberInput value={value} onChange={onChange} decimals={decimals} placeholder={placeholder} className="w-28" />
+        <StepperButtons
+          onStep={(dir) =>
+            onChange(Math.max(0, roundDecimalForInput((value ?? 0) + dir * step, decimals)))
+          }
+        />
       </div>
     </label>
   );
 }
 
+/** Optional non-price number (blank = `undefined`), rounded to `decimals`. */
 function DraftNumberInput({
   value,
   onChange,
+  decimals,
   placeholder,
   className,
 }: {
   value: number | undefined;
   onChange: (n: number | undefined) => void;
+  decimals: number;
   placeholder?: string;
   className?: string;
 }) {
-  const [draft, setDraft] = useSyncedDraft(value, (v) => (v === undefined ? "" : String(v)));
+  const format = (v: number | undefined) => (v === undefined ? "" : formatDecimalInput(v, decimals));
+  const [draft, setDraft] = useSyncedDraft(value, format);
   return (
     <Input
       type="number"
@@ -1046,12 +1085,13 @@ function DraftNumberInput({
       placeholder={placeholder}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
+        if (draft === format(value)) return;
         if (draft.trim() === "") {
           onChange(undefined);
           return;
         }
         const n = parseFloat(draft);
-        if (!isNaN(n)) onChange(n);
+        if (!isNaN(n)) onChange(roundDecimalForInput(n, decimals));
       }}
       className={cn("bg-tv-bg text-right tabular-nums", className)}
     />
@@ -1059,7 +1099,9 @@ function DraftNumberInput({
 }
 
 /** Paired Ticks + Price fields — editing either recomputes the other via
- *  `tickSize`, both driving the same `level` (target or stop) price. */
+ *  `tickSize`, both driving the same `level` (target or stop) price. Ticks are
+ *  whole numbers; the price keeps at least the tick's decimals, for the same
+ *  reason as `PriceFieldStepped`. */
 function PricePlusTicks({
   entry,
   level,
@@ -1071,8 +1113,10 @@ function PricePlusTicks({
   tickSize: number;
   onLevel: (v: number) => void;
 }) {
+  const minDecimals = stepDecimals(tickSize);
+  const formatLevel = (v: number) => formatPriceInput(v, minDecimals);
   const ticks = tickSize > 0 ? Math.round((level - entry) / tickSize) : 0;
-  const [priceDraft, setPriceDraft] = useSyncedDraft(level, (v) => String(v));
+  const [priceDraft, setPriceDraft] = useSyncedDraft(level, formatLevel);
   const [ticksDraft, setTicksDraft] = useSyncedDraft(ticks, (v) => String(v));
 
   return (
@@ -1084,8 +1128,10 @@ function PricePlusTicks({
           value={ticksDraft}
           onChange={(e) => setTicksDraft(e.target.value)}
           onBlur={() => {
-            const n = parseFloat(ticksDraft);
-            if (!isNaN(n) && tickSize > 0) onLevel(entry + n * tickSize);
+            const n = parseEditedDraft(ticksDraft, String(ticks));
+            if (n !== null && tickSize > 0) {
+              onLevel(roundPriceForInput(entry + Math.round(n) * tickSize, minDecimals));
+            }
           }}
           className="w-32 bg-tv-bg text-right tabular-nums"
         />
@@ -1097,8 +1143,8 @@ function PricePlusTicks({
           value={priceDraft}
           onChange={(e) => setPriceDraft(e.target.value)}
           onBlur={() => {
-            const n = parseFloat(priceDraft);
-            if (!isNaN(n)) onLevel(n);
+            const n = parseEditedDraft(priceDraft, formatLevel(level));
+            if (n !== null) onLevel(roundPriceForInput(n, minDecimals));
           }}
           className="w-32 bg-tv-bg text-right tabular-nums"
         />
@@ -1116,7 +1162,7 @@ function PriceField({
   value: number;
   onChange: (n: number) => void;
 }) {
-  const [draft, setDraft] = useSyncedDraft(value, (v) => v.toString());
+  const [draft, setDraft] = useSyncedDraft(value, formatPriceInput);
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs text-tv-text">{label}</span>
@@ -1125,8 +1171,8 @@ function PriceField({
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
-          const n = parseFloat(draft);
-          if (!isNaN(n)) onChange(n);
+          const n = parseEditedDraft(draft, formatPriceInput(value));
+          if (n !== null) onChange(roundPriceForInput(n));
         }}
         className="w-32 bg-tv-bg text-right tabular-nums"
       />
