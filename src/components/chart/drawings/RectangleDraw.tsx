@@ -10,6 +10,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { TV_PINE } from "@/lib/chart/theme";
 import { lineDash } from "@/lib/drawings/line-style";
+import { DrawingTextLabel } from "./DrawingTextLabel";
 
 interface Props {
   drawing: RectangleDrawing;
@@ -119,6 +120,11 @@ export function RectangleDraw({
         strokeWidth={strokeWidth}
         strokeDasharray={strokeDasharray}
         style={{ pointerEvents: "none" }}
+      />
+      <DrawingTextLabel
+        drawing={drawing}
+        lineColor={borderColor}
+        geometry={{ kind: "box", a: { x: ax, y: ay }, b: { x: bx, y: by } }}
       />
       {/* Corner handles */}
       {selected && (

@@ -10,6 +10,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { TV_PINE } from "@/lib/chart/theme";
 import { lineDash } from "@/lib/drawings/line-style";
+import { DrawingTextLabel } from "./DrawingTextLabel";
 
 interface Props {
   drawing: ArrowDrawing;
@@ -126,6 +127,11 @@ export function ArrowDraw({
         points={`${bx},${by} ${h1x},${h1y} ${h2x},${h2y}`}
         fill={color}
         style={{ pointerEvents: "none" }}
+      />
+      <DrawingTextLabel
+        drawing={drawing}
+        lineColor={color}
+        geometry={{ kind: "line", p1: { x: ax, y: ay }, p2: { x: bx, y: by } }}
       />
       {selected && (
         <>

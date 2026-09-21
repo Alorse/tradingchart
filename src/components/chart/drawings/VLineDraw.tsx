@@ -8,11 +8,14 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { TV_PINE } from "@/lib/chart/theme";
 import { lineDash } from "@/lib/drawings/line-style";
+import { DrawingTextLabel } from "./DrawingTextLabel";
 
 interface Props {
   drawing: VLineDrawing;
   x: number;
   height: number;
+  /** Height of the main pane (the line also crosses sub-panes); bounds the label. */
+  plotHeight?: number;
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
@@ -25,6 +28,7 @@ export function VLineDraw({
   drawing,
   x,
   height,
+  plotHeight,
   selected,
   onSelect,
   onEdit,
@@ -97,6 +101,11 @@ export function VLineDraw({
         strokeWidth={strokeWidth}
         strokeDasharray={strokeDasharray}
         style={{ pointerEvents: "none" }}
+      />
+      <DrawingTextLabel
+        drawing={drawing}
+        lineColor={color}
+        geometry={{ kind: "line", p1: { x, y: plotHeight ?? height }, p2: { x, y: 0 } }}
       />
     </g>
   );
