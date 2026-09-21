@@ -11,6 +11,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { TV_PINE } from "@/lib/chart/theme";
 import { lineDash } from "@/lib/drawings/line-style";
+import { DrawingTextLabel } from "./DrawingTextLabel";
 
 interface Props {
   drawing: RayDrawing;
@@ -89,6 +90,16 @@ export function RayDraw({
 
   const end = extendRay({ x: ax, y: ay }, { x: bx, y: by }, width, height);
 
+  // Pressing the body (line or its text label) selects, or drags once selected.
+  function onBodyPointerDown(e: React.PointerEvent<SVGElement>) {
+    if (selected) {
+      dragLine(e);
+    } else {
+      e.stopPropagation();
+      onSelect();
+    }
+  }
+
   return (
     <g>
       <line
@@ -104,14 +115,7 @@ export function RayDraw({
           cursor: selected ? "move" : "pointer",
           touchAction: "none",
         }}
-        onPointerDown={(e) => {
-          if (selected) {
-            dragLine(e);
-          } else {
-            e.stopPropagation();
-            onSelect();
-          }
-        }}
+        onPointerDown={onBodyPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
       <line
@@ -123,6 +127,13 @@ export function RayDraw({
         strokeWidth={strokeWidth}
         strokeDasharray={strokeDasharray}
         style={{ pointerEvents: "none" }}
+      />
+      <DrawingTextLabel
+        drawing={drawing}
+        selected={selected}
+        onPointerDown={onBodyPointerDown}
+        lineColor={color}
+        geometry={{ kind: "line", p1: { x: ax, y: ay }, p2: { x: bx, y: by } }}
       />
       {selected && (
         <>

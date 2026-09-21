@@ -10,6 +10,7 @@ import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { TV_PINE } from "@/lib/chart/theme";
 import { lineDash } from "@/lib/drawings/line-style";
+import { DrawingTextLabel } from "./DrawingTextLabel";
 
 interface Props {
   drawing: RectangleDrawing;
@@ -83,6 +84,17 @@ export function RectangleDraw({
   const w = Math.abs(bx - ax);
   const h = Math.abs(by - ay);
 
+  // Pressing the body (line or its text label) selects, or drags once selected.
+  function onBodyPointerDown(e: React.PointerEvent<SVGElement>) {
+    if (drawing.locked) return;
+    if (selected) {
+      dragRect(e);
+    } else {
+      e.stopPropagation();
+      onSelect();
+    }
+  }
+
   return (
     <g>
       {/* Transparent fill hit area for body drag */}
@@ -92,15 +104,7 @@ export function RectangleDraw({
         stroke="none"
         className="drawing-hit"
         style={{ cursor: selected ? "move" : "pointer", pointerEvents: "all", touchAction: "none" }}
-        onPointerDown={(e) => {
-          if (drawing.locked) return;
-          if (selected) {
-            dragRect(e);
-          } else {
-            e.stopPropagation();
-            onSelect();
-          }
-        }}
+        onPointerDown={onBodyPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
       {/* Fill */}
@@ -119,6 +123,13 @@ export function RectangleDraw({
         strokeWidth={strokeWidth}
         strokeDasharray={strokeDasharray}
         style={{ pointerEvents: "none" }}
+      />
+      <DrawingTextLabel
+        drawing={drawing}
+        selected={selected}
+        onPointerDown={onBodyPointerDown}
+        lineColor={borderColor}
+        geometry={{ kind: "box", a: { x: ax, y: ay }, b: { x: bx, y: by } }}
       />
       {/* Corner handles */}
       {selected && (

@@ -95,6 +95,8 @@ export function DrawingsLayer({
             container,
             width,
             height,
+            plotWidth: clipW,
+            plotHeight: clipH,
             intervalSec: timeframeToSeconds(useChartStore.getState().timeframe),
             selected: selectedId === d.id,
             onSelect: () => setSelected(d.id),
@@ -113,6 +115,9 @@ interface RenderArgs {
   container: HTMLElement | null;
   width: number;
   height: number;
+  /** Visible plot area (the clip rect) — where a text label must stay. */
+  plotWidth: number;
+  plotHeight: number;
   intervalSec: number;
   selected: boolean;
   onSelect: () => void;
@@ -120,7 +125,7 @@ interface RenderArgs {
 }
 
 function renderDrawing(args: RenderArgs) {
-  const { d, chart, candleSeries, container, width, height, selected, onSelect, onEdit } = args;
+  const { d, chart, candleSeries, container, width, height, plotWidth, plotHeight, selected, onSelect, onEdit } = args;
   const _intervalSec = args.intervalSec;
   switch (d.kind) {
     case "hline": {
@@ -132,6 +137,7 @@ function renderDrawing(args: RenderArgs) {
           drawing={d}
           y={y}
           width={width}
+          plotWidth={plotWidth}
           selected={selected}
           onSelect={onSelect}
           onEdit={onEdit}
@@ -150,6 +156,7 @@ function renderDrawing(args: RenderArgs) {
           drawing={d}
           x={x}
           height={height}
+          plotHeight={plotHeight}
           selected={selected}
           onSelect={onSelect}
           onEdit={onEdit}
@@ -170,6 +177,7 @@ function renderDrawing(args: RenderArgs) {
           anchorX={x}
           y={y}
           width={width}
+          plotWidth={plotWidth}
           selected={selected}
           onSelect={onSelect}
           onEdit={onEdit}

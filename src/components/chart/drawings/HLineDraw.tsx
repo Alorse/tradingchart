@@ -9,11 +9,14 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
 import { TV_PINE } from "@/lib/chart/theme";
 import { lineDash } from "@/lib/drawings/line-style";
+import { DrawingTextLabel } from "./DrawingTextLabel";
 
 interface Props {
   drawing: HLineDrawing;
   y: number;
   width: number;
+  /** Width of the visible plot (excludes the price scale); bounds the label. */
+  plotWidth?: number;
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
@@ -26,6 +29,7 @@ export function HLineDraw({
   drawing,
   y,
   width,
+  plotWidth,
   selected,
   onSelect,
   onEdit,
@@ -37,6 +41,7 @@ export function HLineDraw({
   const stroke = color;
   const strokeWidth = drawing.lineWidth ?? 1;
   const strokeDasharray = lineDash(drawing.lineStyle);
+  const chipWidth = drawing.alert?.enabled ? 94 : 78;
   const { updateLive, commit } = useDrawings();
   const snapshotRef = useRef<HLineDrawing | null>(null);
 
@@ -64,6 +69,16 @@ export function HLineDraw({
     },
   );
 
+  // Pressing the body (line or its text label) selects, or drags once selected.
+  function onBodyPointerDown(e: React.PointerEvent<SVGElement>) {
+    if (selected) {
+      dragLine(e);
+    } else {
+      e.stopPropagation();
+      onSelect();
+    }
+  }
+
   return (
     <g>
       {/* Hit area (invisible, easier to click) */}
@@ -80,14 +95,7 @@ export function HLineDraw({
           cursor: selected ? "ns-resize" : "pointer",
           touchAction: "none",
         }}
-        onPointerDown={(e) => {
-          if (selected) {
-            dragLine(e);
-          } else {
-            e.stopPropagation();
-            onSelect();
-          }
-        }}
+        onPointerDown={onBodyPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
       {/* Visible line */}
@@ -106,7 +114,7 @@ export function HLineDraw({
         <rect
           x={4}
           y={y - 9}
-          width={drawing.alert?.enabled ? 94 : 78}
+          width={chipWidth}
           height={18}
           fill={color}
           rx={2}
@@ -126,6 +134,14 @@ export function HLineDraw({
           </text>
         )}
       </g>
+      <DrawingTextLabel
+        drawing={drawing}
+        selected={selected}
+        onPointerDown={onBodyPointerDown}
+        lineColor={color}
+        // A left-aligned label starts past the price chip at x=4.
+        geometry={{ kind: "line", p1: { x: 0, y }, p2: { x: plotWidth ?? width, y }, startInset: 4 + chipWidth }}
+      />
     </g>
   );
 }

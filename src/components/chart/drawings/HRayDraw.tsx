@@ -9,6 +9,7 @@ import { useDrawings } from "@/lib/supabase/use-drawings";
 import { formatPrice } from "@/lib/format";
 import { TV_PINE } from "@/lib/chart/theme";
 import { lineDash } from "@/lib/drawings/line-style";
+import { DrawingTextLabel } from "./DrawingTextLabel";
 
 interface Props {
   drawing: HRayDrawing;
@@ -18,6 +19,8 @@ interface Props {
   y: number;
   /** Container width — ray extends to this */
   width: number;
+  /** Width of the visible plot (excludes the price scale); bounds the label. */
+  plotWidth?: number;
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
@@ -31,6 +34,7 @@ export function HRayDraw({
   anchorX,
   y,
   width,
+  plotWidth,
   selected,
   onSelect,
   onEdit,
@@ -42,6 +46,7 @@ export function HRayDraw({
   const stroke = color;
   const strokeWidth = drawing.lineWidth ?? 1;
   const strokeDasharray = lineDash(drawing.lineStyle);
+  const chipWidth = drawing.alert?.enabled ? 94 : 78;
   const { updateLive, commit } = useDrawings();
   const snapshotRef = useRef<HRayDrawing | null>(null);
 
@@ -71,6 +76,16 @@ export function HRayDraw({
     },
   );
 
+  // Pressing the body (line or its text label) selects, or drags once selected.
+  function onBodyPointerDown(e: React.PointerEvent<SVGElement>) {
+    if (selected) {
+      dragLine(e);
+    } else {
+      e.stopPropagation();
+      onSelect();
+    }
+  }
+
   return (
     <g>
       <line
@@ -86,14 +101,7 @@ export function HRayDraw({
           cursor: selected ? "move" : "pointer",
           touchAction: "none",
         }}
-        onPointerDown={(e) => {
-          if (selected) {
-            dragLine(e);
-          } else {
-            e.stopPropagation();
-            onSelect();
-          }
-        }}
+        onPointerDown={onBodyPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
       <line
@@ -121,7 +129,7 @@ export function HRayDraw({
         <rect
           x={anchorX + 8}
           y={y - 9}
-          width={drawing.alert?.enabled ? 94 : 78}
+          width={chipWidth}
           height={18}
           fill={color}
           rx={2}
@@ -141,6 +149,19 @@ export function HRayDraw({
           </text>
         )}
       </g>
+      <DrawingTextLabel
+        drawing={drawing}
+        selected={selected}
+        onPointerDown={onBodyPointerDown}
+        lineColor={color}
+        // A left-aligned label starts past the price chip at anchorX + 8.
+        geometry={{
+          kind: "line",
+          p1: { x: anchorX, y },
+          p2: { x: plotWidth ?? width, y },
+          startInset: 8 + chipWidth,
+        }}
+      />
     </g>
   );
 }

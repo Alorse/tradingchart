@@ -49,29 +49,56 @@ interface BaseDrawing {
   alert?: AlertConfig | null;
 }
 
-export interface HLineDrawing extends BaseDrawing {
+export type HorzTextAlign = "left" | "center" | "right";
+export type VertTextAlign = "top" | "middle" | "bottom";
+
+/**
+ * Opt-in user text label carried by the line-style tools (TradingView's
+ * "Text" tab). Modelled on `PositionExtraFields`: every field is optional and
+ * backwards-compatible, so a drawing saved before these existed renders
+ * exactly as it did. Per-kind defaults for size/alignment live in
+ * `TEXT_LABEL_DEFAULTS` (`./text-label.ts`).
+ *
+ * Deliberately `showText`, not `showLabels` — that name is already taken by
+ * `PositionExtraFields` for the position stats block.
+ */
+export interface TextLabelFields {
+  /** Master toggle — TradingView's "Text" checkbox. Default false. */
+  showText?: boolean;
+  text?: string;
+  textColor?: string;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  /** Where the label sits ALONG the line (or across a rectangle's width). */
+  horzTextAlign?: HorzTextAlign;
+  /** Where the label sits ACROSS the line: above / on / below it. */
+  vertTextAlign?: VertTextAlign;
+}
+
+export interface HLineDrawing extends BaseDrawing, TextLabelFields {
   kind: "hline";
   price: number;
 }
 
-export interface VLineDrawing extends BaseDrawing {
+export interface VLineDrawing extends BaseDrawing, TextLabelFields {
   kind: "vline";
   time: number;
 }
 
-export interface TrendLineDrawing extends BaseDrawing {
+export interface TrendLineDrawing extends BaseDrawing, TextLabelFields {
   kind: "trendline";
   a: Point;
   b: Point;
 }
 
-export interface RayDrawing extends BaseDrawing {
+export interface RayDrawing extends BaseDrawing, TextLabelFields {
   kind: "ray";
   a: Point;
   b: Point;
 }
 
-export interface HRayDrawing extends BaseDrawing {
+export interface HRayDrawing extends BaseDrawing, TextLabelFields {
   kind: "hray";
   anchor: Point;
 }
@@ -194,7 +221,7 @@ export interface HighlighterDrawing extends BaseDrawing {
   logicals?: number[];
 }
 
-export interface RectangleDrawing extends BaseDrawing {
+export interface RectangleDrawing extends BaseDrawing, TextLabelFields {
   kind: "rectangle";
   a: Point;
   b: Point;
@@ -204,7 +231,7 @@ export interface RectangleDrawing extends BaseDrawing {
 
 /** Trend line with an arrowhead at point B. Shares the {a,b} shape so it reuses
  *  the trend-line placement/drag path. */
-export interface ArrowDrawing extends BaseDrawing {
+export interface ArrowDrawing extends BaseDrawing, TextLabelFields {
   kind: "arrow";
   a: Point;
   b: Point;
