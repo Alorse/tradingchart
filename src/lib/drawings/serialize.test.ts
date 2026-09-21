@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
 import { drawingToRow, rowToDrawing } from "./serialize";
-import type { LongPositionDrawing } from "./types";
+import type { HRayDrawing, LongPositionDrawing, RectangleDrawing } from "./types";
 
 describe("drawingToRow / rowToDrawing", () => {
   it("round-trips a long position's new sizing/style/display fields through the JSONB data column", () => {
@@ -57,5 +57,55 @@ describe("drawingToRow / rowToDrawing", () => {
     });
 
     expect(restored).toEqual(drawing);
+  });
+
+  it("round-trips the text-label fields with no schema change (they ride in `data`)", () => {
+    const hray: HRayDrawing = {
+      id: "h1",
+      symbol: "BYBIT:SOLUSDT.P",
+      kind: "hray",
+      anchor: { time: 100, price: 150.5 },
+      color: "#2962ff",
+      showText: true,
+      text: "Weekly high\nretest",
+      textColor: "#f23645",
+      fontSize: 12,
+      bold: true,
+      italic: false,
+      horzTextAlign: "right",
+      vertTextAlign: "bottom",
+      alert: null,
+    };
+    const rect: RectangleDrawing = {
+      id: "r1",
+      symbol: "BTCUSDT",
+      kind: "rectangle",
+      a: { time: 1, price: 10 },
+      b: { time: 2, price: 20 },
+      showText: false,
+      text: "",
+      horzTextAlign: "left",
+      vertTextAlign: "middle",
+      alert: null,
+    };
+    for (const d of [hray, rect]) {
+      const row = drawingToRow(d);
+      const data = row.data as Record<string, unknown>;
+      expect(data.text).toBe(d.text);
+      expect(data.showText).toBe(d.showText);
+      expect(rowToDrawing(row)).toEqual(d);
+    }
+  });
+
+  it("a legacy row without text fields restores without them", () => {
+    const restored = rowToDrawing({
+      id: "h2",
+      symbol: "BTCUSDT",
+      kind: "hray",
+      data: { anchor: { time: 1, price: 2 }, color: "#fff" },
+      alert: null,
+    }) as HRayDrawing;
+    expect(restored.showText).toBe(undefined);
+    expect(restored.text).toBe(undefined);
   });
 });
