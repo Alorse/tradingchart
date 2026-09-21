@@ -89,3 +89,87 @@ export function formatVolume(n: number): string {
   if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
   return n.toFixed(2);
 }
+
+/** Hard ceiling for `priceInputDecimals`: past 12 decimals there is nothing
+ *  left but float noise, even for the cheapest meme coins. */
+const MAX_INPUT_DECIMALS = 12;
+
+/**
+ * Decimal places an editable price field rounds to. At $1 and above a flat 3
+ * is plenty; below $1 it's 5 *significant* digits counted from the first
+ * non-zero one, because a flat decimal cap is exactly what fails cheap coins —
+ * 0.0000000512 at 5 decimals becomes 0, and since the field is editable,
+ * pressing Ok would then write that 0 back into the drawing.
+ *
+ * `minDecimals` lets a caller that steps the value by a known tick keep that
+ * tick's digits: a 0.0001 tick on a $2 symbol would otherwise be swallowed by
+ * the 3-decimal cap and the stepper would stop moving the price.
+ */
+function priceInputDecimals(abs: number, minDecimals: number): number {
+  const byMagnitude = abs >= 1 || abs === 0 ? 3 : 4 - Math.floor(Math.log10(abs));
+  return Math.min(MAX_INPUT_DECIMALS, Math.max(byMagnitude, minDecimals));
+}
+
+/** `toFixed` without its padding: "86234.100" → "86234.1", "2.000" → "2".
+ *  Also folds "-0" (a tiny negative rounded away) into "0". */
+function stripTrailingZeros(fixed: string): string {
+  const s = fixed.includes(".") ? fixed.replace(/\.?0+$/, "") : fixed;
+  return s === "-0" ? "0" : s;
+}
+
+/**
+ * Display string for an editable price input: at most 3 decimals at/above $1,
+ * 5 significant digits below it (never more than 12 decimals), trailing zeros
+ * stripped. Unlike `formatPrice` it never falls back to exponential notation
+ * or thousands separators — the string has to round-trip through
+ * `parseFloat` and read naturally inside an `<input type="number">`.
+ * Non-finite input renders as an empty field rather than "NaN"/"Infinity".
+ */
+export function formatPriceInput(price: number, minDecimals = 0): string {
+  if (!isFinite(price)) return "";
+  return stripTrailingZeros(price.toFixed(priceInputDecimals(Math.abs(price), minDecimals)));
+}
+
+/**
+ * The same rounding as `formatPriceInput`, applied to the value that gets
+ * stored — prettifying only the text would leave `2.6759999999999997` in the
+ * drawing, and the noise would resurface on the chart and in Supabase.
+ * Non-finite input is returned unchanged.
+ */
+export function roundPriceForInput(price: number, minDecimals = 0): number {
+  if (!isFinite(price)) return price;
+  const n = Number(price.toFixed(priceInputDecimals(Math.abs(price), minDecimals)));
+  return n === 0 ? 0 : n;
+}
+
+/**
+ * Display string for an editable non-price number (leverage, account size,
+ * lot size…): rounded to `maxDecimals` and trailing zeros stripped, so float
+ * noise like `0.30000000000000004` never reaches the field. Non-finite input
+ * renders as an empty field.
+ */
+export function formatDecimalInput(n: number, maxDecimals: number): string {
+  if (!isFinite(n)) return "";
+  return stripTrailingZeros(n.toFixed(maxDecimals));
+}
+
+/** The stored-value counterpart of `formatDecimalInput`. */
+export function roundDecimalForInput(n: number, maxDecimals: number): number {
+  if (!isFinite(n)) return n;
+  const r = Number(n.toFixed(maxDecimals));
+  return r === 0 ? 0 : r;
+}
+
+/**
+ * Decimal places a step size carries (0.01 → 2, 0.00005 → 5, 1e-8 → 8), for
+ * `formatPriceInput`'s `minDecimals`. Counted numerically rather than off the
+ * string, since `String(1e-8)` is already exponential.
+ */
+export function stepDecimals(step: number): number {
+  if (!isFinite(step) || step <= 0) return 0;
+  for (let d = 0; d < MAX_INPUT_DECIMALS; d++) {
+    const scaled = step * 10 ** d;
+    if (Math.abs(scaled - Math.round(scaled)) < 1e-9 * Math.max(1, scaled)) return d;
+  }
+  return MAX_INPUT_DECIMALS;
+}
