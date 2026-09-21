@@ -69,6 +69,16 @@ export function HLineDraw({
     },
   );
 
+  // Pressing the body (line or its text label) selects, or drags once selected.
+  function onBodyPointerDown(e: React.PointerEvent<SVGElement>) {
+    if (selected) {
+      dragLine(e);
+    } else {
+      e.stopPropagation();
+      onSelect();
+    }
+  }
+
   return (
     <g>
       {/* Hit area (invisible, easier to click) */}
@@ -85,14 +95,7 @@ export function HLineDraw({
           cursor: selected ? "ns-resize" : "pointer",
           touchAction: "none",
         }}
-        onPointerDown={(e) => {
-          if (selected) {
-            dragLine(e);
-          } else {
-            e.stopPropagation();
-            onSelect();
-          }
-        }}
+        onPointerDown={onBodyPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
       {/* Visible line */}
@@ -133,6 +136,8 @@ export function HLineDraw({
       </g>
       <DrawingTextLabel
         drawing={drawing}
+        selected={selected}
+        onPointerDown={onBodyPointerDown}
         lineColor={color}
         // A left-aligned label starts past the price chip at x=4.
         geometry={{ kind: "line", p1: { x: 0, y }, p2: { x: plotWidth ?? width, y }, startInset: 4 + chipWidth }}

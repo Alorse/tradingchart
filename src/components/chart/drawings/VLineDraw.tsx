@@ -67,6 +67,16 @@ export function VLineDraw({
     },
   );
 
+  // Pressing the body (line or its text label) selects, or drags once selected.
+  function onBodyPointerDown(e: React.PointerEvent<SVGElement>) {
+    if (selected) {
+      dragLine(e);
+    } else {
+      e.stopPropagation();
+      onSelect();
+    }
+  }
+
   return (
     <g>
       <line
@@ -82,14 +92,7 @@ export function VLineDraw({
           cursor: selected ? "ew-resize" : "pointer",
           touchAction: "none",
         }}
-        onPointerDown={(e) => {
-          if (selected) {
-            dragLine(e);
-          } else {
-            e.stopPropagation();
-            onSelect();
-          }
-        }}
+        onPointerDown={onBodyPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
       <line
@@ -104,6 +107,8 @@ export function VLineDraw({
       />
       <DrawingTextLabel
         drawing={drawing}
+        selected={selected}
+        onPointerDown={onBodyPointerDown}
         lineColor={color}
         geometry={{ kind: "line", p1: { x, y: plotHeight ?? height }, p2: { x, y: 0 } }}
       />

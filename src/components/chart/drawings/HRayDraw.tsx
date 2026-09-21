@@ -76,6 +76,16 @@ export function HRayDraw({
     },
   );
 
+  // Pressing the body (line or its text label) selects, or drags once selected.
+  function onBodyPointerDown(e: React.PointerEvent<SVGElement>) {
+    if (selected) {
+      dragLine(e);
+    } else {
+      e.stopPropagation();
+      onSelect();
+    }
+  }
+
   return (
     <g>
       <line
@@ -91,14 +101,7 @@ export function HRayDraw({
           cursor: selected ? "move" : "pointer",
           touchAction: "none",
         }}
-        onPointerDown={(e) => {
-          if (selected) {
-            dragLine(e);
-          } else {
-            e.stopPropagation();
-            onSelect();
-          }
-        }}
+        onPointerDown={onBodyPointerDown}
         onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
       />
       <line
@@ -148,6 +151,8 @@ export function HRayDraw({
       </g>
       <DrawingTextLabel
         drawing={drawing}
+        selected={selected}
+        onPointerDown={onBodyPointerDown}
         lineColor={color}
         // A left-aligned label starts past the price chip at anchorX + 8.
         geometry={{

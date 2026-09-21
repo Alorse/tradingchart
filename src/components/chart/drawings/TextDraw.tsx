@@ -7,6 +7,7 @@ import { useDrawingsStore } from "@/lib/store/drawings-store";
 import { useDragShape } from "./use-drag-shape";
 import { useDrawings } from "@/lib/supabase/use-drawings";
 import { TV_PINE } from "@/lib/chart/theme";
+import { InlineTextEditor } from "./InlineTextEditor";
 
 interface Props {
   drawing: TextDrawing;
@@ -82,34 +83,15 @@ export function TextDraw({
 
   if (editing) {
     return (
-      <foreignObject x={x} y={y - fontSize} width={220} height={90} style={{ overflow: "visible" }}>
-        <textarea
-          autoFocus
-          defaultValue={drawing.text}
-          onFocus={(e) => e.currentTarget.select()}
-          onBlur={(e) => finishEdit(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              (e.currentTarget as HTMLTextAreaElement).blur();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              finishEdit(drawing.text);
-            }
-            e.stopPropagation();
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="resize-none rounded border border-tv-blue bg-tv-panel px-1 py-0.5 outline-none"
-          style={{
-            pointerEvents: "auto",
-            color,
-            fontSize,
-            width: 210,
-            minHeight: fontSize + 8,
-            lineHeight: 1.2,
-          }}
-        />
-      </foreignObject>
+      <InlineTextEditor
+        x={x}
+        y={y}
+        fontSize={fontSize}
+        color={color}
+        initialValue={drawing.text}
+        onFinish={finishEdit}
+        onCancel={() => finishEdit(drawing.text)}
+      />
     );
   }
 
