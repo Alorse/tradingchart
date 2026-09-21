@@ -16,7 +16,7 @@ import {
   type AlertTrigger,
   type AlertSource,
 } from "@/lib/store/alerts-store";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, formatPriceInput } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const CONDITION_LABELS: Record<AlertCondition, string> = {
@@ -98,7 +98,7 @@ export function CreateAlertDialog() {
     }
     const price = defaultPrice ?? currentLivePrice ?? 0;
     setSource("price");
-    setValue(price > 0 ? String(parseFloat(formatPrice(price))) : "");
+    setValue(price > 0 ? formatPriceInput(price) : "");
     setCondition("crossing");
     setTrigger("once");
     setExpiry(defaultExpiry());
@@ -113,7 +113,7 @@ export function CreateAlertDialog() {
     setSource(next);
     if (next === "rsi") setValue("70");
     else if (next === "macd") setValue("0");
-    else setValue(currentLivePrice && currentLivePrice > 0 ? String(parseFloat(formatPrice(currentLivePrice))) : "");
+    else setValue(currentLivePrice && currentLivePrice > 0 ? formatPriceInput(currentLivePrice) : "");
   }
 
   const numVal = parseFloat(value);

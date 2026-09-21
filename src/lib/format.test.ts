@@ -175,6 +175,20 @@ describe("formatPriceInput", () => {
     // minDecimals never narrows the default rule.
     expect(formatPriceInput(0.000012345678, 2)).toBe("0.000012346");
   });
+  // Regression: the alert dialog used to pre-fill `parseFloat(formatPrice(p))`,
+  // which stopped at formatPrice's thousands separator (86234.12 → 86).
+  it("pre-fills an input without separators or exponents (alert dialog regression)", () => {
+    for (const p of [86234.12, 3012.34, 1234.5, 999.99, 5.12e-8]) {
+      const s = formatPriceInput(p);
+      expect(s).not.toContain(",");
+      expect(s).not.toContain("e");
+      expect(parseFloat(s)).toBe(p);
+    }
+    // Five significant digits below $1: plain notation, rounded rather than truncated.
+    const s = formatPriceInput(0.000123456);
+    expect(s).toBe("0.00012346");
+    expect(parseFloat(s)).toBeCloseTo(0.000123456, 8);
+  });
 });
 
 describe("roundPriceForInput", () => {
