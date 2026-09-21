@@ -25,7 +25,13 @@ import { cn } from "@/lib/utils";
  * as-is from desktop: it's built on the shared `DropdownMenu` primitive
  * (tap-triggered, not hover), so it needs no touch adaptation.
  */
-export function ChartScreen() {
+export function ChartScreen({
+  dockOwnsBottomInset = false,
+}: {
+  /** The tab bar is hidden (landscape), so the dock is the bottom-most
+   *  element and must clear the home indicator itself. */
+  dockOwnsBottomInset?: boolean;
+}) {
   const symbol = useChartStore((s) => s.symbol);
   const setSymbol = useChartStore((s) => s.setSymbol);
   const timeframe = useChartStore((s) => s.timeframe);
@@ -98,10 +104,18 @@ export function ChartScreen() {
         <PriceChart symbol={symbol} timeframe={timeframe} />
       </div>
 
-      {/* Bottom dock, stacked directly above the app's bottom tab bar.
+      {/* Bottom dock, stacked directly above the app's bottom tab bar (or at
+          the very bottom when that bar is hidden in landscape).
           Left zone (symbol, timeframe) is fixed and never scrolls; the
           right zone scrolls horizontally to fit the rest. */}
-      <div className="flex h-12 shrink-0 items-stretch border-t border-tv-border bg-tv-panel">
+      <div
+        className={cn(
+          "flex h-12 shrink-0 items-stretch border-t border-tv-border bg-tv-panel",
+          // content-box keeps the 48px row intact and grows the panel down
+          // under the home indicator, instead of squeezing the buttons.
+          dockOwnsBottomInset && "pb-safe box-content",
+        )}
+      >
         <div className="flex shrink-0 items-center gap-1 px-1">
           <SwipeChip
             label={symbol}
