@@ -80,7 +80,7 @@ import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
 import { useAlertMonitor } from "@/hooks/useAlertMonitor";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
-import { useIsNarrowViewport, narrowViewportQuery } from "@/hooks/useIsMobile";
+import { useIsMobile, readIsMobileViewport } from "@/hooks/useIsMobile";
 
 interface MeasurePoint {
   time: number;
@@ -414,7 +414,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // than hidden: a JSX-level `return null` inside them wouldn't tear those
   // lines down.
   const tradingMode = useTradingModeStore((s) => s.mode);
-  const isMobile = useIsNarrowViewport();
+  // Compact axis + trimmed legend follow the mobile *shell*, not width alone:
+  // a landscape phone (844×390) is wider than the breakpoint but still gets
+  // the mobile UI, and must not fall back to the desktop 14px axis.
+  const isMobile = useIsMobile();
 
   // Helper — compute pane top offsets from chart layout
   function recomputePaneOffsets() {
@@ -511,10 +514,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (!containerRef.current) return;
 
     const initColors = chartColorsRef.current;
-    // The `useIsNarrowViewport` hook's state is still false on this first effect pass
+    // The `useIsMobile` hook's state is still false on this first effect pass
     // (its own effect hasn't run yet), so first paint would flash desktop
     // sizing on a phone unless read synchronously here instead.
-    const mobileNow = window.matchMedia(narrowViewportQuery()).matches;
+    const mobileNow = readIsMobileViewport();
     const chart = createChart(containerRef.current, {
       layout: {
         background: { color: initColors.bg },
@@ -1216,7 +1219,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     };
   }, []);
 
-  // Repaint the axis/font sizing on a breakpoint crossing (rotation/resize) —
+  // Repaint the axis/font sizing when the shell flips (rotation/resize) —
   // the create-chart effect above only sets it once, from a synchronous read
   // at mount.
   useEffect(() => {

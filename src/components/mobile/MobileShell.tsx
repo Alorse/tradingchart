@@ -8,7 +8,7 @@ import { ChartScreen } from "./ChartScreen";
 import { TradeScreen } from "./TradeScreen";
 import { MenuScreen } from "./MenuScreen";
 import { MobileSheetsRoot } from "./MobileSheetsRoot";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile, useIsCoarsePointer } from "@/hooks/useIsMobile";
 import { useIsLandscape, shouldHideNavBar } from "@/hooks/useIsLandscape";
 
 /**
@@ -22,8 +22,9 @@ import { useIsLandscape, shouldHideNavBar } from "@/hooks/useIsLandscape";
 export function MobileShell() {
   const tab = useMobileStore((s) => s.tab);
   const isMobile = useIsMobile();
+  const coarsePointer = useIsCoarsePointer();
   const isLandscape = useIsLandscape();
-  const hideNavBar = shouldHideNavBar({ isMobile, isLandscape, tab });
+  const hideNavBar = shouldHideNavBar({ isMobile, coarsePointer, isLandscape, tab });
 
   return (
     <div className="pt-safe px-safe fixed inset-0 flex flex-col bg-tv-bg text-tv-text">
