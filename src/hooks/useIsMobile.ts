@@ -41,6 +41,19 @@ export function isMobileViewport({ width, height, coarsePointer }: ViewportInfo)
 }
 
 /**
+ * Synchronous read of `isMobileViewport` against the live window, for code
+ * that runs before `useIsMobile`'s state has settled (e.g. a mount effect
+ * configuring an imperative widget). Client-only.
+ */
+export function readIsMobileViewport(): boolean {
+  return isMobileViewport({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    coarsePointer: window.matchMedia(COARSE_POINTER_QUERY).matches,
+  });
+}
+
+/**
  * Reactive "render the mobile shell" check — see `isMobileViewport`.
  * Re-evaluates on rotation: the width, height and pointer queries each fire
  * `change` when crossed.
@@ -54,14 +67,7 @@ export function useIsMobile(): boolean {
   useEffect(() => {
     const coarse = window.matchMedia(COARSE_POINTER_QUERY);
     const mqls = [window.matchMedia(narrowViewportQuery()), window.matchMedia(SHORT_VIEWPORT_QUERY), coarse];
-    const update = () =>
-      setIsMobile(
-        isMobileViewport({
-          width: window.innerWidth,
-          height: window.innerHeight,
-          coarsePointer: coarse.matches,
-        }),
-      );
+    const update = () => setIsMobile(readIsMobileViewport());
     update();
     mqls.forEach((m) => m.addEventListener("change", update));
     return () => mqls.forEach((m) => m.removeEventListener("change", update));
@@ -73,7 +79,8 @@ export function useIsMobile(): boolean {
 /**
  * Width-only check — true when the viewport is narrower than `breakpoint`.
  * For sizing decisions that depend on horizontal room rather than on which
- * shell is showing (the price axis font, the `sm` full-screen dialog).
+ * shell is showing (the `sm` full-screen dialog, which a landscape phone must
+ * not get).
  */
 export function useIsNarrowViewport(breakpoint = MOBILE_BREAKPOINT): boolean {
   const [narrow, setNarrow] = useState(false);
