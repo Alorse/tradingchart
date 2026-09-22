@@ -31,15 +31,21 @@ export function useIsLandscape(): boolean {
  * height. Only on the Chart tab: with the bar gone there is no way to switch
  * tabs, and the other screens gain nothing from the extra room, so hiding it
  * there would just strand the user until they rotate back.
+ *
+ * Touch only (`coarsePointer`): a narrow desktop window (700×500 with a mouse)
+ * is both mobile and landscape, but it isn't a rotated phone — nobody there is
+ * short of height, and losing the tab bar would leave no way to switch tabs.
  */
 export function shouldHideNavBar({
   isMobile,
+  coarsePointer,
   isLandscape,
   tab,
 }: {
   isMobile: boolean;
+  coarsePointer: boolean;
   isLandscape: boolean;
   tab: MobileTab;
 }): boolean {
-  return isMobile && isLandscape && tab === "chart";
+  return isMobile && coarsePointer && isLandscape && tab === "chart";
 }

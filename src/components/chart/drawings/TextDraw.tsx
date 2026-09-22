@@ -76,9 +76,12 @@ export function TextDraw({
       void remove(drawing.id);
       return;
     }
-    // Persist as one history entry (snapshot taken when editing began).
-    if (snapshotRef.current) void commit(drawing.id, { ...snapshotRef.current, text: trimmed });
-    else void updateLive(drawing.id, { text: trimmed } as Partial<TextDrawing>);
+    // Patch only the text into the live state, then record one history entry
+    // against the snapshot taken when editing began. `commit` reads the new
+    // state from the store, so anything else that moved meanwhile (a drag)
+    // is kept rather than overwritten by the stale snapshot.
+    updateLive(drawing.id, { text: trimmed } as Partial<TextDrawing>);
+    if (snapshotRef.current) void commit(drawing.id, snapshotRef.current);
   }
 
   if (editing) {
