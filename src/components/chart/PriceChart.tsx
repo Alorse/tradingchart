@@ -80,7 +80,7 @@ import { generateId, FIB_LEVELS_DEFAULT } from "@/lib/drawings/types";
 import { FIB_EXT_RATIOS_DEFAULT } from "@/lib/drawings/fib";
 import { useAlertMonitor } from "@/hooks/useAlertMonitor";
 import { useTradingModeStore } from "@/lib/store/trading-mode-store";
-import { useIsMobile, MOBILE_BREAKPOINT } from "@/hooks/useIsMobile";
+import { useIsNarrowViewport, narrowViewportQuery } from "@/hooks/useIsMobile";
 
 interface MeasurePoint {
   time: number;
@@ -414,7 +414,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // than hidden: a JSX-level `return null` inside them wouldn't tear those
   // lines down.
   const tradingMode = useTradingModeStore((s) => s.mode);
-  const isMobile = useIsMobile();
+  const isMobile = useIsNarrowViewport();
 
   // Helper — compute pane top offsets from chart layout
   function recomputePaneOffsets() {
@@ -511,10 +511,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (!containerRef.current) return;
 
     const initColors = chartColorsRef.current;
-    // The `useIsMobile` hook's state is still false on this first effect pass
+    // The `useIsNarrowViewport` hook's state is still false on this first effect pass
     // (its own effect hasn't run yet), so first paint would flash desktop
     // sizing on a phone unless read synchronously here instead.
-    const mobileNow = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches;
+    const mobileNow = window.matchMedia(narrowViewportQuery()).matches;
     const chart = createChart(containerRef.current, {
       layout: {
         background: { color: initColors.bg },

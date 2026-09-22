@@ -6,7 +6,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
-import { useIsMobile } from "@/hooks/useIsMobile"
+import { useIsNarrowViewport } from "@/hooks/useIsMobile"
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -63,7 +63,7 @@ function DialogContent({
    *  untouched (the prop only changes anything under the `sm` breakpoint). */
   mobileFullScreen?: boolean
 }) {
-  const isMobile = useIsMobile(SM_BREAKPOINT)
+  const isMobile = useIsNarrowViewport(SM_BREAKPOINT)
   const [offset, setOffset] = React.useState({ x: 0, y: 0 })
   const drag = React.useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
   const isDragging = React.useRef(false)

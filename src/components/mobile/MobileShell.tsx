@@ -8,23 +8,32 @@ import { ChartScreen } from "./ChartScreen";
 import { TradeScreen } from "./TradeScreen";
 import { MenuScreen } from "./MenuScreen";
 import { MobileSheetsRoot } from "./MobileSheetsRoot";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { useIsLandscape, shouldHideNavBar } from "@/hooks/useIsLandscape";
 
 /**
  * Mobile UI shell — full-screen container with a fixed bottom tab bar.
  * State-based routing (no URL changes) for an app-like feel.
+ *
+ * In landscape the tab bar is dropped on the Chart tab only (see
+ * `shouldHideNavBar`), and the chart's dock takes over the bottom safe-area
+ * inset the bar would otherwise have carried.
  */
 export function MobileShell() {
   const tab = useMobileStore((s) => s.tab);
+  const isMobile = useIsMobile();
+  const isLandscape = useIsLandscape();
+  const hideNavBar = shouldHideNavBar({ isMobile, isLandscape, tab });
 
   return (
     <div className="pt-safe px-safe fixed inset-0 flex flex-col bg-tv-bg text-tv-text">
       <main className="min-h-0 flex-1 overflow-hidden">
         {tab === "watchlist" && <WatchlistScreen />}
-        {tab === "chart" && <ChartScreen />}
+        {tab === "chart" && <ChartScreen dockOwnsBottomInset={hideNavBar} />}
         {tab === "trade" && <TradeScreen />}
         {tab === "menu" && <MenuScreen />}
       </main>
-      <BottomTabBar />
+      {!hideNavBar && <BottomTabBar />}
       <MobileSheetsRoot />
     </div>
   );
