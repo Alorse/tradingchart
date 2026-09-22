@@ -77,6 +77,24 @@ export function useIsMobile(): boolean {
 }
 
 /**
+ * Reactive `(pointer: coarse)` check — the primary pointer is touch. The same
+ * signal `isMobileViewport` reads; `false` on the server and first render.
+ */
+export function useIsCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia(COARSE_POINTER_QUERY);
+    const update = () => setCoarse(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
+
+  return coarse;
+}
+
+/**
  * Width-only check — true when the viewport is narrower than `breakpoint`.
  * For sizing decisions that depend on horizontal room rather than on which
  * shell is showing (the `sm` full-screen dialog, which a landscape phone must
