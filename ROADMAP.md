@@ -1,83 +1,95 @@
 # Roadmap
 
-Next features to build, in priority order. These are classic TradingView
-capabilities the platform does not have yet.
+Next features to build, in priority order. Paper Trading is DONE (epic #1,
+issues #5–#9, all merged to master — store + fills engine, order panel,
+positions / live P&L / TP-SL, history + reset, Supabase sync). This file's job
+is to say what is left.
 
 ---
 
-## 1. Paper Trading — 🎯 current focus
+## 1. Alerts hardening + webhooks — PARKED, waiting on Fredo's own analysis
 
-Simulated trading against live Binance prices. No real funds, no API keys: a
-risk-free way to practice the same order flow the live trading panels already
-expose.
+Issues **#2 / #3 / #4**. Fredo wants to think through the alerts domain himself
+before any of it is touched. Do not start work here unprompted.
 
-**Scope**
+What is true about the current behaviour, for when that analysis resumes:
 
-- Virtual USDT balance, seeded on first use and resettable at any time.
-- Market and limit orders, long and short, with configurable leverage.
-- Open positions with live unrealized P&L and ROI, driven off the existing
-  WebSocket last-price tick.
-- TP / SL brackets, reusing the sizing and risk math in
-  `src/lib/trading/sizing.ts`.
-- Closed-trade history: entry, exit, fees, realized P&L, duration.
-- "Reset account" wipes balance, positions and history back to the seed.
-
-**Data model**
-
-Start entirely client-side: a `paper-trading-store.ts` Zustand store,
-`persist`ed to localStorage, holding `{ balance, positions, orders, history,
-settings }`. Fills are evaluated locally against the live tick — a limit order
-fills when the tick crosses its price, a market order fills at the current
-quote. Move to a Supabase table (`user_paper_accounts`, one row per user, state
-in `JSONB`) once the model settles, so the account follows the user across
-devices the way drawings and chart settings already do.
-
-**UI surfaces**
-
-- A Paper / Live toggle at the top of the right sidebar's Trade tab. Paper mode
-  swaps the credential-backed order form for the simulated one; the layout stays
-  identical so the muscle memory carries over.
-- Order panel, positions/orders tables and the chart's order lines reuse the
-  existing components, reading from the paper store instead of `trading-store`.
-- Balance and equity curve in the account panel.
-- A clear visual marker (badge / accent color) whenever paper mode is active, so
-  a simulated position is never mistaken for a real one.
-
----
-
-## 2. Alerts hardening + webhooks
-
-Alerts today are evaluated client-side in `useAlertMonitor`, which is mounted
+Alerts today are evaluated client-side in `useAlertMonitor`, mounted
 per-symbol inside the chart — an alert only fires while its symbol's chart is
-open.
+open. `src/lib/alerts/` contains only `alert-eval.ts`, `sound.ts` and
+`toast-store.ts`: there is NO webhook or Telegram integration anywhere yet.
 
-- **First, verify and fix the current behaviour.** Confirm crossing detection,
+- **#2 — verify and fix current behaviour first.** Confirm crossing detection,
   the 30s cooldown, sound playback and toast delivery actually fire reliably;
-  add tests around `alert-eval.ts` for the cases that are missing.
-- Then add outbound notifications: a Telegram bot integration and a generic
-  webhook `POST` with a documented JSON payload (symbol, condition, trigger
-  price, timestamp, alert id).
-- Retry with backoff on delivery failure, and a delivery status per attempt.
-- Alert history: a persisted log of every firing, visible in the alerts panel.
+  add tests around `alert-eval.ts` for the cases that are missing. The current
+  client-side alerts have still never been QA'd end to end. Then add outbound
+  notifications: a Telegram bot integration and a generic webhook `POST` with a
+  documented JSON payload (symbol, condition, trigger price, timestamp, alert
+  id). Retry with backoff on delivery failure, and a delivery status per
+  attempt. Alert history: a persisted log of every firing, visible in the
+  alerts panel. Server-side evaluation (so alerts fire with no tab open) is the
+  natural follow-on but is deliberately out of scope for this step.
+- **#3 — drawing-anchored alerts.** Extend alerts beyond horizontal levels and
+  trend lines: rectangle/zone fires on price entering or exiting the zone,
+  fibonacci fires on a touch of any selected level in the ladder, Long/Short
+  position tool fires when entry, stop or target is reached. The evaluator
+  already interpolates sloped drawings to the current bar; this is mostly about
+  extending `priceLevelFor` and the alert editing UI per drawing kind. (The
+  `alert?: AlertConfig` field in `src/lib/drawings/types.ts` is the pre-existing
+  hline/hray alert, not this feature.)
+- **#4 — multi-condition alerts.** Combine up to five conditions — price
+  levels, indicator values, drawing events — joined with AND, firing once when
+  all of them hold simultaneously. Needs a condition-list editor in the alert
+  dialog and an evaluator that tracks the satisfied set across ticks rather
+  than a single crossing.
 
-Server-side evaluation (so alerts fire with no tab open) is the natural follow-on
-but is deliberately out of scope for this step.
+## 2. Paper positions panel — deferred follow-ups (#14)
 
-## 3. Drawing-anchored alerts
+Legacy `feedSymbol` revival, stale-marks eviction, equity selector memo, delta
+resubscribe, and the confirm-dialog pattern. Small, self-contained, all flagged
+during the PR #39 review.
 
-Extend alerts beyond horizontal levels and trend lines to the rest of the
-drawing set:
+## 3. Mobile / landscape parity (#32)
 
-- Rectangle / zone: fire on price **entering** or **exiting** the zone.
-- Fibonacci: fire on a touch of any selected level in the ladder.
-- Long / Short position tool: fire when entry, stop or target is reached.
+Landscaped shipped 2026-09-21: landscape phones now stay in the mobile shell
+(the shell predicate is `width < 768 || (coarsePointer && height < 600)`), the
+Chart tab hides the bottom nav bar so the chart keeps the height, and the dock
+takes over the bottom safe-area inset. Remaining, decide with Fredo:
 
-The evaluator already interpolates sloped drawings to the current bar; this is
-mostly about extending `priceLevelFor` and the alert editing UI per drawing kind.
+- Whether the ruler/axis width and font keep tuning as devices get tested.
+- The ObjectTreePanel equivalent for mobile (browsing drawings by list — see
+  the `TODO` in `MobileDrawingsSheet.tsx`).
+- Row density in `MobileTimeframeSheet` is not yet touch-tuned pass-for-pass.
 
-## 4. Multi-condition alerts
+## 4. Drawing price precision at the source
 
-Combine up to five conditions — price levels, indicator values, drawing events —
-joined with AND, firing once when all of them hold simultaneously. Needs a
-condition-list editor in the alert dialog and an evaluator that tracks the
-satisfied set across ticks rather than a single crossing.
+Pixel → price conversion during drag/placement produces unrounded floats that
+get stored into drawings. The settings dialog cleans a value once edited there
+(`formatPriceInput` / `roundPriceForInput` in `src/lib/format.ts`, per
+`references/price-precision.md`), but the chart path does not. Deliberately NOT
+fixed for now — the round would have to land in the store's commit path (so
+drawings saved to Supabase come out clean too), which Fredo chose to skip.
+
+## 5. Palette + auth polish (from UI audit #23)
+
+The palette migration was phased on stacked branches — `feat/tv-palette-foundation`
+(#24), `feat/tv-contrast` (#25), `feat/tv-typography` — and a final polish
+stage that never landed: the login rewrite and tokenizing the remaining
+hardcoded hex values. Full token table plus the two lightweight-charts v5.2
+bugs are in `references/lightweight-charts-pitfalls.md`.
+
+Guest access itself shipped (PR #43): only the chart is viewable without login,
+the login is a closable overlay (never a dead-end full screen), and the one
+action still gated behind login is SnapshotButton's "Copy image link".
+
+## Documentation debt
+
+- The settings dialog has NO DOM test coverage and will not get any: the repo
+  has no jsdom/RTL setup, and Fredo explicitly does not want a DOM test
+  framework added just to test dialogs (decided 2026-09-21). Its logic is
+  covered through the pure helpers in `src/lib/format.ts` instead.
+- Keep THIS file updated as stages land — it had drifted into calling Paper
+  Trading "current focus" long after it was complete.
+- The README must cite the two upstream repos (KManuS88's
+  `tradingview-gratis` + KisuShotto15's `tradingview`) before the repo goes
+  public — the fork lineage is unlicensed.
