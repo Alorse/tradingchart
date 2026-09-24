@@ -2666,11 +2666,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
     const style = useChartStore.getState().adxStyle;
     const data = adxCalc(c, { diLen: cfg.adxDiLen, adxLen: cfg.adx });
     adxRef.current.setData(data.map((p) => ({ time: p.time as UTCTimestamp, value: p.adx })));
-    const adxEnabled = indicatorVisible("adx", {
-      indicators,
-      hidden,
-      subPanesHidden: useChartStore.getState().subPanesHidden,
-    });
+    // Read the live store, not the [symbol, timeframe] closure: eye-toggle and
+    // collapse changes don't re-create this callback.
+    const adxEnabled = indicatorVisible("adx", useChartStore.getState());
     adxRef.current.applyOptions({ color: style.adxColor, lineWidth: style.adxLineWidth ?? 2, visible: style.showAdx && adxEnabled });
     adxPlusDIRef.current?.setData(
       data.map((p) => ({ time: p.time as UTCTimestamp, value: p.plusDI })),
@@ -2695,11 +2693,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     const cfg = configRef.current;
     const style = useChartStore.getState().dmiTradeZoneStyle;
     const pts = dmiTradeZone(c, { diLen: cfg.dmiTzDiLen, adxLen: cfg.dmiTzAdxLen });
-    const on = indicatorVisible("dmitz", {
-      indicators,
-      hidden,
-      subPanesHidden: useChartStore.getState().subPanesHidden,
-    });
+    const on = indicatorVisible("dmitz", useChartStore.getState());
 
     dmiTzShadowRef.current?.setData(
       pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.adx })),
