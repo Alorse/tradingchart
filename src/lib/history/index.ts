@@ -3,6 +3,7 @@ import type {
   IndicatorKey,
   IndicatorConfig,
   AdxStyle,
+  DmiTradeZoneStyle,
   SqueezeStyle,
   UserEMA,
 } from "@/lib/store/chart-store";
@@ -20,6 +21,7 @@ export interface ChartStateSnapshot {
   config?: IndicatorConfig;
   userEMAs?: UserEMA[];
   adxStyle?: AdxStyle;
+  dmiTradeZoneStyle?: DmiTradeZoneStyle;
   squeezeStyle?: SqueezeStyle;
   logScale?: boolean;
   indicatorLogScale?: Partial<Record<IndicatorKey, boolean>>;

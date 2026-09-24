@@ -14,6 +14,7 @@ import {
   useChartStore,
   DEFAULT_CONFIG,
   DEFAULT_ADX_STYLE,
+  DEFAULT_DMI_TRADE_ZONE_STYLE,
   DEFAULT_SQUEEZE_STYLE,
   DEFAULT_KEY_LEVELS,
   DEFAULT_BOLLINGER_STYLE,
@@ -33,6 +34,7 @@ const TITLES: Record<IndicatorKey, string> = {
   macd: "MACD",
   volume: "Volume",
   adx: "ADX",
+  dmitz: "DMI Trade Zone",
   squeeze: "Squeeze Momentum",
   vumanchu: "VuManChu Cipher B",
   obv: "On-Balance Volume",
@@ -217,6 +219,9 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
     adx: config.adx,
     adxDiLen: config.adxDiLen,
     adxKeyLevel: config.adxKeyLevel,
+    dmiTzDiLen: config.dmiTzDiLen,
+    dmiTzAdxLen: config.dmiTzAdxLen,
+    dmiTzKeyLevel: config.dmiTzKeyLevel,
     squeezeBB: config.squeezeBB,
     squeezeBBMult: config.squeezeBBMult,
     squeezeKC: config.squeezeKC,
@@ -245,6 +250,9 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
       adx: config.adx,
       adxDiLen: config.adxDiLen,
       adxKeyLevel: config.adxKeyLevel,
+      dmiTzDiLen: config.dmiTzDiLen,
+      dmiTzAdxLen: config.dmiTzAdxLen,
+      dmiTzKeyLevel: config.dmiTzKeyLevel,
       squeezeBB: config.squeezeBB,
       squeezeBBMult: config.squeezeBBMult,
       squeezeKC: config.squeezeKC,
@@ -278,6 +286,12 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
         adx: clamp(draft.adx, 2, 100),
         adxDiLen: clamp(draft.adxDiLen, 2, 100),
         adxKeyLevel: clamp(draft.adxKeyLevel, 1, 100),
+      });
+    else if (target === "dmitz")
+      onSave({
+        dmiTzDiLen: clamp(draft.dmiTzDiLen, 1, 100),
+        dmiTzAdxLen: clamp(draft.dmiTzAdxLen, 1, 50),
+        dmiTzKeyLevel: clamp(draft.dmiTzKeyLevel, 1, 100),
       });
     else if (target === "squeeze")
       onSave({
@@ -367,6 +381,36 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
           </div>
           <AdxStyleSection />
           <OverlaySection target="adx" />
+        </>
+      )}
+      {target === "dmitz" && (
+        <>
+          <SectionLabel>Inputs</SectionLabel>
+          <div className="grid grid-cols-3 gap-2">
+            <Field
+              label="DI Length"
+              min={1}
+              max={100}
+              value={draft.dmiTzDiLen}
+              onChange={(n) => setDraft((d) => ({ ...d, dmiTzDiLen: n }))}
+            />
+            <Field
+              label="ADX Smoothing"
+              min={1}
+              max={50}
+              value={draft.dmiTzAdxLen}
+              onChange={(n) => setDraft((d) => ({ ...d, dmiTzAdxLen: n }))}
+            />
+            <Field
+              label="Key level"
+              min={1}
+              max={100}
+              value={draft.dmiTzKeyLevel}
+              onChange={(n) => setDraft((d) => ({ ...d, dmiTzKeyLevel: n }))}
+            />
+          </div>
+          <DmiTradeZoneStyleSection />
+          <OverlaySection target="dmitz" />
         </>
       )}
       {target === "squeeze" && (
@@ -684,6 +728,7 @@ const OVERLAY_OPTIONS: { value: IndicatorKey | "own"; label: string }[] = [
   { value: "rsi", label: "RSI pane" },
   { value: "macd", label: "MACD pane" },
   { value: "adx", label: "ADX pane" },
+  { value: "dmitz", label: "DMI Trade Zone pane" },
   { value: "squeeze", label: "Squeeze pane" },
   { value: "vumanchu", label: "VuManChu pane" },
   { value: "obv", label: "OBV pane" },
@@ -793,6 +838,67 @@ function AdxStyleSection() {
           <ColorPick label="" value={draft.keyLevelColor} onChange={(v) => commit({ keyLevelColor: v })} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * DMI Trade Zone style. Shape follows `AdxStyleSection` — a toggle, a width
+ * picker and a colour per line — with one departure the Pine forces: the ADX
+ * line takes *two* colours, since it is coloured per bar by the directional
+ * cross and so has no single "ADX colour".
+ */
+function DmiTradeZoneStyleSection() {
+  const draft = useChartStore((s) => s.dmiTradeZoneStyle);
+  const commit = useChartStore((s) => s.setDmiTradeZoneStyle);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionLabel>Style — Lines</SectionLabel>
+      <div className="flex items-center justify-between gap-2">
+        <Toggle label="Shadow" value={draft.showShadow} onChange={(v) => commit({ showShadow: v })} />
+        <div className="flex items-center gap-2">
+          <LineWidthPicker value={draft.shadowLineWidth} onChange={(v) => commit({ shadowLineWidth: v })} />
+          <ColorPick label="" value={draft.shadowColor} onChange={(v) => commit({ shadowColor: v })} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Toggle label="ADX" value={draft.showAdx} onChange={(v) => commit({ showAdx: v })} />
+        <div className="flex items-center gap-2">
+          <LineWidthPicker value={draft.adxLineWidth} onChange={(v) => commit({ adxLineWidth: v })} />
+          <ColorPick label="" value={draft.adxUpColor} onChange={(v) => commit({ adxUpColor: v })} />
+          <ColorPick label="" value={draft.adxDownColor} onChange={(v) => commit({ adxDownColor: v })} />
+        </div>
+      </div>
+      <p className="text-[10px] text-tv-text-muted">
+        Two colours: the ADX line is painted per bar — the first while the
+        directional cross is positive, the second otherwise.
+      </p>
+      <div className="flex items-center justify-between gap-2">
+        <Toggle label="Key level" value={draft.showKeyLevel} onChange={(v) => commit({ showKeyLevel: v })} />
+        <div className="flex items-center gap-2">
+          <LineWidthPicker value={draft.keyLevelLineWidth} onChange={(v) => commit({ keyLevelLineWidth: v })} />
+          <ColorPick label="" value={draft.keyLevelColor} onChange={(v) => commit({ keyLevelColor: v })} />
+        </div>
+      </div>
+
+      <SectionLabel>Style — Trade zone</SectionLabel>
+      <div className="flex items-center justify-between gap-2">
+        <Toggle label="Background zone" value={draft.showZone} onChange={(v) => commit({ showZone: v })} />
+        <ColorPick label="" value={draft.zoneColor} onChange={(v) => commit({ zoneColor: v })} />
+      </div>
+      <p className="text-[10px] text-tv-text-muted">
+        Shades the pane on every bar where +DI is above -DI.
+      </p>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => commit(DEFAULT_DMI_TRADE_ZONE_STYLE)}
+        className="self-start text-tv-text-muted hover:text-tv-text"
+      >
+        Reset style
+      </Button>
     </div>
   );
 }

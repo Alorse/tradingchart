@@ -57,6 +57,7 @@ export function useCloudSync() {
   const config = useChartStore((s) => s.config);
   const chartColors = useChartStore((s) => s.chartColors);
   const adxStyle = useChartStore((s) => s.adxStyle);
+  const dmiTradeZoneStyle = useChartStore((s) => s.dmiTradeZoneStyle);
   const squeezeStyle = useChartStore((s) => s.squeezeStyle);
   const bollingerStyle = useChartStore((s) => s.bollingerStyle);
   const vwapStyle = useChartStore((s) => s.vwapStyle);
@@ -121,6 +122,7 @@ export function useCloudSync() {
           useChartStore.setState({
             ...(vs.chartColors   && { chartColors:   vs.chartColors }),
             ...(vs.adxStyle      && { adxStyle:      vs.adxStyle }),
+            ...(vs.dmiTradeZoneStyle && { dmiTradeZoneStyle: vs.dmiTradeZoneStyle }),
             ...(vs.squeezeStyle  && { squeezeStyle:  vs.squeezeStyle }),
             ...(vs.bollingerStyle && { bollingerStyle: vs.bollingerStyle }),
             ...(vs.vwapStyle     && { vwapStyle:     vs.vwapStyle }),
@@ -192,6 +194,7 @@ export function useCloudSync() {
         visual_settings: {
           chartColors,
           adxStyle,
+          dmiTradeZoneStyle,
           squeezeStyle,
           bollingerStyle,
           vwapStyle,
@@ -206,7 +209,7 @@ export function useCloudSync() {
   }, [
     user,
     symbol, timeframe, indicators, hidden, config,
-    chartColors, adxStyle, squeezeStyle, bollingerStyle, vwapStyle, volumeProfile,
+    chartColors, adxStyle, dmiTradeZoneStyle, squeezeStyle, bollingerStyle, vwapStyle, volumeProfile,
     keyLevels, userEMAs, chartType,
   ]);
 
