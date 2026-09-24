@@ -33,8 +33,10 @@ import { ema, rsi, macd, obv, bollingerBands, vwap as vwapCalc } from "@/lib/ind
 import type { BandPoint } from "@/lib/indicators";
 import { SIMPLE_OSCILLATORS, type SimpleOscKey } from "@/lib/indicators/pane-specs";
 import { adx as adxCalc } from "@/lib/indicators/adx";
+import { dmiTradeZone, dmiZoneSpans, type DmiZoneSpan } from "@/lib/indicators/dmi-trade-zone";
 import { squeezeMomentum } from "@/lib/indicators/squeeze";
 import { SqueezeOverlay } from "./SqueezeOverlay";
+import { DmiTradeZoneOverlay } from "./DmiTradeZoneOverlay";
 import { vumanchu as vumanchuCalc } from "@/lib/indicators/vumanchu";
 import type { Candle, Timeframe } from "@/lib/binance/types";
 import {
@@ -172,6 +174,7 @@ interface HoverInfo {
 
 interface LastValues {
   rsi?: number;
+  dmitz?: number;
   macd?: number;
   macdSignal?: number;
   macdHist?: number;
@@ -211,6 +214,14 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const adxPlusDIRef = useRef<ISeriesApi<"Line"> | null>(null);
   const adxMinusDIRef = useRef<ISeriesApi<"Line"> | null>(null);
   const adxKeyLevelRef = useRef<ISeriesApi<"Line"> | null>(null);
+  // DMI Trade Zone pane. `dmiTzShadowRef` is added before `dmiTzAdxRef` on
+  // purpose: series paint in creation order, and Pine draws the wide faint
+  // "Shadow" plot underneath the coloured ADX line.
+  const dmiTzShadowRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const dmiTzAdxRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const dmiTzPlusDIRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const dmiTzMinusDIRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const dmiTzKeyLevelRef = useRef<ISeriesApi<"Line"> | null>(null);
   // Squeeze Momentum pane
   const squeezeHistRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const squeezeDotsRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -308,6 +319,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const removeUserEMA = useChartStore((s) => s.removeUserEMA);
   const toggleUserEMAHidden = useChartStore((s) => s.toggleUserEMAHidden);
   const adxStyle = useChartStore((s) => s.adxStyle);
+  const dmiTradeZoneStyle = useChartStore((s) => s.dmiTradeZoneStyle);
   const squeezeStyle = useChartStore((s) => s.squeezeStyle);
   const bollingerStyle = useChartStore((s) => s.bollingerStyle);
   const vwapStyle = useChartStore((s) => s.vwapStyle);
@@ -384,6 +396,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const [ctrlHeld, setCtrlHeld] = useState(false);
   const [magnetTarget, setMagnetTarget] = useState<{ time: number; price: number } | null>(null);
   const [squeezePts, setSqueezePts] = useState<SqueezePoint[]>([]);
+  // Zone runs live in React state (not just on a series) because the fill is
+  // an SVG overlay that needs the raw bar times — same reason as `bbPts`.
+  const [dmiTzSpans, setDmiTzSpans] = useState<DmiZoneSpan[]>([]);
   // Band rails are kept in state (not just in the series) because the
   // translucent fill is an SVG overlay that needs the raw prices.
   const [bbPts, setBbPts] = useState<BandPoint[]>([]);
@@ -500,6 +515,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       rsi: rsiRef.current,
       macd: macdRef.current,
       adx: adxRef.current,
+      dmitz: dmiTzAdxRef.current,
       squeeze: squeezeHistRef.current,
       vumanchu: vmcWt2Ref.current,
     };
@@ -1337,6 +1353,20 @@ export function PriceChart({ symbol, timeframe }: Props) {
         }
       }
 
+      if (idxMap.dmitz === clickedPane && state.indicators.dmitz && dmiTzAdxRef.current) {
+        const param = latestCrosshairParamRef.current;
+        if (param) {
+          const data = param.seriesData.get(dmiTzAdxRef.current);
+          if (data && "value" in data) {
+            const yCoord = dmiTzAdxRef.current.priceToCoordinate(data.value as number);
+            if (yCoord !== null && Math.abs(yCoord - relY) <= 10) {
+              state.setSettingsTarget("dmitz");
+              return;
+            }
+          }
+        }
+      }
+
       state.setSettingsTarget(hostKey);
     }
 
@@ -1611,6 +1641,65 @@ export function PriceChart({ symbol, timeframe }: Props) {
     requestAnimationFrame(() => recomputePaneOffsets());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [indicators.adx, indicators.rsi, indicators.macd, indicatorOverlays]);
+
+  // ── DMI Trade Zone pane ──────────────────────────────────────────────────
+  // Independent of the ADX pane above: same maths, different study. Rebuilds
+  // wholesale (rather than patching) so a change of pane assignment moves the
+  // series, exactly as the ADX effect does.
+  useEffect(() => {
+    if (!chartRef.current) return;
+    for (const r of [dmiTzShadowRef, dmiTzAdxRef, dmiTzPlusDIRef, dmiTzMinusDIRef, dmiTzKeyLevelRef]) {
+      if (r.current) {
+        try { chartRef.current.removeSeries(r.current); } catch {}
+        r.current = null;
+      }
+    }
+    if (indicators.dmitz) {
+      const paneIndex = panelIndexFor("dmitz");
+      const style = useChartStore.getState().dmiTradeZoneStyle;
+      // As guest in someone else's pane, take an own overlay scale: 0-100
+      // against, say, ATR in dollars would be flattened off-screen.
+      const target = indicatorOverlays.dmitz;
+      const isGuest = !!(target && target !== "own" && indicators[target as IndicatorKey]);
+      const priceScaleId = isGuest ? "dmitz-overlay" : "right";
+      const line = (color: string, lineWidth: 1 | 2 | 3 | 4) =>
+        chartRef.current!.addSeries(
+          LineSeries,
+          { color, lineWidth, priceLineVisible: false, lastValueVisible: false, priceScaleId },
+          paneIndex,
+        );
+      // Creation order is paint order — Shadow first, under the ADX line.
+      dmiTzShadowRef.current = line(style.shadowColor, style.shadowLineWidth);
+      dmiTzAdxRef.current = line(style.adxUpColor, style.adxLineWidth);
+      dmiTzPlusDIRef.current = line(style.plusDiColor, style.diLineWidth);
+      dmiTzMinusDIRef.current = line(style.minusDiColor, style.diLineWidth);
+      // Key level: a constant series would otherwise drag the pane's autoscale
+      // toward it. `autoscaleInfoProvider: () => null` excludes it, same as the
+      // ADX pane's own key level.
+      dmiTzKeyLevelRef.current = chartRef.current.addSeries(
+        LineSeries,
+        {
+          color: style.keyLevelColor,
+          lineWidth: style.keyLevelLineWidth,
+          lineStyle: 0,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          priceScaleId,
+          autoscaleInfoProvider: () => null,
+        },
+        paneIndex,
+      );
+      try {
+        applyPaneLayout(paneIndex, 1);
+      } catch {}
+      updateDmiTradeZone();
+    }
+    // No `setDmiTzSpans([])` on the off branch: the overlay is gated on
+    // `indicators.dmitz` anyway, so stale spans are unreachable, and clearing
+    // them here would be a setState straight out of an effect body.
+    requestAnimationFrame(() => recomputePaneOffsets());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicators, indicatorOverlays]);
 
   // ── Squeeze Momentum pane ────────────────────────────────────────────────
   useEffect(() => {
@@ -2002,6 +2091,15 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (adxPlusDIRef.current) adxPlusDIRef.current.applyOptions({ visible: v("adx") && adxSt.showPlusDi });
     if (adxMinusDIRef.current) adxMinusDIRef.current.applyOptions({ visible: v("adx") && adxSt.showMinusDi });
     if (adxKeyLevelRef.current) adxKeyLevelRef.current.applyOptions({ visible: v("adx") && (adxSt.showKeyLevel ?? true) });
+    // DMI Trade Zone pane — per-line visibility from its own style slice, with
+    // the DI pair gated by Pine's `pl` input rather than a second style toggle.
+    const dmiTzSt = useChartStore.getState().dmiTradeZoneStyle;
+    const dmiTzOn = v("dmitz");
+    if (dmiTzShadowRef.current) dmiTzShadowRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showShadow });
+    if (dmiTzAdxRef.current) dmiTzAdxRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showAdx });
+    if (dmiTzPlusDIRef.current) dmiTzPlusDIRef.current.applyOptions({ visible: dmiTzOn && config.dmiTzPlotDi });
+    if (dmiTzMinusDIRef.current) dmiTzMinusDIRef.current.applyOptions({ visible: dmiTzOn && config.dmiTzPlotDi });
+    if (dmiTzKeyLevelRef.current) dmiTzKeyLevelRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showKeyLevel });
     // Squeeze pane — the histogram provides the price-scale anchor for the SVG
     // overlay; always keep it visible so priceToCoordinate(0) never returns null.
     // The actual show/hide of the histogram colours is handled by the SVG overlay.
@@ -2022,7 +2120,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (vmcObRef.current) vmcObRef.current.applyOptions({ visible: v("vumanchu") });
     if (vmcOsRef.current) vmcOsRef.current.applyOptions({ visible: v("vumanchu") });
     if (vmcZeroRef.current) vmcZeroRef.current.applyOptions({ visible: v("vumanchu") });
-  }, [indicators, hidden, subPanesHidden]);
+  }, [indicators, hidden, subPanesHidden, config.dmiTzPlotDi]);
 
   // Apply price scale mode/inversion — main candle pane ONLY (uses the
   // candle series's own price scale so sub-pane indicators are unaffected).
@@ -2065,6 +2163,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
     apply(
       adxRef as unknown as React.RefObject<ISeriesApi<"Line"> | null>,
       !!indicatorLogScale.adx,
+    );
+    apply(
+      dmiTzAdxRef as unknown as React.RefObject<ISeriesApi<"Line"> | null>,
+      !!indicatorLogScale.dmitz,
     );
     apply(
       squeezeHistRef as unknown as React.RefObject<ISeriesApi<"Histogram"> | null>,
@@ -2156,6 +2258,16 @@ export function PriceChart({ symbol, timeframe }: Props) {
   useEffect(() => {
     updateADX();
   }, [config.adx, config.adxDiLen, config.adxKeyLevel, adxStyle]);
+
+  useEffect(() => {
+    updateDmiTradeZone();
+  }, [
+    config.dmiTzDiLen,
+    config.dmiTzAdxLen,
+    config.dmiTzKeyLevel,
+    config.dmiTzPlotDi,
+    dmiTradeZoneStyle,
+  ]);
 
   useEffect(() => {
     updateSqueeze();
@@ -2574,6 +2686,66 @@ export function PriceChart({ symbol, timeframe }: Props) {
     }
   }
 
+  function updateDmiTradeZone() {
+    const c = candlesRef.current;
+    if (c.length === 0 || !dmiTzAdxRef.current) return;
+    const cfg = configRef.current;
+    const style = useChartStore.getState().dmiTradeZoneStyle;
+    const pts = dmiTradeZone(c, { diLen: cfg.dmiTzDiLen, adxLen: cfg.dmiTzAdxLen });
+    const on = indicators.dmitz && !hidden.dmitz;
+
+    dmiTzShadowRef.current?.setData(
+      pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.adx })),
+    );
+    dmiTzShadowRef.current?.applyOptions({
+      color: style.shadowColor,
+      lineWidth: style.shadowLineWidth,
+      visible: style.showShadow && on,
+    });
+
+    // Per-point `color` — Pine's `colo = cond ? green : red` is a per-bar
+    // colour on one plot, not two series masked against each other.
+    dmiTzAdxRef.current.setData(
+      pts.map((p) => ({
+        time: p.time as UTCTimestamp,
+        value: p.adx,
+        color: p.bullish ? style.adxUpColor : style.adxDownColor,
+      })),
+    );
+    dmiTzAdxRef.current.applyOptions({ lineWidth: style.adxLineWidth, visible: style.showAdx && on });
+
+    dmiTzPlusDIRef.current?.setData(
+      pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.plusDI })),
+    );
+    dmiTzPlusDIRef.current?.applyOptions({
+      color: style.plusDiColor,
+      lineWidth: style.diLineWidth,
+      visible: cfg.dmiTzPlotDi && on,
+    });
+    dmiTzMinusDIRef.current?.setData(
+      pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.minusDI })),
+    );
+    dmiTzMinusDIRef.current?.applyOptions({
+      color: style.minusDiColor,
+      lineWidth: style.diLineWidth,
+      visible: cfg.dmiTzPlotDi && on,
+    });
+
+    if (dmiTzKeyLevelRef.current && pts.length > 0) {
+      dmiTzKeyLevelRef.current.setData(
+        pts.map((p) => ({ time: p.time as UTCTimestamp, value: cfg.dmiTzKeyLevel })),
+      );
+      dmiTzKeyLevelRef.current.applyOptions({
+        color: style.keyLevelColor,
+        lineWidth: style.keyLevelLineWidth,
+        visible: style.showKeyLevel && on,
+      });
+    }
+
+    setDmiTzSpans(dmiZoneSpans(pts));
+    setLastValues((prev) => ({ ...prev, dmitz: pts.at(-1)?.adx }));
+  }
+
   function updateSqueeze() {
     const c = candlesRef.current;
     if (c.length === 0 || !squeezeHistRef.current) return;
@@ -2818,6 +2990,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
         updateRSI();
         updateMACD();
         updateADX();
+        updateDmiTradeZone();
         updateSqueeze();
         updateVumanchu();
         updateOBV();
@@ -2922,6 +3095,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               updateRSI();
               updateMACD();
               updateADX();
+              updateDmiTradeZone();
               updateSqueeze();
               updateVumanchu();
               updateOBV();
@@ -3010,6 +3184,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
                 updateRSI();
                 updateMACD();
                 updateADX();
+                updateDmiTradeZone();
                 updateSqueeze();
                 updateVumanchu();
               updateOBV();
@@ -3068,6 +3243,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
             updateRSI();
             updateMACD();
             updateADX();
+            updateDmiTradeZone();
             updateSqueeze();
             updateVumanchu();
             updateOBV();
@@ -3123,6 +3299,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     updateRSI();
     updateMACD();
     updateADX();
+    updateDmiTradeZone();
     updateSqueeze();
     updateVumanchu();
     updateOBV();
@@ -3254,6 +3431,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const rsiPaneIdx = indicatorPaneIdx.rsi;
   const macdPaneIdx = indicatorPaneIdx.macd;
   const adxPaneIdx = indicatorPaneIdx.adx;
+  const dmiTzPaneIdx = indicatorPaneIdx.dmitz;
   const squeezePaneIdx = indicatorPaneIdx.squeeze;
   const vumanchuPaneIdx = indicatorPaneIdx.vumanchu;
 
@@ -3264,6 +3442,12 @@ export function PriceChart({ symbol, timeframe }: Props) {
       { key: "rsi" as IndicatorKey, paneIdx: rsiPaneIdx, name: `RSI ${config.rsi}`, value: lastValues.rsi !== undefined ? lastValues.rsi.toFixed(2) : undefined },
       { key: "macd" as IndicatorKey, paneIdx: macdPaneIdx, name: `MACD ${config.macdFast}, ${config.macdSlow}, ${config.macdSignal}`, value: lastValues.macd !== undefined ? `${lastValues.macd.toFixed(2)} / ${(lastValues.macdSignal ?? 0).toFixed(2)}` : undefined },
       { key: "adx" as IndicatorKey, paneIdx: adxPaneIdx, name: `ADX ${config.adx}` },
+      {
+        key: "dmitz" as IndicatorKey,
+        paneIdx: dmiTzPaneIdx,
+        name: `DMI TZ ${config.dmiTzDiLen}, ${config.dmiTzAdxLen}, ${config.dmiTzKeyLevel}`,
+        value: lastValues.dmitz !== undefined ? lastValues.dmitz.toFixed(2) : undefined,
+      },
       { key: "squeeze" as IndicatorKey, paneIdx: squeezePaneIdx, name: "Squeeze Momentum" },
       { key: "vumanchu" as IndicatorKey, paneIdx: vumanchuPaneIdx, name: "VuManChu Cipher B" },
       { key: "obv" as IndicatorKey, paneIdx: indicatorPaneIdx.obv, name: "OBV" },
@@ -3865,6 +4049,19 @@ export function PriceChart({ symbol, timeframe }: Props) {
         />
       )}
 
+      {indicators.dmitz && !subPanesHidden && paneOffsets[dmiTzPaneIdx] && paneOffsets[dmiTzPaneIdx].height > 0 && (
+        <DmiTradeZoneOverlay
+          chart={chartRef.current}
+          spans={dmiTzSpans}
+          color={dmiTradeZoneStyle.zoneColor}
+          visible={dmiTradeZoneStyle.showZone && !hidden.dmitz}
+          paneTop={paneOffsets[dmiTzPaneIdx].top}
+          paneHeight={paneOffsets[dmiTzPaneIdx].height}
+          chartAreaWidth={chartRef.current ? chartRef.current.timeScale().width() : containerSize.width}
+          renderTick={renderTick}
+        />
+      )}
+
       {indicators.squeeze && !subPanesHidden && paneOffsets[squeezePaneIdx] && paneOffsets[squeezePaneIdx].height > 0 && (
         <SqueezeOverlay
           chart={chartRef.current}
@@ -3994,6 +4191,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               rsi: rsiRef.current,
               macd: macdRef.current,
               adx: adxRef.current,
+              dmitz: dmiTzAdxRef.current,
               squeeze: squeezeHistRef.current,
               vumanchu: vmcWt2Ref.current,
             } as const;
