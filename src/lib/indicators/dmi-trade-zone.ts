@@ -6,8 +6,6 @@
  *   colo  = cond ? color.green : color.red
  *   plot(adx, 'Shadow', white 50%, linewidth 3)
  *   plot(adx, 'ADX', colo, linewidth 2)
- *   plot(pl ? diminus : na, 'DI-')
- *   plot(pl ? diplus  : na, 'DI+')
  *   hline(keyLevel)
  *   bgcolor(cond ? color.new(color.silver, 92) : na)
  *
@@ -16,6 +14,11 @@
  * −DI)), so this module only adds what the Pine layers on top: the per-bar
  * `cond` flag that colours the ADX line, and the contiguous spans that flag
  * folds into for the `bgcolor` zone.
+ *
+ * The Pine's two optional directional plots (its `pl` input) are deliberately
+ * not ported: the ADX indicator already draws that pair, so carrying them here
+ * too would only let the same two lines appear on a chart twice. `plusDI` and
+ * `minusDI` stay on every point regardless — their cross is what `bullish` is.
  *
  * On Pine's `sum == 0 ? 1 : sum` guard: `+DI` and `−DI` are both RMAs of
  * non-negative series, so `sum == 0` implies `+DI == −DI == 0`, hence

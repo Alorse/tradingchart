@@ -118,7 +118,24 @@ describe("chart-store DMI Trade Zone migration (v12)", () => {
     expect(migrated.config.dmiTzDiLen).toBe(14);
     expect(migrated.config.dmiTzAdxLen).toBe(14);
     expect(migrated.config.dmiTzKeyLevel).toBe(23);
-    expect(migrated.config.dmiTzPlotDi).toBe(false);
+  });
+
+  it("does not leave a plot-directional-lines input behind on a migrated config", () => {
+    // The study never plots the directional pair, so the input that used to
+    // gate them must not reappear via DEFAULT_CONFIG.
+    const migrated = migrateChartState({ config: { rsi: 21 } }, 11) as {
+      config: Record<string, unknown>;
+    };
+    expect("dmiTzPlotDi" in migrated.config).toBe(false);
+  });
+
+  it("does not seed the style slice with directional-line fields", () => {
+    const migrated = migrateChartState({}, 11) as {
+      dmiTradeZoneStyle: Record<string, unknown>;
+    };
+    for (const key of ["plusDiColor", "minusDiColor", "diLineWidth"]) {
+      expect(key in migrated.dmiTradeZoneStyle).toBe(false);
+    }
   });
 
   it("does not touch a customised period the user already persisted", () => {
@@ -159,7 +176,6 @@ describe("chart-store DMI Trade Zone defaults", () => {
     expect(s.config.dmiTzDiLen).toBe(14);
     expect(s.config.dmiTzAdxLen).toBe(14);
     expect(s.config.dmiTzKeyLevel).toBe(23);
-    expect(s.config.dmiTzPlotDi).toBe(false);
     expect(isSubPaneKey("dmitz")).toBe(true);
   });
 

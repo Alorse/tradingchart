@@ -222,7 +222,6 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
     dmiTzDiLen: config.dmiTzDiLen,
     dmiTzAdxLen: config.dmiTzAdxLen,
     dmiTzKeyLevel: config.dmiTzKeyLevel,
-    dmiTzPlotDi: config.dmiTzPlotDi,
     squeezeBB: config.squeezeBB,
     squeezeBBMult: config.squeezeBBMult,
     squeezeKC: config.squeezeKC,
@@ -254,7 +253,6 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
       dmiTzDiLen: config.dmiTzDiLen,
       dmiTzAdxLen: config.dmiTzAdxLen,
       dmiTzKeyLevel: config.dmiTzKeyLevel,
-      dmiTzPlotDi: config.dmiTzPlotDi,
       squeezeBB: config.squeezeBB,
       squeezeBBMult: config.squeezeBBMult,
       squeezeKC: config.squeezeKC,
@@ -294,7 +292,6 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
         dmiTzDiLen: clamp(draft.dmiTzDiLen, 1, 100),
         dmiTzAdxLen: clamp(draft.dmiTzAdxLen, 1, 50),
         dmiTzKeyLevel: clamp(draft.dmiTzKeyLevel, 1, 100),
-        dmiTzPlotDi: draft.dmiTzPlotDi,
       });
     else if (target === "squeeze")
       onSave({
@@ -412,11 +409,6 @@ function SettingsForm({ target, config, onSave, onReset, onClose }: FormProps) {
               onChange={(n) => setDraft((d) => ({ ...d, dmiTzKeyLevel: n }))}
             />
           </div>
-          <Toggle
-            label="Plot DI- & DI+"
-            value={draft.dmiTzPlotDi}
-            onChange={(v) => setDraft((d) => ({ ...d, dmiTzPlotDi: v }))}
-          />
           <DmiTradeZoneStyleSection />
           <OverlaySection target="dmitz" />
         </>
@@ -852,10 +844,9 @@ function AdxStyleSection() {
 
 /**
  * DMI Trade Zone style. Shape follows `AdxStyleSection` — a toggle, a width
- * picker and a colour per line — with two departures the Pine forces: the ADX
- * line takes *two* colours (it is coloured per bar by the DI cross, so there
- * is no single "ADX colour"), and the DI pair has no visibility toggle here
- * because that is Pine's `pl` input, which lives up in Inputs.
+ * picker and a colour per line — with one departure the Pine forces: the ADX
+ * line takes *two* colours, since it is coloured per bar by the directional
+ * cross and so has no single "ADX colour".
  */
 function DmiTradeZoneStyleSection() {
   const draft = useChartStore((s) => s.dmiTradeZoneStyle);
@@ -880,17 +871,9 @@ function DmiTradeZoneStyleSection() {
         </div>
       </div>
       <p className="text-[10px] text-tv-text-muted">
-        Two colours: the ADX line is painted per bar — the first when +DI is above
-        -DI, the second otherwise.
+        Two colours: the ADX line is painted per bar — the first while the
+        directional cross is positive, the second otherwise.
       </p>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-tv-text">DI+ / DI-</span>
-        <div className="flex items-center gap-2">
-          <LineWidthPicker value={draft.diLineWidth} onChange={(v) => commit({ diLineWidth: v })} />
-          <ColorPick label="" value={draft.plusDiColor} onChange={(v) => commit({ plusDiColor: v })} />
-          <ColorPick label="" value={draft.minusDiColor} onChange={(v) => commit({ minusDiColor: v })} />
-        </div>
-      </div>
       <div className="flex items-center justify-between gap-2">
         <Toggle label="Key level" value={draft.showKeyLevel} onChange={(v) => commit({ showKeyLevel: v })} />
         <div className="flex items-center gap-2">

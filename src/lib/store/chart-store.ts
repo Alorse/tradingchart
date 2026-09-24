@@ -116,13 +116,12 @@ export interface IndicatorConfig {
   adx: number;
   adxDiLen: number;
   adxKeyLevel: number;
-  /** DMI Trade Zone — Pine `len` (DI Length), `lensig` (ADX Smoothing),
-   *  `keyLevel` and `pl` (Plot DI- & DI+). Deliberately separate from the
-   *  ADX indicator's own `adx*` fields: the two are independent studies. */
+  /** DMI Trade Zone — Pine `len` (DI Length), `lensig` (ADX Smoothing) and
+   *  `keyLevel`. Deliberately separate from the ADX indicator's own `adx*`
+   *  fields: the two are independent studies. */
   dmiTzDiLen: number;
   dmiTzAdxLen: number;
   dmiTzKeyLevel: number;
-  dmiTzPlotDi: boolean;
   squeezeBB: number;
   squeezeBBMult: number;
   squeezeKC: number;
@@ -157,7 +156,6 @@ export const DEFAULT_CONFIG: IndicatorConfig = {
   dmiTzDiLen: 14,
   dmiTzAdxLen: 14,
   dmiTzKeyLevel: 23,
-  dmiTzPlotDi: false,
   squeezeBB: 20,
   squeezeBBMult: 2,
   squeezeKC: 20,
@@ -239,7 +237,13 @@ export const DEFAULT_ADX_STYLE: AdxStyle = {
 };
 
 /**
- * DMI Trade Zone style. The two ADX colours are a *direction* pair (which
+ * DMI Trade Zone style. The directional lines the Pine can optionally plot are
+ * not ported — the ADX indicator already draws them, and carrying a second
+ * copy here would put the same pair on a chart twice. The directional cross is
+ * still what this study is about; it drives the ADX colour and the zone rather
+ * than being drawn itself.
+ *
+ * The two ADX colours are a *direction* pair (which
  * side of the DI cross the bar is on), so they follow the semantic rule in
  * CLAUDE.md only loosely — the Pine paints them green/red, and that is what
  * the study is read by, so the theme's movement tokens are the right source
@@ -250,14 +254,12 @@ export const DEFAULT_ADX_STYLE: AdxStyle = {
 export interface DmiTradeZoneStyle {
   /** Pine "Shadow" plot — the wide, faint ADX underlay. */
   shadowColor: string;
-  /** ADX line when +DI > -DI. */
+  /** ADX line while the directional cross is positive. */
   adxUpColor: string;
   /** ADX line otherwise. */
   adxDownColor: string;
-  plusDiColor: string;
-  minusDiColor: string;
   keyLevelColor: string;
-  /** `bgcolor` fill on bars where +DI > -DI. */
+  /** `bgcolor` fill on bars where the directional cross is positive. */
   zoneColor: string;
   showShadow: boolean;
   showAdx: boolean;
@@ -265,7 +267,6 @@ export interface DmiTradeZoneStyle {
   showZone: boolean;
   shadowLineWidth: 1 | 2 | 3 | 4;
   adxLineWidth: 1 | 2 | 3 | 4;
-  diLineWidth: 1 | 2 | 3 | 4;
   keyLevelLineWidth: 1 | 2 | 3 | 4;
 }
 
@@ -273,8 +274,6 @@ export const DEFAULT_DMI_TRADE_ZONE_STYLE: DmiTradeZoneStyle = {
   shadowColor: "rgba(255, 255, 255, 0.5)", // Pine color.new(color.white, 50)
   adxUpColor: TV_DARK.green,
   adxDownColor: TV_DARK.red,
-  plusDiColor: TV_DARK.green,
-  minusDiColor: TV_DARK.red,
   keyLevelColor: "#ffffff",
   zoneColor: "rgba(192, 192, 192, 0.08)", // Pine color.new(color.silver, 92)
   showShadow: true,
@@ -283,7 +282,6 @@ export const DEFAULT_DMI_TRADE_ZONE_STYLE: DmiTradeZoneStyle = {
   showZone: true,
   shadowLineWidth: 3,
   adxLineWidth: 2,
-  diLineWidth: 1,
   keyLevelLineWidth: 1,
 };
 

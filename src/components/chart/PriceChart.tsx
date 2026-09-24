@@ -219,8 +219,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // "Shadow" plot underneath the coloured ADX line.
   const dmiTzShadowRef = useRef<ISeriesApi<"Line"> | null>(null);
   const dmiTzAdxRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const dmiTzPlusDIRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const dmiTzMinusDIRef = useRef<ISeriesApi<"Line"> | null>(null);
   const dmiTzKeyLevelRef = useRef<ISeriesApi<"Line"> | null>(null);
   // Squeeze Momentum pane
   const squeezeHistRef = useRef<ISeriesApi<"Histogram"> | null>(null);
@@ -1655,7 +1653,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // four onto the five specs that want none of them.
   useEffect(() => {
     if (!chartRef.current) return;
-    for (const r of [dmiTzShadowRef, dmiTzAdxRef, dmiTzPlusDIRef, dmiTzMinusDIRef, dmiTzKeyLevelRef]) {
+    for (const r of [dmiTzShadowRef, dmiTzAdxRef, dmiTzKeyLevelRef]) {
       if (r.current) {
         try { chartRef.current.removeSeries(r.current); } catch {}
         r.current = null;
@@ -1678,8 +1676,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
       // Creation order is paint order — Shadow first, under the ADX line.
       dmiTzShadowRef.current = line(style.shadowColor, style.shadowLineWidth);
       dmiTzAdxRef.current = line(style.adxUpColor, style.adxLineWidth);
-      dmiTzPlusDIRef.current = line(style.plusDiColor, style.diLineWidth);
-      dmiTzMinusDIRef.current = line(style.minusDiColor, style.diLineWidth);
       // Key level: a constant series would otherwise drag the pane's autoscale
       // toward it. `autoscaleInfoProvider: () => null` excludes it, same as the
       // ADX pane's own key level.
@@ -2098,15 +2094,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (adxPlusDIRef.current) adxPlusDIRef.current.applyOptions({ visible: v("adx") && adxSt.showPlusDi });
     if (adxMinusDIRef.current) adxMinusDIRef.current.applyOptions({ visible: v("adx") && adxSt.showMinusDi });
     if (adxKeyLevelRef.current) adxKeyLevelRef.current.applyOptions({ visible: v("adx") && (adxSt.showKeyLevel ?? true) });
-    // DMI Trade Zone pane — per-line visibility from its own style slice, with
-    // the DI pair gated by Pine's `pl` input rather than a second style toggle.
+    // DMI Trade Zone pane — per-line visibility from its own style slice.
     const dmiTzSt = useChartStore.getState().dmiTradeZoneStyle;
-    const dmiTzPlotDi = configRef.current.dmiTzPlotDi;
     const dmiTzOn = v("dmitz");
     if (dmiTzShadowRef.current) dmiTzShadowRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showShadow });
     if (dmiTzAdxRef.current) dmiTzAdxRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showAdx });
-    if (dmiTzPlusDIRef.current) dmiTzPlusDIRef.current.applyOptions({ visible: dmiTzOn && dmiTzPlotDi });
-    if (dmiTzMinusDIRef.current) dmiTzMinusDIRef.current.applyOptions({ visible: dmiTzOn && dmiTzPlotDi });
     if (dmiTzKeyLevelRef.current) dmiTzKeyLevelRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showKeyLevel });
     // Squeeze pane — the histogram provides the price-scale anchor for the SVG
     // overlay; always keep it visible so priceToCoordinate(0) never returns null.
@@ -2273,7 +2265,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
     config.dmiTzDiLen,
     config.dmiTzAdxLen,
     config.dmiTzKeyLevel,
-    config.dmiTzPlotDi,
     dmiTradeZoneStyle,
   ]);
 
@@ -2729,23 +2720,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
       })),
     );
     dmiTzAdxRef.current.applyOptions({ lineWidth: style.adxLineWidth, visible: style.showAdx && on });
-
-    dmiTzPlusDIRef.current?.setData(
-      pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.plusDI })),
-    );
-    dmiTzPlusDIRef.current?.applyOptions({
-      color: style.plusDiColor,
-      lineWidth: style.diLineWidth,
-      visible: cfg.dmiTzPlotDi && on,
-    });
-    dmiTzMinusDIRef.current?.setData(
-      pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.minusDI })),
-    );
-    dmiTzMinusDIRef.current?.applyOptions({
-      color: style.minusDiColor,
-      lineWidth: style.diLineWidth,
-      visible: cfg.dmiTzPlotDi && on,
-    });
 
     if (dmiTzKeyLevelRef.current && pts.length > 0) {
       dmiTzKeyLevelRef.current.setData([
