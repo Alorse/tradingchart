@@ -130,18 +130,12 @@ describe("chart-store DMI Trade Zone migration (v12)", () => {
     const migrated = migrateChartState({}, 11) as {
       dmiTradeZoneStyle: Record<string, unknown>;
     };
-    expect(migrated.dmiTradeZoneStyle).toEqual({ ...DEFAULT_DMI_TRADE_ZONE_STYLE });
+    expect(migrated.dmiTradeZoneStyle).toEqual(DEFAULT_DMI_TRADE_ZONE_STYLE);
   });
 
-  it("leaves an existing dmiTradeZoneStyle alone while filling any missing field", () => {
-    const migrated = migrateChartState(
-      { dmiTradeZoneStyle: { adxUpColor: "#123456", showZone: false } },
-      11,
-    ) as { dmiTradeZoneStyle: Record<string, unknown> };
-    expect(migrated.dmiTradeZoneStyle.adxUpColor).toBe("#123456");
-    expect(migrated.dmiTradeZoneStyle.showZone).toBe(false);
-    expect(migrated.dmiTradeZoneStyle.adxLineWidth).toBe(DEFAULT_DMI_TRADE_ZONE_STYLE.adxLineWidth);
-    expect(migrated.dmiTradeZoneStyle.shadowColor).toBe(DEFAULT_DMI_TRADE_ZONE_STYLE.shadowColor);
+  it("gives the style slice a fresh object, not a reference to the defaults", () => {
+    const migrated = migrateChartState({}, 11) as { dmiTradeZoneStyle: object };
+    expect(migrated.dmiTradeZoneStyle).not.toBe(DEFAULT_DMI_TRADE_ZONE_STYLE);
   });
 
   it("does not re-run for state already at v12", () => {

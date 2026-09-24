@@ -56,7 +56,6 @@ export function IndicatorSettingsDialog() {
   const setConfig = useChartStore((s) => s.setConfig);
   const userEMAs = useChartStore((s) => s.userEMAs);
   const updateUserEMA = useChartStore((s) => s.updateUserEMA);
-  const setDmiTradeZoneStyle = useChartStore((s) => s.setDmiTradeZoneStyle);
 
   const open = target !== null;
   const isEMA = typeof target === "object" && target !== null && target.kind === "ema";
@@ -102,11 +101,6 @@ export function IndicatorSettingsDialog() {
             }}
             onReset={() => {
               setConfig(DEFAULT_CONFIG);
-              // DMI Trade Zone keeps its colours and widths in their own store
-              // slice, so resetting IndicatorConfig alone would leave half the
-              // indicator customised. Scoped to this target: the other
-              // indicators' style slices behave exactly as before.
-              if (indicatorKey === "dmitz") setDmiTradeZoneStyle({ ...DEFAULT_DMI_TRADE_ZONE_STYLE });
               setTarget(null);
             }}
             onClose={() => setTarget(null)}
@@ -913,6 +907,15 @@ function DmiTradeZoneStyleSection() {
       <p className="text-[10px] text-tv-text-muted">
         Shades the pane on every bar where +DI is above -DI.
       </p>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => commit(DEFAULT_DMI_TRADE_ZONE_STYLE)}
+        className="self-start text-tv-text-muted hover:text-tv-text"
+      >
+        Reset style
+      </Button>
     </div>
   );
 }

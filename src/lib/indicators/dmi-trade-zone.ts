@@ -26,23 +26,15 @@
  */
 
 import type { Candle } from "@/lib/binance/types";
-import { adx } from "./adx";
+import { adx, type ADXConfig, type ADXPoint } from "./adx";
 
-export interface DmiTradeZoneConfig {
-  /** Pine `len` — DI Length. */
-  diLen?: number;
-  /** Pine `lensig` — ADX Smoothing. */
-  adxLen?: number;
-}
+/** Pine `len` (DI Length) and `lensig` (ADX Smoothing) — `ta.dmi`'s own pair. */
+export type DmiTradeZoneConfig = ADXConfig;
 
-export interface DmiTradeZonePoint {
-  time: number;
-  adx: number;
-  plusDI: number;
-  minusDI: number;
+export type DmiTradeZonePoint = ADXPoint & {
   /** Pine's `cond = diplus > diminus`: colours the ADX line and fills the zone. */
   bullish: boolean;
-}
+};
 
 /** A contiguous run of `bullish` bars, as the inclusive time range it spans. */
 export interface DmiZoneSpan {
@@ -56,14 +48,8 @@ export function dmiTradeZone(
   candles: Candle[],
   cfg: DmiTradeZoneConfig = {},
 ): DmiTradeZonePoint[] {
-  const pts = adx(candles, { diLen: cfg.diLen ?? 14, adxLen: cfg.adxLen ?? 14 });
-  return pts.map((p) => ({
-    time: p.time,
-    adx: p.adx,
-    plusDI: p.plusDI,
-    minusDI: p.minusDI,
-    bullish: p.plusDI > p.minusDI,
-  }));
+  // `adx()` already defaults both lengths to 14, which is Pine's default too.
+  return adx(candles, cfg).map((p) => ({ ...p, bullish: p.plusDI > p.minusDI }));
 }
 
 /**

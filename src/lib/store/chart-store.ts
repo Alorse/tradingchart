@@ -928,10 +928,9 @@ export function migrateChartState(persisted: unknown, fromVersion: number): unkn
     p.indicators = { ...ALL_INDICATORS_FALSE, ...(p.indicators as object ?? {}) };
     p.hidden = { ...ALL_INDICATORS_FALSE, ...(p.hidden as object ?? {}) };
     p.config = { ...DEFAULT_CONFIG, ...(p.config as object ?? {}) };
-    p.dmiTradeZoneStyle = {
-      ...DEFAULT_DMI_TRADE_ZONE_STYLE,
-      ...(p.dmiTradeZoneStyle as object ?? {}),
-    };
+    // Assigned, not merged: v12 is what introduces this key, so no state
+    // migrating from below it can carry a value to preserve.
+    p.dmiTradeZoneStyle = { ...DEFAULT_DMI_TRADE_ZONE_STYLE };
   }
   return p;
 }

@@ -1646,6 +1646,13 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // Independent of the ADX pane above: same maths, different study. Rebuilds
   // wholesale (rather than patching) so a change of pane assignment moves the
   // series, exactly as the ADX effect does.
+  //
+  // Hand-written rather than a `SIMPLE_OSCILLATORS` spec because the Pine needs
+  // four things that shape has no room for: a per-point colour on the ADX line
+  // (`colo`), a wider shadow series whose creation order is load-bearing, a
+  // guide level that comes from config instead of a constant, and the SVG
+  // background zone. Widening `SimpleOscSpec` for one consumer would push all
+  // four onto the five specs that want none of them.
   useEffect(() => {
     if (!chartRef.current) return;
     for (const r of [dmiTzShadowRef, dmiTzAdxRef, dmiTzPlusDIRef, dmiTzMinusDIRef, dmiTzKeyLevelRef]) {
@@ -2094,11 +2101,12 @@ export function PriceChart({ symbol, timeframe }: Props) {
     // DMI Trade Zone pane — per-line visibility from its own style slice, with
     // the DI pair gated by Pine's `pl` input rather than a second style toggle.
     const dmiTzSt = useChartStore.getState().dmiTradeZoneStyle;
+    const dmiTzPlotDi = configRef.current.dmiTzPlotDi;
     const dmiTzOn = v("dmitz");
     if (dmiTzShadowRef.current) dmiTzShadowRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showShadow });
     if (dmiTzAdxRef.current) dmiTzAdxRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showAdx });
-    if (dmiTzPlusDIRef.current) dmiTzPlusDIRef.current.applyOptions({ visible: dmiTzOn && config.dmiTzPlotDi });
-    if (dmiTzMinusDIRef.current) dmiTzMinusDIRef.current.applyOptions({ visible: dmiTzOn && config.dmiTzPlotDi });
+    if (dmiTzPlusDIRef.current) dmiTzPlusDIRef.current.applyOptions({ visible: dmiTzOn && dmiTzPlotDi });
+    if (dmiTzMinusDIRef.current) dmiTzMinusDIRef.current.applyOptions({ visible: dmiTzOn && dmiTzPlotDi });
     if (dmiTzKeyLevelRef.current) dmiTzKeyLevelRef.current.applyOptions({ visible: dmiTzOn && dmiTzSt.showKeyLevel });
     // Squeeze pane — the histogram provides the price-scale anchor for the SVG
     // overlay; always keep it visible so priceToCoordinate(0) never returns null.
@@ -2120,7 +2128,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (vmcObRef.current) vmcObRef.current.applyOptions({ visible: v("vumanchu") });
     if (vmcOsRef.current) vmcOsRef.current.applyOptions({ visible: v("vumanchu") });
     if (vmcZeroRef.current) vmcZeroRef.current.applyOptions({ visible: v("vumanchu") });
-  }, [indicators, hidden, subPanesHidden, config.dmiTzPlotDi]);
+  }, [indicators, hidden, subPanesHidden]);
 
   // Apply price scale mode/inversion — main candle pane ONLY (uses the
   // candle series's own price scale so sub-pane indicators are unaffected).
@@ -2692,7 +2700,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     const cfg = configRef.current;
     const style = useChartStore.getState().dmiTradeZoneStyle;
     const pts = dmiTradeZone(c, { diLen: cfg.dmiTzDiLen, adxLen: cfg.dmiTzAdxLen });
-    const on = indicators.dmitz && !hidden.dmitz;
+    const on = indicators.dmitz && !hidden.dmitz && !subPanesHidden;
 
     dmiTzShadowRef.current?.setData(
       pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.adx })),
@@ -2732,9 +2740,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
     });
 
     if (dmiTzKeyLevelRef.current && pts.length > 0) {
-      dmiTzKeyLevelRef.current.setData(
-        pts.map((p) => ({ time: p.time as UTCTimestamp, value: cfg.dmiTzKeyLevel })),
-      );
+      dmiTzKeyLevelRef.current.setData([
+        { time: pts[0].time as UTCTimestamp, value: cfg.dmiTzKeyLevel },
+        { time: pts[pts.length - 1].time as UTCTimestamp, value: cfg.dmiTzKeyLevel },
+      ]);
       dmiTzKeyLevelRef.current.applyOptions({
         color: style.keyLevelColor,
         lineWidth: style.keyLevelLineWidth,

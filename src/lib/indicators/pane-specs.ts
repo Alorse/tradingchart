@@ -2,12 +2,13 @@
  * Declarative specs for the "plain" sub-pane oscillators — the ones that are
  * fully described by *some lines over time* plus *some horizontal guides*.
  *
- * RSI, MACD, ADX, Squeeze and VuManChu each need bespoke rendering (histograms,
- * markers, area fills, an SVG overlay), so they stay as hand-written effects in
- * `PriceChart`. Everything here, though, differs only in its maths and its
- * colours, and five near-identical copies of the same create/teardown/update
- * effect is exactly the kind of drift this file exists to prevent: one spec
- * drives series creation, data updates, the legend pill and the settings form.
+ * RSI, MACD, ADX, Squeeze, VuManChu and DMI Trade Zone each need bespoke
+ * rendering (histograms, markers, area fills, per-bar line colours, an SVG
+ * overlay), so they stay as hand-written effects in `PriceChart`. Everything
+ * here, though, differs only in its maths and its colours, and five
+ * near-identical copies of the same create/teardown/update effect is exactly
+ * the kind of drift this file exists to prevent: one spec drives series
+ * creation, data updates, the legend pill and the settings form.
  */
 
 import type { Candle } from "@/lib/binance/types";
