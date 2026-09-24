@@ -77,6 +77,42 @@ describe("dmiTradeZone", () => {
     expect(out[out.length - 1].bullish).toBe(false);
   });
 
+  it("converges on ADX 100 when a trend never produces a single -DM", () => {
+    // Every bar of `uptrend` makes a higher high and a higher low, so -DM is 0
+    // throughout: -DI is 0, dx is a constant 100, and Wilder's RMA walks ADX
+    // up towards 100 from its SMA seed.
+    const out = dmiTradeZone(uptrend);
+    expect(out.every((p) => p.minusDI === 0)).toBe(true);
+    expect(out.every((p) => p.plusDI > 0)).toBe(true);
+    const last = out[out.length - 1];
+    expect(last.adx).toBeGreaterThan(95);
+    expect(last.adx).toBeLessThan(100.0001);
+    // Monotonically rising, since each new dx (100) is at or above the running mean.
+    for (let i = 1; i < out.length; i++) {
+      expect(out[i].adx).toBeGreaterThan(out[i - 1].adx - 1e-9);
+    }
+  });
+
+  it("reads a zero DI sum as dx = 0, matching Pine's `sum == 0 ? 1 : sum` guard", () => {
+    // Identical bars with a real high-low range: TR is non-zero (so the DI
+    // division is defined) but neither +DM nor -DM ever fires, leaving
+    // +DI == -DI == 0. Pine divides |0 - 0| by the substituted 1; this
+    // implementation skips the division and feeds the RMA a 0. Same number.
+    const boxed: Candle[] = Array.from({ length: 80 }, (_, i) => ({
+      time: i * 60, open: 100, high: 101, low: 99, close: 100, volume: 1, isFinal: true,
+    }));
+    const out = dmiTradeZone(boxed);
+    expect(out.length).toBeGreaterThan(0);
+    for (const p of out) {
+      expect(p.plusDI).toBe(0);
+      expect(p.minusDI).toBe(0);
+      expect(p.adx).toBe(0);
+      // `diplus > diminus` is false on a tie, so no zone — as in the Pine.
+      expect(p.bullish).toBe(false);
+    }
+    expect(dmiZoneSpans(out)).toEqual([]);
+  });
+
   it("returns nothing before the warm-up completes", () => {
     expect(dmiTradeZone(ohlc([100, 101, 102]))).toEqual([]);
   });
