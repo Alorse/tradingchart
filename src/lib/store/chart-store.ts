@@ -15,6 +15,7 @@ export type IndicatorKey =
   | "macd"
   | "volume"
   | "adx"
+  | "dmitz"
   | "squeeze"
   | "vumanchu"
   | "obv"
@@ -47,6 +48,7 @@ export const SUB_PANE_KEYS = [
   "atr",
   "cci",
   "mfi",
+  "dmitz",
 ] as const satisfies readonly IndicatorKey[];
 
 export type SubPaneKey = (typeof SUB_PANE_KEYS)[number];
@@ -88,6 +90,13 @@ export interface IndicatorConfig {
   adx: number;
   adxDiLen: number;
   adxKeyLevel: number;
+  /** DMI Trade Zone — Pine `len` (DI Length), `lensig` (ADX Smoothing),
+   *  `keyLevel` and `pl` (Plot DI- & DI+). Deliberately separate from the
+   *  ADX indicator's own `adx*` fields: the two are independent studies. */
+  dmiTzDiLen: number;
+  dmiTzAdxLen: number;
+  dmiTzKeyLevel: number;
+  dmiTzPlotDi: boolean;
   squeezeBB: number;
   squeezeBBMult: number;
   squeezeKC: number;
@@ -119,6 +128,10 @@ export const DEFAULT_CONFIG: IndicatorConfig = {
   adx: 14,
   adxDiLen: 14,
   adxKeyLevel: 23,
+  dmiTzDiLen: 14,
+  dmiTzAdxLen: 14,
+  dmiTzKeyLevel: 23,
+  dmiTzPlotDi: false,
   squeezeBB: 20,
   squeezeBBMult: 2,
   squeezeKC: 20,
@@ -199,11 +212,61 @@ export const DEFAULT_ADX_STYLE: AdxStyle = {
   keyLevelLineWidth: 1,
 };
 
+/**
+ * DMI Trade Zone style. The two ADX colours are a *direction* pair (which
+ * side of the DI cross the bar is on), so they follow the semantic rule in
+ * CLAUDE.md only loosely — the Pine paints them green/red, and that is what
+ * the study is read by, so the theme's movement tokens are the right source
+ * rather than TV_PINE. `shadowColor` and `zoneColor` carry their alpha in the
+ * stored string, matching Pine's `color.new(c, transparency)`; the shared
+ * ColorPicker round-trips rgba() the same way it does hex.
+ */
+export interface DmiTradeZoneStyle {
+  /** Pine "Shadow" plot — the wide, faint ADX underlay. */
+  shadowColor: string;
+  /** ADX line when +DI > -DI. */
+  adxUpColor: string;
+  /** ADX line otherwise. */
+  adxDownColor: string;
+  plusDiColor: string;
+  minusDiColor: string;
+  keyLevelColor: string;
+  /** `bgcolor` fill on bars where +DI > -DI. */
+  zoneColor: string;
+  showShadow: boolean;
+  showAdx: boolean;
+  showKeyLevel: boolean;
+  showZone: boolean;
+  shadowLineWidth: 1 | 2 | 3 | 4;
+  adxLineWidth: 1 | 2 | 3 | 4;
+  diLineWidth: 1 | 2 | 3 | 4;
+  keyLevelLineWidth: 1 | 2 | 3 | 4;
+}
+
+export const DEFAULT_DMI_TRADE_ZONE_STYLE: DmiTradeZoneStyle = {
+  shadowColor: "rgba(255, 255, 255, 0.5)", // Pine color.new(color.white, 50)
+  adxUpColor: TV_DARK.green,
+  adxDownColor: TV_DARK.red,
+  plusDiColor: TV_DARK.green,
+  minusDiColor: TV_DARK.red,
+  keyLevelColor: "#ffffff",
+  zoneColor: "rgba(192, 192, 192, 0.08)", // Pine color.new(color.silver, 92)
+  showShadow: true,
+  showAdx: true,
+  showKeyLevel: true,
+  showZone: true,
+  shadowLineWidth: 3,
+  adxLineWidth: 2,
+  diLineWidth: 1,
+  keyLevelLineWidth: 1,
+};
+
 export const INDICATOR_COLORS: Record<IndicatorKey, string> = {
   rsi: "#ab47bc",
   macd: "#2962ff",
   volume: "#8c8c8c",
   adx: "#ff9800",
+  dmitz: "#089981",
   squeeze: "#2962ff",
   vumanchu: "#4994ec",
   obv: "#ff9800",
@@ -484,6 +547,8 @@ interface ChartState {
   userEMAs: UserEMA[];
   /** ADX indicator style overrides */
   adxStyle: AdxStyle;
+  /** DMI Trade Zone style overrides */
+  dmiTradeZoneStyle: DmiTradeZoneStyle;
   keyLevels: KeyLevelsConfig;
   /** Squeeze indicator style overrides */
   squeezeStyle: SqueezeStyle;
@@ -620,6 +685,7 @@ interface ChartState {
   updateUserEMA: (id: string, patch: Partial<UserEMA>) => void;
   toggleUserEMAHidden: (id: string) => void;
   setAdxStyle: (patch: Partial<AdxStyle>) => void;
+  setDmiTradeZoneStyle: (patch: Partial<DmiTradeZoneStyle>) => void;
   setKeyLevels: (patch: Partial<KeyLevelsConfig>) => void;
   setSqueezeStyle: (patch: Partial<SqueezeStyle>) => void;
   setBollingerStyle: (patch: Partial<BollingerStyle>) => void;
@@ -713,6 +779,7 @@ export const ALL_INDICATORS_FALSE: Record<IndicatorKey, boolean> = {
   macd: false,
   volume: false,
   adx: false,
+  dmitz: false,
   squeeze: false,
   vumanchu: false,
   obv: false,
@@ -850,6 +917,22 @@ export function migrateChartState(persisted: unknown, fromVersion: number): unkn
   if (fromVersion < 11 && typeof p.visibleBars === "number" && p.visibleBars >= 995) {
     p.visibleBars = 0;
   }
+  // v12: the DMI Trade Zone indicator. Same reasoning as the v6 clause: the
+  // pane-index walk and `Object.values(indicators).filter(Boolean)` both
+  // assume `indicators`/`hidden` are *complete* records, and a persisted map
+  // from before this key existed reads `undefined` rather than `false` for
+  // it. Its config inputs and style slice get the defaults too. Spread order
+  // puts the persisted values last everywhere, so nothing already stored is
+  // overwritten — only the genuinely missing keys are filled in.
+  if (fromVersion < 12) {
+    p.indicators = { ...ALL_INDICATORS_FALSE, ...(p.indicators as object ?? {}) };
+    p.hidden = { ...ALL_INDICATORS_FALSE, ...(p.hidden as object ?? {}) };
+    p.config = { ...DEFAULT_CONFIG, ...(p.config as object ?? {}) };
+    p.dmiTradeZoneStyle = {
+      ...DEFAULT_DMI_TRADE_ZONE_STYLE,
+      ...(p.dmiTradeZoneStyle as object ?? {}),
+    };
+  }
   return p;
 }
 
@@ -867,6 +950,7 @@ export const useChartStore = create<ChartState>()(
         { id: randomId(), period: 50, color: EMA_PALETTE[1], lineWidth: 1, hidden: false },
       ],
       adxStyle: { ...DEFAULT_ADX_STYLE },
+      dmiTradeZoneStyle: { ...DEFAULT_DMI_TRADE_ZONE_STYLE },
       keyLevels: { ...DEFAULT_KEY_LEVELS },
       squeezeStyle: { ...DEFAULT_SQUEEZE_STYLE },
       bollingerStyle: { ...DEFAULT_BOLLINGER_STYLE },
@@ -950,6 +1034,7 @@ export const useChartStore = create<ChartState>()(
             hidden: { ...s.hidden },
             config: { ...s.config },
             adxStyle: { ...s.adxStyle },
+            dmiTradeZoneStyle: { ...s.dmiTradeZoneStyle },
             squeezeStyle: { ...s.squeezeStyle },
             indicatorOverlays: { ...s.indicatorOverlays },
           };
@@ -1050,6 +1135,18 @@ export const useChartStore = create<ChartState>()(
           unifiedHistory.push({ kind: "chartState", before, after: { adxStyle: { ...after.adxStyle } } });
         } else {
           set((st) => ({ adxStyle: { ...st.adxStyle, ...patch } }));
+        }
+      },
+
+      setDmiTradeZoneStyle: (patch) => {
+        if (!isApplyingHistory) {
+          const s = get();
+          const before: ChartStateSnapshot = { dmiTradeZoneStyle: { ...s.dmiTradeZoneStyle } };
+          set((st) => ({ dmiTradeZoneStyle: { ...st.dmiTradeZoneStyle, ...patch } }));
+          const after = get();
+          unifiedHistory.push({ kind: "chartState", before, after: { dmiTradeZoneStyle: { ...after.dmiTradeZoneStyle } } });
+        } else {
+          set((st) => ({ dmiTradeZoneStyle: { ...st.dmiTradeZoneStyle, ...patch } }));
         }
       },
 
@@ -1187,6 +1284,7 @@ export const useChartStore = create<ChartState>()(
           if (snap.config !== undefined) patch.config = snap.config;
           if (snap.userEMAs !== undefined) patch.userEMAs = snap.userEMAs;
           if (snap.adxStyle !== undefined) patch.adxStyle = snap.adxStyle;
+          if (snap.dmiTradeZoneStyle !== undefined) patch.dmiTradeZoneStyle = snap.dmiTradeZoneStyle;
           if (snap.squeezeStyle !== undefined) patch.squeezeStyle = snap.squeezeStyle;
           if (snap.logScale !== undefined) patch.logScale = snap.logScale;
           if (snap.indicatorLogScale !== undefined) patch.indicatorLogScale = snap.indicatorLogScale;
@@ -1469,7 +1567,7 @@ export const useChartStore = create<ChartState>()(
     }),
     {
       name: "tv-gratis-chart-state",
-      version: 11,
+      version: 12,
       migrate: migrateChartState,
       partialize: (s) => ({
         symbol: s.symbol,
@@ -1479,6 +1577,7 @@ export const useChartStore = create<ChartState>()(
         config: s.config,
         userEMAs: s.userEMAs,
         adxStyle: s.adxStyle,
+        dmiTradeZoneStyle: s.dmiTradeZoneStyle,
         keyLevels: s.keyLevels,
         squeezeStyle: s.squeezeStyle,
         bollingerStyle: s.bollingerStyle,

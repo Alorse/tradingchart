@@ -33,6 +33,7 @@ const TITLES: Record<IndicatorKey, string> = {
   macd: "MACD",
   volume: "Volume",
   adx: "ADX",
+  dmitz: "DMI Trade Zone",
   squeeze: "Squeeze Momentum",
   vumanchu: "VuManChu Cipher B",
   obv: "On-Balance Volume",

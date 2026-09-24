@@ -5,6 +5,7 @@ import type { IndicatorConfig, IndicatorKey } from "@/lib/store/chart-store";
 import type {
   ChartColors,
   AdxStyle,
+  DmiTradeZoneStyle,
   SqueezeStyle,
   BollingerStyle,
   VwapStyle,
@@ -21,6 +22,7 @@ import type { CloudWatchlists, RawWatchlistRow } from "./watchlists-migrate";
 export interface VisualSettings {
   chartColors?: ChartColors;
   adxStyle?: AdxStyle;
+  dmiTradeZoneStyle?: DmiTradeZoneStyle;
   squeezeStyle?: SqueezeStyle;
   bollingerStyle?: BollingerStyle;
   vwapStyle?: VwapStyle;
