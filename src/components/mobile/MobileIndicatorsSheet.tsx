@@ -32,6 +32,7 @@ const ENTRIES: Entry[] = [
   { key: "williamsr", group: "Oscillators", label: (c) => `Williams %R (${c.williamsRPeriod})` },
   { key: "cci",       group: "Oscillators", label: (c) => `CCI (${c.cciPeriod})` },
   { key: "adx",       group: "Trend",       label: (c) => `ADX (${c.adx})` },
+  { key: "dmitz",     group: "Trend",       label: (c) => `DMI Trade Zone (${c.dmiTzDiLen}, ${c.dmiTzAdxLen})` },
   { key: "bb",        group: "Volatility",  label: (c) => `Bollinger Bands (${c.bbPeriod}, ${c.bbMult})` },
   { key: "atr",       group: "Volatility",  label: (c) => `Average True Range (${c.atrPeriod})` },
   { key: "vwap",      group: "Overlays",    label: () => "VWAP" },
