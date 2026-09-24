@@ -42,7 +42,7 @@ import type { Candle, Timeframe } from "@/lib/binance/types";
 import {
   INDICATOR_COLORS,
   SUB_PANE_KEYS,
-  isSubPaneKey,
+  indicatorVisible,
   useChartStore,
   type IndicatorKey,
   type SubPaneKey,
@@ -2083,7 +2083,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // Sub-pane series are also hidden when subPanesHidden (so their legend headers vanish).
   useEffect(() => {
     const v = (key: IndicatorKey) =>
-      indicators[key] && !hidden[key] && !(isSubPaneKey(key) && subPanesHidden);
+      indicatorVisible(key, { indicators, hidden, subPanesHidden });
     // EMAs visibility is driven by per-instance `hidden` flag in the sync effect
     if (rsiRef.current) rsiRef.current.applyOptions({ visible: v("rsi") });
     if (rsi30Ref.current) rsi30Ref.current.applyOptions({ visible: v("rsi") });
@@ -2675,7 +2675,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
     const style = useChartStore.getState().adxStyle;
     const data = adxCalc(c, { diLen: cfg.adxDiLen, adxLen: cfg.adx });
     adxRef.current.setData(data.map((p) => ({ time: p.time as UTCTimestamp, value: p.adx })));
-    const adxEnabled = indicators.adx && !hidden.adx;
+    const adxEnabled = indicatorVisible("adx", {
+      indicators,
+      hidden,
+      subPanesHidden: useChartStore.getState().subPanesHidden,
+    });
     adxRef.current.applyOptions({ color: style.adxColor, lineWidth: style.adxLineWidth ?? 2, visible: style.showAdx && adxEnabled });
     adxPlusDIRef.current?.setData(
       data.map((p) => ({ time: p.time as UTCTimestamp, value: p.plusDI })),
@@ -2700,7 +2704,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
     const cfg = configRef.current;
     const style = useChartStore.getState().dmiTradeZoneStyle;
     const pts = dmiTradeZone(c, { diLen: cfg.dmiTzDiLen, adxLen: cfg.dmiTzAdxLen });
-    const on = indicators.dmitz && !hidden.dmitz && !subPanesHidden;
+    const on = indicatorVisible("dmitz", {
+      indicators,
+      hidden,
+      subPanesHidden: useChartStore.getState().subPanesHidden,
+    });
 
     dmiTzShadowRef.current?.setData(
       pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.adx })),

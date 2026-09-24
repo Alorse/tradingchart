@@ -57,6 +57,32 @@ export function isSubPaneKey(key: IndicatorKey): key is SubPaneKey {
   return (SUB_PANE_KEYS as readonly IndicatorKey[]).includes(key);
 }
 
+/**
+ * Whether an indicator's series should currently be painted.
+ *
+ * Pure, and exported, because it is applied from two directions: the
+ * visibility effect in `PriceChart` sweeps every series when the store
+ * changes, and each indicator's own `update*()` re-applies it after writing
+ * new data. Those were two separate expressions and they drifted — the
+ * `update*()` copies omitted `subPanesHidden`, so a live tick arriving while
+ * the sub-panes were collapsed re-showed the series behind the effect's back.
+ * One definition means they cannot disagree again.
+ */
+export function indicatorVisible(
+  key: IndicatorKey,
+  state: {
+    indicators: Record<IndicatorKey, boolean>;
+    hidden: Record<IndicatorKey, boolean>;
+    subPanesHidden: boolean;
+  },
+): boolean {
+  return (
+    state.indicators[key] &&
+    !state.hidden[key] &&
+    !(isSubPaneKey(key) && state.subPanesHidden)
+  );
+}
+
 export type DrawingTool =
   | "cursor"
   | "measure"

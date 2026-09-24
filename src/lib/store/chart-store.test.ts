@@ -1,9 +1,13 @@
 import { beforeEach, describe, it } from "node:test";
 import { expect } from "@/test-utils/expect";
+import type { IndicatorKey } from "./chart-store";
 import {
   useChartStore,
   migrateChartState,
   isSubPaneKey,
+  indicatorVisible,
+  SUB_PANE_KEYS,
+  ALL_INDICATORS_FALSE,
   DEFAULT_DMI_TRADE_ZONE_STYLE,
 } from "./chart-store";
 
@@ -166,5 +170,59 @@ describe("chart-store DMI Trade Zone defaults", () => {
       DEFAULT_DMI_TRADE_ZONE_STYLE.adxUpColor,
     );
     useChartStore.getState().setDmiTradeZoneStyle({ showZone: true });
+  });
+});
+
+describe("indicatorVisible", () => {
+  /** Store slice the predicate reads, with everything off by default. */
+  function state(over: {
+    on?: IndicatorKey[];
+    hidden?: IndicatorKey[];
+    subPanesHidden?: boolean;
+  } = {}) {
+    const indicators = { ...ALL_INDICATORS_FALSE };
+    for (const k of over.on ?? []) indicators[k] = true;
+    const hidden = { ...ALL_INDICATORS_FALSE };
+    for (const k of over.hidden ?? []) hidden[k] = true;
+    return { indicators, hidden, subPanesHidden: over.subPanesHidden ?? false };
+  }
+
+  it("is false for an indicator that is not on the chart", () => {
+    expect(indicatorVisible("adx", state())).toBe(false);
+  });
+
+  it("is true for an enabled, unhidden indicator", () => {
+    expect(indicatorVisible("adx", state({ on: ["adx"] }))).toBe(true);
+  });
+
+  it("is false once the eye toggle hides it", () => {
+    expect(indicatorVisible("adx", state({ on: ["adx"], hidden: ["adx"] }))).toBe(false);
+  });
+
+  it("is false for every sub-pane indicator while the sub-panes are collapsed", () => {
+    const s = state({ on: [...SUB_PANE_KEYS], subPanesHidden: true });
+    for (const key of SUB_PANE_KEYS) {
+      expect(indicatorVisible(key, s)).toBe(false);
+    }
+  });
+
+  it("still shows main-pane overlays while the sub-panes are collapsed", () => {
+    // Collapsing the sub-panes must not touch Volume, BB, VWAP, VRVP or
+    // Key Levels — they live on the price pane, which is what expands.
+    const mainPane: IndicatorKey[] = ["volume", "bb", "vwap", "vrvp", "keylevels"];
+    const s = state({ on: mainPane, subPanesHidden: true });
+    for (const key of mainPane) {
+      expect(isSubPaneKey(key)).toBe(false);
+      expect(indicatorVisible(key, s)).toBe(true);
+    }
+  });
+
+  it("agrees for ADX and DMI Trade Zone — the two that apply it from their own update path", () => {
+    const collapsed = state({ on: ["adx", "dmitz"], subPanesHidden: true });
+    expect(indicatorVisible("adx", collapsed)).toBe(false);
+    expect(indicatorVisible("dmitz", collapsed)).toBe(false);
+    const open = state({ on: ["adx", "dmitz"] });
+    expect(indicatorVisible("adx", open)).toBe(true);
+    expect(indicatorVisible("dmitz", open)).toBe(true);
   });
 });
